@@ -93,3 +93,20 @@ async def get_splits(period: int = Query(14), db: Session = Depends(get_db)):
         device_result.append({"name": row[0], "clicks": int(row[1]), "spend": spend, "revenue": revenue, "profit": revenue - spend})
     
     return {"os": os_result, "device": device_result}
+
+@router.get("/orphans")
+async def get_orphans(db: Session = Depends(get_db)):
+    rows = db.execute(text("SELECT id, token1, date, revenue, source FROM orphans ORDER BY revenue DESC LIMIT 100")).fetchall()
+    orphans = [{"id": row[0], "token1": row[1], "date": row[2].isoformat() if row[2] else None, "revenue": float(row[3] or 0), "source": row[4]} for row in rows]
+    total = db.execute(text("SELECT COUNT(*), SUM(revenue) FROM orphans")).fetchone()
+    return {"orphans": orphans, "total_count": total[0] or 0, "total_revenue": float(total[1] or 0)}
+
+@router.post("/orphans/match")
+async def match_orphan(orphan_id: int, campaign_id: str, db: Session = Depends(get_db)):
+    orphan = db.execute(text("SELECT token1, date, revenue, source FROM orphans WHERE id = :id"), {"id": orphan_id}).fetchone()
+    if not orphan:
+        return {"success": False, "error": "Orphan not found"}
+    db.execute(text("INSERT INTO additional_monetization (campaign_id, token1, date, revenue, source) VALUES (:cid, :t, :d, :r, :s)"), {"cid": campaign_id, "t": orphan[0], "d": orphan[1], "r": orphan[2], "s": orphan[3]})
+    db.execute(text("DELETE FROM orphans WHERE id = :id"), {"id": orphan_id})
+    db.commit()
+    return {"success": True}
