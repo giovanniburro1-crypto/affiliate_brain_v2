@@ -40,3 +40,16 @@ async def save_config(config: RoleConfig):
 @router.post("/test")
 async def test_role(req: TestRequest):
     return {"success": True, "response": {"role": req.role, "verdict": "HOLD", "confidence": 75, "reasoning": f"ROI {req.campaign_data.get('roi', 0)}%"}}
+
+import subprocess
+
+@router.post("/git/commit")
+async def git_commit(data: dict):
+    try:
+        message = data.get('message', 'Auto backup')
+        subprocess.run(['git', 'add', '.'], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', check=True)
+        subprocess.run(['git', 'commit', '-m', message], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', check=True)
+        result = subprocess.run(['git', 'push'], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', capture_output=True, text=True)
+        return {"success": True, "message": "Pushed to GitHub!"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

@@ -12,10 +12,11 @@
         .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
         .btn-primary { background: #8b5cf6; }
         .btn-success { background: #22c55e; }
+        .btn-github { background: #333; }
         .nav-item { border-radius: 8px; }
         .nav-item:hover { background: rgba(139,92,246,0.1); }
         .nav-item.active { background: #8b5cf6; }
-        select, textarea { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
+        select, textarea, input[type="text"] { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -37,16 +38,32 @@
             </nav>
         </aside>
         <main class="ml-56 flex-1 p-6">
-            <h1 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="settings" class="w-6 h-6"></i>AI Council Settings</h1>
+            <h1 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="settings" class="w-6 h-6"></i>Settings</h1>
+            
+            <!-- Git Commit Section -->
             <div class="card p-4 mb-6">
-                <div class="flex items-center gap-4">
-                    <select id="campaignSelect" class="flex-1 px-3 py-2 rounded-lg"><option value="">Select campaign...</option></select>
+                <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="git-branch" class="w-4 h-4"></i>Git Backup</h3>
+                <div class="flex gap-3">
+                    <input type="text" id="commitMessage" placeholder="Commit message..." class="flex-1 px-3 py-2 rounded-lg">
+                    <button onclick="gitCommit()" class="btn-github px-4 py-2 rounded-lg flex items-center gap-2">
+                        <i data-lucide="github" class="w-4 h-4"></i>Push to GitHub
+                    </button>
+                </div>
+                <div id="gitStatus" class="text-sm mt-3"></div>
+            </div>
+            
+            <!-- AI Council Settings -->
+            <div class="card p-4 mb-6">
+                <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="bot" class="w-4 h-4"></i>AI Council Settings</h3>
+                <div class="flex items-center gap-4 mb-4">
+                    <select id="campaignSelect" class="flex-1 px-3 py-2 rounded-lg"><option value="">Select campaign for testing...</option></select>
                     <button onclick="loadCampaign()" class="btn-primary px-4 py-2 rounded-lg">Load</button>
                 </div>
-                <div id="cacheStatus" class="text-xs text-zinc-500 mt-2">No campaign loaded</div>
+                <div id="cacheStatus" class="text-xs text-zinc-500 mb-4">No campaign loaded</div>
             </div>
+            
             <div id="rolesContainer" class="space-y-4"></div>
-            <button onclick="saveAll()" class="w-full btn-success py-3 rounded-xl font-bold mt-6">💾 SAVE ALL</button>
+            <button onclick="saveAll()" class="w-full btn-success py-3 rounded-xl font-bold mt-6">Save All AI Settings</button>
         </main>
     </div>
     <script>
@@ -68,6 +85,29 @@
             renderRoles();
             loadCampaigns();
         });
+
+        async function gitCommit() {
+            const msg = document.getElementById('commitMessage').value || 'Auto backup';
+            const status = document.getElementById('gitStatus');
+            status.innerHTML = '<span class="text-yellow-400">Pushing to GitHub...</span>';
+            
+            try {
+                const res = await fetch('/api/ai-settings/git/commit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    status.innerHTML = '<span class="text-green-400">✓ ' + data.message + '</span>';
+                    document.getElementById('commitMessage').value = '';
+                } else {
+                    status.innerHTML = '<span class="text-red-400">✗ ' + data.error + '</span>';
+                }
+            } catch (e) {
+                status.innerHTML = '<span class="text-red-400">✗ ' + e.message + '</span>';
+            }
+        }
 
         function renderRoles() {
             document.getElementById('rolesContainer').innerHTML = roles.map(r => `
