@@ -27,6 +27,9 @@
         .modal { backdrop-filter: blur(4px); }
         .progress-bar { height: 8px; border-radius: 4px; background: #2a2a3a; }
         .progress-fill { height: 100%; border-radius: 4px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { width: 24px; height: 24px; border: 3px solid #2a2a3a; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        .dashboard-loading { transition: opacity 0.2s; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -55,7 +58,14 @@
                 </button>
             </div>
         </aside>
-        <main class="ml-56 flex-1 p-6">
+        <main class="ml-56 flex-1 p-6 relative">
+            <!-- Индикатор загрузки -->
+            <div id="dashboardLoading" class="dashboard-loading hidden absolute inset-0 z-10 bg-black/40 flex items-center justify-center rounded-xl" style="margin: -1.5rem;">
+                <div class="card p-6 flex flex-col items-center gap-4">
+                    <div class="spinner"></div>
+                    <span class="text-zinc-300">Loading data...</span>
+                </div>
+            </div>
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-bold">Dashboard</h1>
                 <div class="flex items-center gap-3">
@@ -63,7 +73,7 @@
                     <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm">
                         <option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option>
                     </select>
-                    <button onclick="loadAll()" class="btn-primary px-4 py-2 rounded-lg text-sm">Apply</button>
+                    <button id="applyBtn" onclick="loadAll()" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 min-w-[100px] justify-center">Apply</button>
                 </div>
             </div>
             <div class="grid grid-cols-4 gap-4 mb-6">
@@ -171,13 +181,26 @@
         }
         
         async function loadAll() {
-            const period = document.getElementById('periodSelect').value;
-            const source = document.getElementById('sourceSelect').value;
-            await Promise.all([loadSummary(period, source), loadSplits(period), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
+            const applyBtn = document.getElementById('applyBtn');
+            const loadingEl = document.getElementById('dashboardLoading');
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = 'Loading...';
+            loadingEl.classList.remove('hidden');
+            loadingEl.classList.add('flex');
+            try {
+                const period = document.getElementById('periodSelect').value;
+                const source = document.getElementById('sourceSelect').value;
+                await Promise.all([loadSummary(period, source), loadSplits(period), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
+            } finally {
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = 'Apply';
+                loadingEl.classList.add('hidden');
+                loadingEl.classList.remove('flex');
+            }
         }
         
         async function loadSummary(period, source) {
-            const url = `/api/metrics/summary?period=${period}` + (source !== 'all' ? `&source=${source}` : '');
+            const url = `/api/metrics/summary?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url);
             const d = await res.json();
             document.getElementById('statSpend').textContent = '$' + d.spend.toLocaleString();

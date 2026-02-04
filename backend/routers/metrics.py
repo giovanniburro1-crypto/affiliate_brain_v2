@@ -13,10 +13,22 @@ async def get_summary(period: int = Query(7), source: Optional[str] = None, db: 
     source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
     query = text(f"SELECT COALESCE(SUM(cost),0), COALESCE(SUM(revenue),0), COALESCE(SUM(conversions),0), COUNT(*) FROM traffic_stats WHERE date >= :date_from {source_filter}")
     params = {'date_from': date_from}
-    if source and source != 'all': params['source'] = source
+    if source and source != 'all':
+        params['source'] = source
     r = db.execute(query, params).fetchone()
     spend, revenue, conversions, clicks = int(r[0]), int(r[1]), int(r[2]), int(r[3])
-    add_mon = db.execute(text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"), {'d': date_from}).scalar() or 0
+
+    # Доп. монетизация: при фильтре по источнику — только по кампаниям этого источника (без дублирования строк)
+    if source and source != 'all':
+        add_mon = db.execute(text("""
+            SELECT COALESCE(SUM(am.revenue), 0)
+            FROM additional_monetization am
+            WHERE am.date >= :d
+              AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE traffic_source = :source)
+        """), {'d': date_from, 'source': source}).scalar() or 0
+    else:
+        add_mon = db.execute(text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"), {'d': date_from}).scalar() or 0
+
     total_revenue = revenue + int(add_mon)
     profit = total_revenue - spend
     roi = round((profit / spend * 100) if spend > 0 else 0)
