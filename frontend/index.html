@@ -109,12 +109,20 @@
                 </div>
             </div>
             <div class="card p-4 mb-6">
-                <h3 class="font-semibold mb-4">ОБЩИЙ АНАЛИЗ ПО ИСТОЧНИКАМ</h3>
-                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="px-3 py-2">Source</th><th class="px-3 py-2 text-right">Spend</th><th class="px-3 py-2 text-right">Revenue</th><th class="px-3 py-2 text-right">Profit</th><th class="px-3 py-2 text-right">ROI</th><th class="px-2 py-2 text-center" colspan="14">Daily</th></tr></thead><tbody id="sourcesTable"></tbody></table></div>
-            </div>
-            <div class="card p-4">
-                <h3 class="font-semibold mb-4">Campaigns</h3>
-                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="px-3 py-2">Campaign</th><th class="px-3 py-2">Source</th><th class="px-3 py-2 text-right">Spend</th><th class="px-3 py-2 text-right">Revenue</th><th class="px-3 py-2 text-right">Profit</th><th class="px-3 py-2 text-right">ROI</th></tr></thead><tbody id="campaignsTable"></tbody></table></div>
+                <h3 class="font-semibold mb-4">GENERAL ANALYSIS BY CAMPAIGNS</h3>
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table class="w-full text-xs">
+                        <thead class="sticky top-0 bg-zinc-900">
+                            <tr class="text-zinc-400 text-xs border-b border-zinc-700">
+                                <th class="text-left py-2 px-2 sticky left-0 bg-zinc-900">Token1</th>
+                                <th class="text-left py-2 px-2 sticky left-16 bg-zinc-900">Campaign</th>
+                                <th class="text-right py-2 px-2">Spend</th>
+                                <th class="text-center py-2 px-1" id="dateHeaders"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaignsTable"></tbody>
+                    </table>
+                </div>
             </div>
         </main>
     </div>
@@ -165,7 +173,7 @@
         async function loadAll() {
             const period = document.getElementById('periodSelect').value;
             const source = document.getElementById('sourceSelect').value;
-            await Promise.all([loadSummary(period, source), loadSplits(period), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period), loadCampaigns(period, source)]);
+            await Promise.all([loadSummary(period, source), loadSplits(period), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
         }
         
         async function loadSummary(period, source) {
@@ -215,24 +223,44 @@
         }
         
         async function loadSourcesTable(period) {
-            const res = await fetch(`/api/metrics/sources-table?period=${period}`);
+            const res = await fetch(`/api/metrics/campaigns-table?period=${period}`);
             const data = await res.json();
-            document.getElementById('sourcesTable').innerHTML = data.sources.map(s => {
-                const dates = Object.keys(s.days).sort();
-                const cells = dates.map(d => `<td class="px-1 py-1 text-center text-xs cell-${s.days[d].color}">${s.days[d].profit}</td>`).join('');
-                return `<tr class="border-b border-zinc-800"><td class="px-3 py-2">${s.source}</td><td class="px-3 py-2 text-right">$${s.total_cost.toLocaleString()}</td><td class="px-3 py-2 text-right">$${s.total_revenue.toLocaleString()}</td><td class="px-3 py-2 text-right ${s.total_profit >= 0 ? 'profit-green' : 'profit-red'}">$${s.total_profit.toLocaleString()}</td><td class="px-3 py-2 text-right ${s.roi >= 0 ? 'profit-green' : 'profit-red'}">${s.roi}%</td>${cells}</tr>`;
+            
+            // Генерируем заголовки дат (сегодня → сегодня-13)
+            const today = new Date();
+            const dates = [];
+            for (let i = 0; i <= 13; i++) {
+                const d = new Date(today);
+                d.setDate(d.getDate() - i);
+                dates.push(d.toISOString().slice(5, 10)); // MM-DD
+            }
+            
+            // Вставляем заголовки дат
+            document.getElementById('dateHeaders').outerHTML = dates.map(d => 
+                `<th class="text-center py-2 px-1 text-xs">${d}</th>`
+            ).join('');
+            
+            // Заполняем таблицу
+            document.getElementById('campaignsTable').innerHTML = data.campaigns.map(c => {
+                const dateCells = dates.map(d => {
+                    const dayData = c.days[d];
+                    if (!dayData) return '<td class="px-1 py-1 text-center text-xs">0</td>';
+                    
+                    let bgColor = '';
+                    if (dayData.color === 'red') bgColor = 'bg-red-900/30';
+                    else if (dayData.color === 'green') bgColor = 'bg-green-900/30';
+                    
+                    return `<td class="px-1 py-1 text-center text-xs ${bgColor}">${dayData.profit}</td>`;
+                }).join('');
+                
+                return `<tr class="border-b border-zinc-800">
+                    <td class="py-2 px-2 sticky left-0 bg-zinc-900 text-xs">${c.token1}</td>
+                    <td class="py-2 px-2 sticky left-16 bg-zinc-900 text-xs truncate" style="max-width: 200px;">${c.campaign}</td>
+                    <td class="py-2 px-2 text-right text-xs">${c.spend.toLocaleString()}</td>
+                    ${dateCells}
+                </tr>`;
             }).join('');
         }
-        
-        async function loadCampaigns(period, source) {
-            const url = `/api/metrics/campaigns?period=${period}` + (source !== 'all' ? `&source=${source}` : '');
-            const res = await fetch(url);
-            const data = await res.json();
-            document.getElementById('campaignsTable').innerHTML = data.campaigns.map(c => `<tr class="border-b border-zinc-800"><td class="px-3 py-2">${c.campaign}</td><td class="px-3 py-2 text-zinc-400">${c.source}</td><td class="px-3 py-2 text-right">$${c.spend.toLocaleString()}</td><td class="px-3 py-2 text-right">$${c.revenue.toLocaleString()}</td><td class="px-3 py-2 text-right ${c.profit >= 0 ? 'profit-green' : 'profit-red'}">$${c.profit.toLocaleString()}</td><td class="px-3 py-2 text-right ${c.roi >= 0 ? 'profit-green' : 'profit-red'}">${c.roi}%</td></tr>`).join('');
-        }
-        
-        function openUpload() { document.getElementById('uploadModal').classList.remove('hidden'); document.getElementById('uploadModal').classList.add('flex'); }
-        function closeUpload() { document.getElementById('uploadModal').classList.add('hidden'); }
         
         async function openOrphans() {
             document.getElementById('orphansModal').classList.remove('hidden');

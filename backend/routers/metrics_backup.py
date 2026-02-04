@@ -88,32 +88,17 @@ async def get_splits(period: int = Query(14), db: Session = Depends(get_db)):
     total_os_clicks = sum(int(row[1]) for row in os_raw)
     os_groups = {"iOS": {"clicks": 0, "profit": 0}, "Android": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
     for row in os_raw:
-        os_name = row[0]
-        clicks = int(row[1])
-        spend = int(row[2] or 0)
-        base_revenue = int(row[3] or 0)
-        
-        # Добавляем additional_monetization для этой OS
-        add_rev = db.execute(text("""
-            SELECT COALESCE(SUM(am.revenue), 0) 
-            FROM additional_monetization am 
-            JOIN traffic_stats ts ON am.campaign_id = ts.campaign_id 
-            WHERE ts.os = :os AND am.date >= :d
-        """), {'os': os_name, 'd': date_from}).scalar() or 0
-        
-        total_revenue = base_revenue + int(add_rev)
-        profit = total_revenue - spend
-        
-        if os_name == "iOS": 
+        clicks, profit = int(row[1]), int(row[3] or 0) - int(row[2] or 0)
+        if row[0] == "iOS": 
             os_groups["iOS"]["clicks"] += clicks
             os_groups["iOS"]["profit"] += profit
-        elif os_name == "Android": 
+        elif row[0] == "Android": 
             os_groups["Android"]["clicks"] += clicks
             os_groups["Android"]["profit"] += profit
         else: 
             os_groups["Other"]["clicks"] += clicks
             os_groups["Other"]["profit"] += profit
-
+    
     os_result = []
     for name in ["iOS", "Android", "Other"]:
         data = os_groups[name]
@@ -132,32 +117,17 @@ async def get_splits(period: int = Query(14), db: Session = Depends(get_db)):
     total_dev_clicks = sum(int(row[1]) for row in device_raw)
     device_groups = {"Mobile": {"clicks": 0, "profit": 0}, "Desktop": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
     for row in device_raw:
-        dev_name = row[0]
-        clicks = int(row[1])
-        spend = int(row[2] or 0)
-        base_revenue = int(row[3] or 0)
-        
-        # Добавляем additional_monetization для этого Device
-        add_rev = db.execute(text("""
-            SELECT COALESCE(SUM(am.revenue), 0) 
-            FROM additional_monetization am 
-            JOIN traffic_stats ts ON am.campaign_id = ts.campaign_id 
-            WHERE ts.device_type = :dev AND am.date >= :d
-        """), {'dev': dev_name, 'd': date_from}).scalar() or 0
-        
-        total_revenue = base_revenue + int(add_rev)
-        profit = total_revenue - spend
-        
-        if dev_name == "Mobile": 
+        clicks, profit = int(row[1]), int(row[3] or 0) - int(row[2] or 0)
+        if row[0] == "Mobile": 
             device_groups["Mobile"]["clicks"] += clicks
             device_groups["Mobile"]["profit"] += profit
-        elif dev_name == "Desktop": 
+        elif row[0] == "Desktop": 
             device_groups["Desktop"]["clicks"] += clicks
             device_groups["Desktop"]["profit"] += profit
         else: 
             device_groups["Other"]["clicks"] += clicks
             device_groups["Other"]["profit"] += profit
-
+    
     device_result = []
     for name in ["Mobile", "Desktop", "Other"]:
         data = device_groups[name]
@@ -204,7 +174,7 @@ async def get_traffic_sources_summary(period: int = Query(14), db: Session = Dep
             SUM(ts.cost) as spend,
             SUM(ts.revenue) as base_revenue
         FROM traffic_stats ts
-        WHERE ts.date >= :d AND ts.traffic_source IS NOT NULL AND ts.traffic_source != 'AddMonetisation'
+        WHERE ts.date >= :d AND ts.traffic_source IS NOT NULL
         GROUP BY ts.traffic_source
     """), {'d': date_from}).fetchall()
     
@@ -236,68 +206,3 @@ async def get_traffic_sources_summary(period: int = Query(14), db: Session = Dep
     
     result.sort(key=lambda x: x['profit'], reverse=True)
     return {"sources": result}
-
-@router.get("/metrics/campaigns-table")
-async def get_campaigns_table(period: int = Query(14), db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
-    
-    # Получаем топ-25 кампаний по spend
-    campaigns = db.execute(text("""
-        SELECT campaign_id, campaign, SUM(cost) as total_spend
-        FROM traffic_stats 
-        WHERE date >= :d AND campaign_id IS NOT NULL
-        GROUP BY campaign_id, campaign
-        ORDER BY total_spend DESC
-        LIMIT 25
-    """), {'d': date_from}).fetchall()
-    
-    result = []
-    for row in campaigns:
-        campaign_id = row[0]
-        campaign_name = row[1]
-        total_spend = int(row[2] or 0)
-        
-        # Получаем данные по дням для этой кампании
-        daily = db.execute(text("""
-            SELECT date, SUM(cost), SUM(revenue)
-            FROM traffic_stats 
-            WHERE campaign_id = :cid AND date >= :d
-            GROUP BY date
-            ORDER BY date
-        """), {'cid': campaign_id, 'd': date_from}).fetchall()
-        
-        days = {}
-        for day_row in daily:
-            day_date = day_row[0].strftime('%m-%d')
-            day_spend = int(day_row[1] or 0)
-            day_base_revenue = int(day_row[2] or 0)
-            
-            # Добавляем additional_monetization для этой кампании в этот день
-            day_add_revenue = db.execute(text("""
-                SELECT COALESCE(SUM(revenue), 0)
-                FROM additional_monetization
-                WHERE campaign_id = :cid AND date = :dt
-            """), {'cid': campaign_id, 'dt': day_row[0]}).scalar() or 0
-            
-            day_total_revenue = day_base_revenue + int(day_add_revenue)
-            day_profit = day_total_revenue - day_spend
-            
-            # Определяем цвет (profit%)
-            day_profit_pct = (day_profit / day_spend * 100) if day_spend > 0 else 0
-            if day_profit_pct < -10:
-                color = 'red'
-            elif day_profit_pct > 10:
-                color = 'green'
-            else:
-                color = 'none'
-            
-            days[day_date] = {'profit': day_profit, 'color': color}
-        
-        result.append({
-            'token1': campaign_id,
-            'campaign': campaign_name,
-            'spend': total_spend,
-            'days': days
-        })
-    
-    return {'campaigns': result, 'date_from': date_from.strftime('%Y-%m-%d')}
