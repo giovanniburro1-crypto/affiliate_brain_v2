@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Affiliate Brain v2.0</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238b5cf6'/%3E%3Cpath fill='%23fff' d='M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z'/%3E%3C/svg%3E" type="image/svg+xml">
+    <!-- Tailwind CDN: для production лучше собрать CSS через PostCSS/CLI -->
+    <script>
+      (function(){
+        var w = console.warn;
+        console.warn = function(m){ if (typeof m === 'string' && m.indexOf('cdn.tailwindcss.com') !== -1) return; w.apply(console, arguments); };
+      })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -169,7 +177,7 @@
         document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadSources(); loadAll(); loadOrphansCount(); });
         
         async function loadSources() {
-            const res = await fetch('/api/metrics/sources');
+            const res = await fetch('/api/metrics/sources', { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('sourceSelect').innerHTML = '<option value="all">All Sources</option>' + data.sources.map(s => `<option value="${s}">${s}</option>`).join('');
         }
@@ -190,7 +198,7 @@
             try {
                 const period = document.getElementById('periodSelect').value;
                 const source = document.getElementById('sourceSelect').value;
-                await Promise.all([loadSummary(period, source), loadSplits(period), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
+                await Promise.all([loadSummary(period, source), loadSplits(period, source), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
             } finally {
                 applyBtn.disabled = false;
                 applyBtn.innerHTML = 'Apply';
@@ -201,7 +209,7 @@
         
         async function loadSummary(period, source) {
             const url = `/api/metrics/summary?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
-            const res = await fetch(url);
+            const res = await fetch(url, { cache: 'no-store' });
             const d = await res.json();
             document.getElementById('statSpend').textContent = '$' + d.spend.toLocaleString();
             document.getElementById('statRevenue').textContent = '$' + d.revenue.toLocaleString();
@@ -211,14 +219,15 @@
             document.getElementById('statRoi').className = 'text-2xl font-bold ' + (d.roi >= 0 ? 'profit-green' : 'profit-red');
         }
         
-        async function loadSplits(period) {
-            const res = await fetch(`/api/metrics/splits?period=${period}`);
+        async function loadSplits(period, source) {
+            const url = `/api/metrics/splits?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('osSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">OS</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.os.map(o => `<tr class="border-b border-zinc-800"><td class="py-1.5">${o.name}</td><td class="text-right">${o.traffic_pct}%</td><td class="text-right">${o.clicks.toLocaleString()}</td><td class="text-right">${o.profit_pct}%</td><td class="text-right ${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
             document.getElementById('deviceSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">Device</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.device.map(d => `<tr class="border-b border-zinc-800"><td class="py-1.5">${d.name}</td><td class="text-right">${d.traffic_pct}%</td><td class="text-right">${d.clicks.toLocaleString()}</td><td class="text-right">${d.profit_pct}%</td><td class="text-right ${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
         }
         async function loadChart(period) {
-            const res = await fetch(`/api/metrics/daily?period=${period}`);
+            const res = await fetch(`/api/metrics/daily?period=${period}`, { cache: 'no-store' });
             const data = await res.json();
             if (chart) chart.destroy();
             chart = new Chart(document.getElementById('chart'), {
@@ -232,7 +241,7 @@
         }
         
         async function loadTrafficSourcesSummary(period) {
-            const res = await fetch(`/api/metrics/traffic-sources-summary?period=${period}`);
+            const res = await fetch(`/api/metrics/traffic-sources-summary?period=${period}`, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('trafficSourcesSummary').innerHTML = data.sources.map(s => `
                 <tr class="border-b border-zinc-800">
@@ -246,7 +255,7 @@
         }
         
         async function loadSourcesTable(period) {
-            const res = await fetch(`/api/metrics/campaigns-table?period=${period}`);
+            const res = await fetch(`/api/metrics/campaigns-table?period=${period}`, { cache: 'no-store' });
             const data = await res.json();
             
             // Генерируем заголовки дат (сегодня → сегодня-13)

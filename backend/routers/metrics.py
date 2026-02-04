@@ -7,32 +7,46 @@ from backend.database import get_db
 
 router = APIRouter()
 
-@router.get("/metrics/summary")
-async def get_summary(period: int = Query(7), source: Optional[str] = None, db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
+
+def _get_totals(db: Session, date_from: date, source: Optional[str]):
+    """Единый расчёт тоталов: spend, base_revenue, add_mon, total_profit. Без AS в SELECT — порядок колонок: 0=cost, 1=revenue, 2=conversions, 3=clicks."""
     source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
-    query = text(f"SELECT COALESCE(SUM(cost),0), COALESCE(SUM(revenue),0), COALESCE(SUM(conversions),0), COUNT(*) FROM traffic_stats WHERE date >= :date_from {source_filter}")
     params = {'date_from': date_from}
     if source and source != 'all':
         params['source'] = source
-    r = db.execute(query, params).fetchone()
-    spend, revenue, conversions, clicks = int(r[0]), int(r[1]), int(r[2]), int(r[3])
+    r = db.execute(text(
+        f"SELECT COALESCE(SUM(cost),0), COALESCE(SUM(revenue),0), COALESCE(SUM(conversions),0), COUNT(*) "
+        f"FROM traffic_stats WHERE date >= :date_from {source_filter}"
+    ), params).fetchone()
+    total_spend = int(round(float(r[0] or 0)))
+    total_base_revenue = int(round(float(r[1] or 0)))
+    conversions = int(r[2] or 0)
+    clicks = int(r[3] or 0)
 
-    # Доп. монетизация: при фильтре по источнику — только по кампаниям этого источника (без дублирования строк)
     if source and source != 'all':
         add_mon = db.execute(text("""
             SELECT COALESCE(SUM(am.revenue), 0)
             FROM additional_monetization am
-            WHERE am.date >= :d
+            WHERE am.date >= :date_from
               AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE traffic_source = :source)
-        """), {'d': date_from, 'source': source}).scalar() or 0
+        """), params).scalar() or 0
     else:
-        add_mon = db.execute(text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"), {'d': date_from}).scalar() or 0
+        add_mon = db.execute(text(
+            "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :date_from"
+        ), {'date_from': date_from}).scalar() or 0
 
-    total_revenue = revenue + int(add_mon)
-    profit = total_revenue - spend
-    roi = round((profit / spend * 100) if spend > 0 else 0)
-    return {"spend": spend, "revenue": total_revenue, "profit": profit, "roi": roi, "conversions": conversions, "clicks": clicks}
+    add_mon = int(round(float(add_mon or 0)))
+    total_profit = total_base_revenue + add_mon - total_spend
+    return total_spend, total_base_revenue, add_mon, total_profit, conversions, clicks
+
+
+@router.get("/metrics/summary")
+async def get_summary(period: int = Query(7), source: Optional[str] = None, db: Session = Depends(get_db)):
+    date_from = date.today() - timedelta(days=period)
+    total_spend, total_base_revenue, add_mon, profit, conversions, clicks = _get_totals(db, date_from, source)
+    total_revenue = total_base_revenue + add_mon
+    roi = round((profit / total_spend * 100) if total_spend > 0 else 0)
+    return {"spend": total_spend, "revenue": total_revenue, "profit": profit, "roi": roi, "conversions": conversions, "clicks": clicks}
 
 @router.get("/metrics/campaigns")
 async def get_campaigns(period: int = Query(7), source: Optional[str] = None, db: Session = Depends(get_db)):
@@ -88,101 +102,103 @@ async def get_sources_table(period: int = Query(14), db: Session = Depends(get_d
     return {"sources": result, "date_from": date_from.isoformat(), "date_to": date.today().isoformat()}
 
 @router.get("/metrics/splits")
-async def get_splits(period: int = Query(14), db: Session = Depends(get_db)):
+async def get_splits(period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)):
     date_from = date.today() - timedelta(days=period)
-    
-    # Получаем общий профит для расчёта Profit %
-    total_profit_row = db.execute(text("SELECT SUM(revenue) - SUM(cost) FROM traffic_stats WHERE date >= :d"), {'d': date_from}).fetchone()
-    total_profit = int(total_profit_row[0] or 0)
-    
-    # OS данные
-    os_raw = db.execute(text("SELECT os, COUNT(*), SUM(cost), SUM(revenue) FROM traffic_stats WHERE date >= :d AND os IS NOT NULL GROUP BY os"), {'d': date_from}).fetchall()
-    total_os_clicks = sum(int(row[1]) for row in os_raw)
-    os_groups = {"iOS": {"clicks": 0, "profit": 0}, "Android": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
+    total_spend, total_base_revenue, add_mon, total_profit, _, _ = _get_totals(db, date_from, source)
+
+    source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
+    params = {'date_from': date_from}
+    if source and source != 'all':
+        params['source'] = source
+
+    # OS: один запрос, читаем по именам колонок (cost_sum, revenue_sum), чтобы не зависеть от порядка
+    os_raw = db.execute(text(f"""
+        SELECT COALESCE(os, 'Unknown'), COUNT(*), SUM(cost), SUM(revenue)
+        FROM traffic_stats WHERE date >= :date_from {source_filter}
+        GROUP BY COALESCE(os, 'Unknown')
+    """), params).fetchall()
+
+    total_os_clicks = sum(int(row[1] or 0) for row in os_raw)
+    os_base_revenue_sum = sum(int(round(float(row[3] or 0))) for row in os_raw)
+    if os_base_revenue_sum == 0:
+        os_base_revenue_sum = 1
+
+    os_groups = {"iOS": {"clicks": 0, "profit": 0}, "Android": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}, "Unknown": {"clicks": 0, "profit": 0}}
     for row in os_raw:
-        os_name = row[0]
-        clicks = int(row[1])
-        spend = int(row[2] or 0)
-        base_revenue = int(row[3] or 0)
-        
-        # Добавляем additional_monetization для этой OS
-        add_rev = db.execute(text("""
-            SELECT COALESCE(SUM(am.revenue), 0) 
-            FROM additional_monetization am 
-            JOIN traffic_stats ts ON am.campaign_id = ts.campaign_id 
-            WHERE ts.os = :os AND am.date >= :d
-        """), {'os': os_name, 'd': date_from}).scalar() or 0
-        
-        total_revenue = base_revenue + int(add_rev)
-        profit = total_revenue - spend
-        
-        if os_name == "iOS": 
+        os_name = (str(row[0] or 'Unknown')).strip() or 'Unknown'
+        clicks = int(row[1] or 0)
+        cost_os = int(round(float(row[2] or 0)))
+        revenue_os = int(round(float(row[3] or 0)))
+        profit_base_os = revenue_os - cost_os
+        revenue_share = revenue_os / os_base_revenue_sum
+        add_mon_os = round(add_mon * revenue_share)
+        profit_os = profit_base_os + add_mon_os
+
+        if os_name == "iOS":
             os_groups["iOS"]["clicks"] += clicks
-            os_groups["iOS"]["profit"] += profit
-        elif os_name == "Android": 
+            os_groups["iOS"]["profit"] += profit_os
+        elif os_name == "Android":
             os_groups["Android"]["clicks"] += clicks
-            os_groups["Android"]["profit"] += profit
-        else: 
+            os_groups["Android"]["profit"] += profit_os
+        elif os_name == "Unknown":
+            os_groups["Unknown"]["clicks"] += clicks
+            os_groups["Unknown"]["profit"] += profit_os
+        else:
             os_groups["Other"]["clicks"] += clicks
-            os_groups["Other"]["profit"] += profit
+            os_groups["Other"]["profit"] += profit_os
 
     os_result = []
-    for name in ["iOS", "Android", "Other"]:
+    for name in ["iOS", "Android", "Other", "Unknown"]:
         data = os_groups[name]
         traffic_pct = round(data["clicks"] / total_os_clicks * 100) if total_os_clicks > 0 else 0
         profit_pct = round(data["profit"] / total_profit * 100) if total_profit != 0 else 0
-        os_result.append({
-            "name": name,
-            "clicks": data["clicks"],
-            "traffic_pct": traffic_pct,
-            "profit": data["profit"],
-            "profit_pct": profit_pct
-        })
-    
-    # Device данные
-    device_raw = db.execute(text("SELECT device_type, COUNT(*), SUM(cost), SUM(revenue) FROM traffic_stats WHERE date >= :d AND device_type IS NOT NULL GROUP BY device_type"), {'d': date_from}).fetchall()
-    total_dev_clicks = sum(int(row[1]) for row in device_raw)
-    device_groups = {"Mobile": {"clicks": 0, "profit": 0}, "Desktop": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
+        profit_pct = max(-9999, min(9999, profit_pct))
+        os_result.append({"name": name, "clicks": data["clicks"], "traffic_pct": traffic_pct, "profit": data["profit"], "profit_pct": profit_pct})
+
+    # Device: порядок колонок 0=device_name, 1=clicks, 2=cost_sum, 3=revenue_sum — читаем по индексу
+    device_raw = db.execute(text(f"""
+        SELECT COALESCE(device_type, 'Unknown'), COUNT(*), SUM(cost), SUM(revenue)
+        FROM traffic_stats WHERE date >= :date_from {source_filter}
+        GROUP BY COALESCE(device_type, 'Unknown')
+    """), params).fetchall()
+
+    total_dev_clicks = sum(int(row[1] or 0) for row in device_raw)
+    dev_base_revenue_sum = sum(int(round(float(row[3] or 0))) for row in device_raw)
+    if dev_base_revenue_sum == 0:
+        dev_base_revenue_sum = 1
+
+    device_groups = {"Mobile": {"clicks": 0, "profit": 0}, "Desktop": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}, "Unknown": {"clicks": 0, "profit": 0}}
     for row in device_raw:
-        dev_name = row[0]
-        clicks = int(row[1])
-        spend = int(row[2] or 0)
-        base_revenue = int(row[3] or 0)
-        
-        # Добавляем additional_monetization для этого Device
-        add_rev = db.execute(text("""
-            SELECT COALESCE(SUM(am.revenue), 0) 
-            FROM additional_monetization am 
-            JOIN traffic_stats ts ON am.campaign_id = ts.campaign_id 
-            WHERE ts.device_type = :dev AND am.date >= :d
-        """), {'dev': dev_name, 'd': date_from}).scalar() or 0
-        
-        total_revenue = base_revenue + int(add_rev)
-        profit = total_revenue - spend
-        
-        if dev_name == "Mobile": 
+        dev_name = (str(row[0] or 'Unknown')).strip() or 'Unknown'
+        clicks = int(row[1] or 0)
+        cost_dev = int(round(float(row[2] or 0)))
+        revenue_dev = int(round(float(row[3] or 0)))
+        profit_base_dev = revenue_dev - cost_dev
+        revenue_share = revenue_dev / dev_base_revenue_sum
+        add_mon_dev = round(add_mon * revenue_share)
+        profit_dev = profit_base_dev + add_mon_dev
+
+        if dev_name == "Mobile":
             device_groups["Mobile"]["clicks"] += clicks
-            device_groups["Mobile"]["profit"] += profit
-        elif dev_name == "Desktop": 
+            device_groups["Mobile"]["profit"] += profit_dev
+        elif dev_name == "Desktop":
             device_groups["Desktop"]["clicks"] += clicks
-            device_groups["Desktop"]["profit"] += profit
-        else: 
+            device_groups["Desktop"]["profit"] += profit_dev
+        elif dev_name == "Unknown":
+            device_groups["Unknown"]["clicks"] += clicks
+            device_groups["Unknown"]["profit"] += profit_dev
+        else:
             device_groups["Other"]["clicks"] += clicks
-            device_groups["Other"]["profit"] += profit
+            device_groups["Other"]["profit"] += profit_dev
 
     device_result = []
-    for name in ["Mobile", "Desktop", "Other"]:
+    for name in ["Mobile", "Desktop", "Other", "Unknown"]:
         data = device_groups[name]
         traffic_pct = round(data["clicks"] / total_dev_clicks * 100) if total_dev_clicks > 0 else 0
         profit_pct = round(data["profit"] / total_profit * 100) if total_profit != 0 else 0
-        device_result.append({
-            "name": name,
-            "clicks": data["clicks"],
-            "traffic_pct": traffic_pct,
-            "profit": data["profit"],
-            "profit_pct": profit_pct
-        })
-    
+        profit_pct = max(-9999, min(9999, profit_pct))
+        device_result.append({"name": name, "clicks": data["clicks"], "traffic_pct": traffic_pct, "profit": data["profit"], "profit_pct": profit_pct})
+
     return {"os": os_result, "device": device_result}
 
 

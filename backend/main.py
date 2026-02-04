@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 import uvicorn
 from backend.config import settings
 from backend.database import check_db_connection
@@ -39,6 +39,18 @@ async def settings_page():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+# Favicon — убирает 404 в консоли
+FAVICON_SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#8b5cf6"/><path fill="#fff" d="M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z"/></svg>'
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(content=FAVICON_SVG, media_type="image/svg+xml")
+
+# Chrome DevTools иногда запрашивает этот URL — отдаём пустой JSON, чтобы не было 404
+@app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+async def chrome_devtools():
+    return Response(content=b"{}", media_type="application/json")
 
 if __name__ == "__main__":
     uvicorn.run("backend.main:app", host=settings.host, port=settings.port, reload=True)
