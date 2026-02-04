@@ -162,3 +162,47 @@ async def match_orphan(orphan_id: int, campaign_id: str, db: Session = Depends(g
     db.execute(text("DELETE FROM orphans WHERE id = :id"), {"id": orphan_id})
     db.commit()
     return {"success": True}
+
+@router.get("/metrics/traffic-sources-summary")
+async def get_traffic_sources_summary(period: int = Query(14), db: Session = Depends(get_db)):
+    date_from = date.today() - timedelta(days=period)
+    
+    # Получаем данные по traffic sources (traffic_stats + additional_monetization)
+    sources = db.execute(text("""
+        SELECT 
+            ts.traffic_source,
+            SUM(ts.cost) as spend,
+            SUM(ts.revenue) as base_revenue
+        FROM traffic_stats ts
+        WHERE ts.date >= :d AND ts.traffic_source IS NOT NULL
+        GROUP BY ts.traffic_source
+    """), {'d': date_from}).fetchall()
+    
+    result = []
+    for row in sources:
+        source_name = row[0]
+        spend = int(row[1] or 0)
+        base_revenue = int(row[2] or 0)
+        
+        # Добавляем additional_monetization для кампаний этого source
+        add_revenue = db.execute(text("""
+            SELECT COALESCE(SUM(am.revenue), 0)
+            FROM additional_monetization am
+            JOIN traffic_stats ts ON am.campaign_id = ts.campaign_id
+            WHERE ts.traffic_source = :src AND am.date >= :d
+        """), {'src': source_name, 'd': date_from}).scalar() or 0
+        
+        total_revenue = base_revenue + int(add_revenue)
+        profit = total_revenue - spend
+        roi = round((profit / spend * 100) if spend > 0 else 0)
+        
+        result.append({
+            "source": source_name,
+            "spend": spend,
+            "revenue": total_revenue,
+            "profit": profit,
+            "roi": roi
+        })
+    
+    result.sort(key=lambda x: x['profit'], reverse=True)
+    return {"sources": result}
