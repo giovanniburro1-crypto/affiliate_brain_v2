@@ -79,20 +79,72 @@ async def get_sources_table(period: int = Query(14), db: Session = Depends(get_d
 async def get_splits(period: int = Query(14), db: Session = Depends(get_db)):
     date_from = date.today() - timedelta(days=period)
     
-    os_data = db.execute(text("SELECT os, COUNT(*), SUM(cost), SUM(revenue) FROM traffic_stats WHERE date >= :d AND os IS NOT NULL GROUP BY os ORDER BY COUNT(*) DESC LIMIT 6"), {'d': date_from}).fetchall()
-    device_data = db.execute(text("SELECT device_type, COUNT(*), SUM(cost), SUM(revenue) FROM traffic_stats WHERE date >= :d AND device_type IS NOT NULL GROUP BY device_type ORDER BY COUNT(*) DESC"), {'d': date_from}).fetchall()
+    # Получаем общий профит для расчёта Profit %
+    total_profit_row = db.execute(text("SELECT SUM(revenue) - SUM(cost) FROM traffic_stats WHERE date >= :d"), {'d': date_from}).fetchone()
+    total_profit = int(total_profit_row[0] or 0)
+    
+    # OS данные
+    os_raw = db.execute(text("SELECT os, COUNT(*), SUM(cost), SUM(revenue) FROM traffic_stats WHERE date >= :d AND os IS NOT NULL GROUP BY os"), {'d': date_from}).fetchall()
+    total_os_clicks = sum(int(row[1]) for row in os_raw)
+    os_groups = {"iOS": {"clicks": 0, "profit": 0}, "Android": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
+    for row in os_raw:
+        clicks, profit = int(row[1]), int(row[3] or 0) - int(row[2] or 0)
+        if row[0] == "iOS": 
+            os_groups["iOS"]["clicks"] += clicks
+            os_groups["iOS"]["profit"] += profit
+        elif row[0] == "Android": 
+            os_groups["Android"]["clicks"] += clicks
+            os_groups["Android"]["profit"] += profit
+        else: 
+            os_groups["Other"]["clicks"] += clicks
+            os_groups["Other"]["profit"] += profit
     
     os_result = []
-    for row in os_data:
-        spend, revenue = int(row[2] or 0), int(row[3] or 0)
-        os_result.append({"name": row[0], "clicks": int(row[1]), "spend": spend, "revenue": revenue, "profit": revenue - spend})
+    for name in ["iOS", "Android", "Other"]:
+        data = os_groups[name]
+        traffic_pct = round(data["clicks"] / total_os_clicks * 100) if total_os_clicks > 0 else 0
+        profit_pct = round(data["profit"] / total_profit * 100) if total_profit != 0 else 0
+        os_result.append({
+            "name": name,
+            "clicks": data["clicks"],
+            "traffic_pct": traffic_pct,
+            "profit": data["profit"],
+            "profit_pct": profit_pct
+        })
+    
+    # Device данные
+    device_raw = db.execute(text("SELECT device_type, COUNT(*), SUM(cost), SUM(revenue) FROM traffic_stats WHERE date >= :d AND device_type IS NOT NULL GROUP BY device_type"), {'d': date_from}).fetchall()
+    total_dev_clicks = sum(int(row[1]) for row in device_raw)
+    device_groups = {"Mobile": {"clicks": 0, "profit": 0}, "Desktop": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
+    for row in device_raw:
+        clicks, profit = int(row[1]), int(row[3] or 0) - int(row[2] or 0)
+        if row[0] == "Mobile": 
+            device_groups["Mobile"]["clicks"] += clicks
+            device_groups["Mobile"]["profit"] += profit
+        elif row[0] == "Desktop": 
+            device_groups["Desktop"]["clicks"] += clicks
+            device_groups["Desktop"]["profit"] += profit
+        else: 
+            device_groups["Other"]["clicks"] += clicks
+            device_groups["Other"]["profit"] += profit
     
     device_result = []
-    for row in device_data:
-        spend, revenue = int(row[2] or 0), int(row[3] or 0)
-        device_result.append({"name": row[0], "clicks": int(row[1]), "spend": spend, "revenue": revenue, "profit": revenue - spend})
+    for name in ["Mobile", "Desktop", "Other"]:
+        data = device_groups[name]
+        traffic_pct = round(data["clicks"] / total_dev_clicks * 100) if total_dev_clicks > 0 else 0
+        profit_pct = round(data["profit"] / total_profit * 100) if total_profit != 0 else 0
+        device_result.append({
+            "name": name,
+            "clicks": data["clicks"],
+            "traffic_pct": traffic_pct,
+            "profit": data["profit"],
+            "profit_pct": profit_pct
+        })
     
     return {"os": os_result, "device": device_result}
+
+
+
 
 @router.get("/orphans")
 async def get_orphans(db: Session = Depends(get_db)):

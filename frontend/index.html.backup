@@ -158,9 +158,18 @@
         async function loadSplits(period) {
             const res = await fetch(`/api/metrics/splits?period=${period}`);
             const data = await res.json();
-            document.getElementById('osSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">OS</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.os.map(o => `<tr class="border-b border-zinc-800"><td class="py-1.5">${o.name}</td><td class="text-right">${o.traffic_pct}%</td><td class="text-right">${o.clicks.toLocaleString()}</td><td class="text-right">${o.profit_pct}%</td><td class="text-right ${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
-            document.getElementById('deviceSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">Device</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.device.map(d => `<tr class="border-b border-zinc-800"><td class="py-1.5">${d.name}</td><td class="text-right">${d.traffic_pct}%</td><td class="text-right">${d.clicks.toLocaleString()}</td><td class="text-right">${d.profit_pct}%</td><td class="text-right ${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
+            const totalOsClicks = data.os.reduce((sum, o) => sum + o.clicks, 0);
+            document.getElementById('osSplit').innerHTML = data.os.map((o, i) => {
+                const pct = totalOsClicks > 0 ? Math.round(o.clicks / totalOsClicks * 100) : 0;
+                return `<div><div class="flex justify-between text-sm mb-1"><span>${o.name}</span><span class="${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()} (${pct}%)</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${colors[i % colors.length]}"></div></div></div>`;
+            }).join('');
+            const totalDevClicks = data.device.reduce((sum, d) => sum + d.clicks, 0);
+            document.getElementById('deviceSplit').innerHTML = data.device.map((d, i) => {
+                const pct = totalDevClicks > 0 ? Math.round(d.clicks / totalDevClicks * 100) : 0;
+                return `<div><div class="flex justify-between text-sm mb-1"><span>${d.name}</span><span class="${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()} (${pct}%)</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${colors[i % colors.length]}"></div></div></div>`;
+            }).join('');
         }
+        
         async function loadChart(period) {
             const res = await fetch(`/api/metrics/daily?period=${period}`);
             const data = await res.json();
