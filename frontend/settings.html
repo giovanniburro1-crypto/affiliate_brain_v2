@@ -52,6 +52,22 @@
                 <div id="gitStatus" class="text-sm mt-3"></div>
             </div>
             
+            <!-- General Settings Section -->
+            <div class="card p-4 mb-6">
+                <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="settings" class="w-4 h-4"></i>General Settings</h3>
+                <a href="/general-settings" class="btn-primary px-4 py-2 rounded-lg inline-flex items-center gap-2 hover:opacity-90">
+                    <i data-lucide="sliders" class="w-4 h-4"></i>Open General Settings
+                </a>
+            </div>
+            
+            <!-- AI Council Settings Section -->
+            <div class="card p-4 mb-6">
+                <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="brain" class="w-4 h-4"></i>AI Council Settings</h3>
+                <button onclick="openAIModal()" class="btn-primary px-4 py-2 rounded-lg inline-flex items-center gap-2 hover:opacity-90">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>Configure AI Council
+                </button>
+            </div>
+            
             <!-- AI Council Settings -->
             <div class="card p-4 mb-6">
                 <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="bot" class="w-4 h-4"></i>AI Council Settings</h3>
@@ -166,6 +182,41 @@
         async function saveAll() {
             for (const r of roles) await saveRole(r.id);
             alert('All saved!');
+        }
+    </script>
+
+    <!-- AI Council Modal -->
+    <div id="aiModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="card p-6 w-96">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold text-lg">AI Council Settings</h3>
+                <button onclick="closeAIModal()" class="text-zinc-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <a href="/ai-top5" class="block w-full text-center py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition">
+                    Settings Top 5
+                </a>
+                <a href="/ai-search-gold" class="block w-full text-center py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition">
+                    Settings Search for Gold
+                </a>
+                <a href="/ai-company-analysis" class="block w-full text-center py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition">
+                    Settings Company Analysis
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function openAIModal() {
+            document.getElementById('aiModal').classList.remove('hidden');
+            document.getElementById('aiModal').classList.add('flex');
+            lucide.createIcons();
+        }
+        function closeAIModal() {
+            document.getElementById('aiModal').classList.add('hidden');
+            document.getElementById('aiModal').classList.remove('flex');
         }
     </script>
 </body>

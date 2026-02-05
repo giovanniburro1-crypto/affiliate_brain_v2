@@ -1,0 +1,3 @@
+
+# Keep .env structure but ignore actual API keys
+.env.local
