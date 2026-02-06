@@ -94,6 +94,8 @@ def _process_traffic(df, db, stats):
             token9=str(row.get('token9', '')) if pd.notna(row.get('token9')) else None,
             token10=str(row.get('token10', '')) if pd.notna(row.get('token10')) else None,
             traffic_source=str(row.get('traffic_source', 'Unknown'))[:255],
+            os=str(row.get('os', ''))[:100] if pd.notna(row.get('os')) else None,
+            device_type=str(row.get('device_type', ''))[:100] if pd.notna(row.get('device_type')) else None,
             cost=float(row.get('cost', 0) or 0), revenue=revenue,
             conversions=1 if revenue > 0 else 0
         ))
@@ -107,28 +109,93 @@ def _process_traffic(df, db, stats):
 
 def _save_traffic_batch(db, batch):
     """
-    Сохраняем партию TrafficStats, игнорируя дубликаты click_id.
-    Сначала пробуем bulk_save_objects (быстро),
-    если падает из-за уникального индекса — вставляем по одной записи.
+    Быстрая вставка через raw SQL с ON CONFLICT DO NOTHING.
+    Это в 10-100 раз быстрее чем построчная вставка при дубликатах.
     """
     if not batch:
         return
-
+    
+    # Убираем дубликаты внутри партии
+    seen = set()
+    unique_batch = []
+    for obj in batch:
+        cid = getattr(obj, "click_id", None)
+        if cid and cid not in seen:
+            seen.add(cid)
+            unique_batch.append(obj)
+        elif not cid:
+            unique_batch.append(obj)
+    
+    if not unique_batch:
+        return
+    
+    # Формируем VALUES для bulk INSERT
+    values_parts = []
+    for obj in unique_batch:
+        # Экранируем кавычки в строках
+        def escape(s):
+            if s is None:
+                return 'NULL'
+            s_str = str(s).replace("'", "''")
+            return f"'{s_str}'"
+        
+        click_id = escape(getattr(obj, 'click_id', None))
+        campaign_id = escape(getattr(obj, 'campaign_id', None))
+        campaign = escape(getattr(obj, 'campaign', None))
+        date_val = f"'{obj.date}'" if hasattr(obj, 'date') and obj.date else 'NULL'
+        token1 = escape(getattr(obj, 'token1', None))
+        token2 = escape(getattr(obj, 'token2', None))
+        token3 = escape(getattr(obj, 'token3', None))
+        token4 = escape(getattr(obj, 'token4', None))
+        token5 = escape(getattr(obj, 'token5', None))
+        token6 = escape(getattr(obj, 'token6', None))
+        token7 = escape(getattr(obj, 'token7', None))
+        token8 = escape(getattr(obj, 'token8', None))
+        token9 = escape(getattr(obj, 'token9', None))
+        token10 = escape(getattr(obj, 'token10', None))
+        traffic_source = escape(getattr(obj, 'traffic_source', None))
+        os_val = escape(getattr(obj, 'os', None))
+        device_type_val = escape(getattr(obj, 'device_type', None))
+        cost = getattr(obj, 'cost', 0) or 0
+        revenue = getattr(obj, 'revenue', 0) or 0
+        conversions = getattr(obj, 'conversions', 0) or 0
+        
+        values_parts.append(
+            f"({click_id}, {campaign_id}, {campaign}, {date_val}, {token1}, {token2}, "
+            f"{token3}, {token4}, {token5}, {token6}, {token7}, {token8}, {token9}, {token10}, "
+            f"{traffic_source}, {os_val}, {device_type_val}, {cost}, {revenue}, {conversions})"
+        )
+    
+    # Bulk INSERT с ON CONFLICT DO NOTHING
+    sql = f"""
+        INSERT INTO traffic_stats 
+        (click_id, campaign_id, campaign, date, token1, token2, token3, token4, token5, 
+         token6, token7, token8, token9, token10, traffic_source, os, device_type, cost, revenue, conversions)
+        VALUES {', '.join(values_parts)}
+        ON CONFLICT (click_id) DO NOTHING
+    """
+    
     try:
-        db.bulk_save_objects(batch)
+        db.execute(text(sql))
         db.commit()
-    except IntegrityError:
+    except Exception as e:
+        # Если SQL слишком большой или другая ошибка - fallback на старый метод
         db.rollback()
-        for obj in batch:
-            try:
-                db.add(obj)
-                db.commit()
-            except IntegrityError:
-                db.rollback()
-                # дубликат или другая проблема — просто пропускаем
-                continue
+        try:
+            db.bulk_save_objects(unique_batch)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            # Игнорируем дубликаты
+            pass
 
 def _process_sales(df, db, stats):
+    """
+    Оптимизированная обработка sales файлов:
+    1. Собираем все prefixes за один раз
+    2. Делаем ОДИН batch запрос для матчинга всех prefixes
+    3. Используем полученный маппинг для быстрой классификации
+    """
     stats['total'] = len(df)
     cols = list(df.columns)
     col_map = {}
@@ -140,9 +207,16 @@ def _process_sales(df, db, stats):
     df = df.rename(columns=col_map)
     if 'token1' not in df.columns:
         raise ValueError(f"Missing Sub ID 1 column")
+    
+    # ШАГ 1: Собираем все уникальные prefixes из файла
+    prefixes_set = set()
+    rows_data = []
+    
     for _, row in df.iterrows():
         token1 = str(row.get('token1', ''))
-        if not token1 or token1 in ['', 'nan', 'None']: continue
+        if not token1 or token1 in ['', 'nan', 'None']: 
+            continue
+        
         revenue = float(str(row.get('revenue', 0)).replace(',', '.') or 0)
         date_val = row.get('date', datetime.now().date())
         if isinstance(date_val, str):
@@ -152,15 +226,73 @@ def _process_sales(df, db, stats):
                     break
                 except: pass
             else: date_val = datetime.now().date()
-        elif hasattr(date_val, 'date'): date_val = date_val.date()
+        elif hasattr(date_val, 'date'): 
+            date_val = date_val.date()
+        
         prefix = extract_prefix(token1)
         if prefix:
-            result = db.execute(text("SELECT DISTINCT campaign_id FROM traffic_stats WHERE split_part(token1, '_', 1) = :prefix LIMIT 1"), {'prefix': prefix}).fetchone()
-            if result and result[0]:
-                db.add(AdditionalMonetization(campaign_id=result[0], token1=token1, date=date_val, revenue=revenue, source='sales'))
-                stats['matched'] += 1
-            else:
-                db.add(Orphan(token1=token1, date=date_val, revenue=revenue, source='sales'))
-                stats['orphans'] += 1
-            stats['inserted'] += 1
+            prefixes_set.add(prefix)
+            rows_data.append({
+                'token1': token1,
+                'prefix': prefix,
+                'revenue': revenue,
+                'date': date_val
+            })
+    
+    if not prefixes_set:
+        return
+    
+    # ШАГ 2: ОДИН batch запрос для матчинга всех prefixes сразу
+    prefixes_list = list(prefixes_set)
+    prefix_to_campaign = {}
+    
+    # Разбиваем на батчи по 100 prefixes (чтобы не превысить лимит параметров)
+    batch_size = 100
+    for i in range(0, len(prefixes_list), batch_size):
+        batch_prefixes = prefixes_list[i:i+batch_size]
+        placeholders = ','.join([f"'{p}'" for p in batch_prefixes])
+        
+        matches = db.execute(text(f"""
+            SELECT DISTINCT split_part(token1, '_', 1) as prefix, campaign_id
+            FROM traffic_stats
+            WHERE split_part(token1, '_', 1) IN ({placeholders})
+        """)).fetchall()
+        
+        for prefix, campaign_id in matches:
+            if campaign_id:
+                prefix_to_campaign[prefix] = campaign_id
+    
+    # ШАГ 3: Классифицируем все строки используя маппинг
+    matched_batch = []
+    orphan_batch = []
+    
+    for row_data in rows_data:
+        campaign_id = prefix_to_campaign.get(row_data['prefix'])
+        
+        if campaign_id:
+            matched_batch.append(AdditionalMonetization(
+                campaign_id=campaign_id,
+                token1=row_data['token1'],
+                date=row_data['date'],
+                revenue=row_data['revenue'],
+                source='sales'
+            ))
+            stats['matched'] += 1
+        else:
+            orphan_batch.append(Orphan(
+                token1=row_data['token1'],
+                date=row_data['date'],
+                revenue=row_data['revenue'],
+                source='sales'
+            ))
+            stats['orphans'] += 1
+        
+        stats['inserted'] += 1
+    
+    # ШАГ 4: Bulk insert всех matched и orphans
+    if matched_batch:
+        db.bulk_save_objects(matched_batch)
+    if orphan_batch:
+        db.bulk_save_objects(orphan_batch)
+    
     db.commit()

@@ -267,10 +267,13 @@
                 dates.push(d.toISOString().slice(5, 10)); // MM-DD
             }
             
-            // Вставляем заголовки дат
-            document.getElementById('dateHeaders').outerHTML = dates.map(d => 
-                `<th class="text-center py-2 px-1 text-xs">${d}</th>`
-            ).join('');
+            // Вставляем заголовки дат (делаем один раз, при первом вызове)
+            const headerCell = document.getElementById('dateHeaders');
+            if (headerCell) {
+                headerCell.outerHTML = dates.map(d => 
+                    `<th class="text-center py-2 px-1 text-xs">${d}</th>`
+                ).join('');
+            }
             
             // Заполняем таблицу
             document.getElementById('campaignsTable').innerHTML = data.campaigns.map(c => {
