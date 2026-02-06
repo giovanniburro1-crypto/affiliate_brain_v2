@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, Response
 import uvicorn
 from backend.config import settings
 from backend.database import check_db_connection
-from backend.routers import upload_router, metrics_router, bot_agent_router, ai_settings_router
+from backend.routers import upload_router, metrics_router, bot_agent_router, ai_settings_router, providers_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +23,7 @@ app.include_router(upload_router, prefix="/api", tags=["Upload"])
 app.include_router(metrics_router, prefix="/api", tags=["Metrics"])
 app.include_router(bot_agent_router, prefix="/api/bot-agent", tags=["Bot Agent"])
 app.include_router(ai_settings_router, prefix="/api/ai-settings", tags=["AI Settings"])
+app.include_router(providers_router, prefix="/api", tags=["Providers"])
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -35,6 +36,26 @@ async def top5():
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page():
     with open("frontend/settings.html") as f: return f.read()
+
+@app.get("/general-settings", response_class=HTMLResponse)
+async def general_settings():
+    with open("frontend/general-settings.html") as f: return f.read()
+
+@app.get("/ai-top5", response_class=HTMLResponse)
+async def ai_top5():
+    with open("frontend/ai-top5.html") as f: return f.read()
+
+@app.get("/ai-search-gold", response_class=HTMLResponse)
+async def ai_search_gold():
+    with open("frontend/ai-search-gold.html") as f: return f.read()
+
+@app.get("/ai-company-analysis", response_class=HTMLResponse)
+async def ai_company_analysis():
+    with open("frontend/ai-company-analysis.html") as f: return f.read()
+
+@app.get("/ai-connect-models", response_class=HTMLResponse)
+async def ai_connect_models():
+    with open("frontend/ai-connect-models.html") as f: return f.read()
 
 @app.get("/health")
 async def health():

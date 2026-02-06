@@ -68,38 +68,11 @@
                 </button>
             </div>
             
-            <!-- AI Council Settings -->
-            <div class="card p-4 mb-6">
-                <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="bot" class="w-4 h-4"></i>AI Council Settings</h3>
-                <div class="flex items-center gap-4 mb-4">
-                    <select id="campaignSelect" class="flex-1 px-3 py-2 rounded-lg"><option value="">Select campaign for testing...</option></select>
-                    <button onclick="loadCampaign()" class="btn-primary px-4 py-2 rounded-lg">Load</button>
-                </div>
-                <div id="cacheStatus" class="text-xs text-zinc-500 mb-4">No campaign loaded</div>
-            </div>
-            
-            <div id="rolesContainer" class="space-y-4"></div>
-            <button onclick="saveAll()" class="w-full btn-success py-3 rounded-xl font-bold mt-6">Save All AI Settings</button>
         </main>
     </div>
     <script>
-        const roles = [
-            { id: 'bot_pro', name: 'BOT PRO', icon: '👍' },
-            { id: 'bot_con', name: 'BOT CON', icon: '👎' },
-            { id: 'analyst', name: 'ANALYST', icon: '📊' },
-            { id: 'strategist', name: 'STRATEGIST', icon: '🎯' },
-            { id: 'risk', name: 'RISK MANAGER', icon: '⚠️' },
-            { id: 'monetizer', name: 'MONETIZER', icon: '💰' },
-            { id: 'visionary', name: 'VISIONARY', icon: '🔮' },
-            { id: 'ceo', name: 'CEO', icon: '👑' }
-        ];
-        const providers = ['openrouter', 'groq', 'google', 'siliconflow'];
-        let cached = null;
-
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
-            renderRoles();
-            loadCampaigns();
         });
 
         async function gitCommit() {
@@ -124,65 +97,6 @@
                 status.innerHTML = '<span class="text-red-400">✗ ' + e.message + '</span>';
             }
         }
-
-        function renderRoles() {
-            document.getElementById('rolesContainer').innerHTML = roles.map(r => `
-                <div class="card p-4">
-                    <div class="flex items-center gap-3 mb-3">
-                        <span class="text-2xl">${r.icon}</span>
-                        <span class="font-bold">${r.name}</span>
-                        <select id="${r.id}-provider" class="px-2 py-1 rounded text-sm">${providers.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
-                        <label class="ml-auto flex items-center gap-1"><input type="checkbox" id="${r.id}-enabled" checked> On</label>
-                    </div>
-                    <textarea id="${r.id}-prompt" rows="2" class="w-full p-2 rounded text-sm" placeholder="Prompt...">${r.name} analysis prompt</textarea>
-                    <div class="flex gap-2 mt-2">
-                        <button onclick="saveRole('${r.id}')" class="btn-success px-3 py-1 rounded text-sm">Save</button>
-                        <button onclick="testRole('${r.id}')" class="btn-primary px-3 py-1 rounded text-sm">Test</button>
-                        <span id="${r.id}-status" class="text-xs text-zinc-400 ml-2"></span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function loadCampaigns() {
-            const res = await fetch('/api/bot-agent/top5?period=7');
-            const data = await res.json();
-            document.getElementById('campaignSelect').innerHTML = '<option value="">Select...</option>' + data.campaigns.map(c => `<option value="${c.campaign_id}">${c.campaign} (ROI: ${c.roi}%)</option>`).join('');
-        }
-
-        async function loadCampaign() {
-            const id = document.getElementById('campaignSelect').value;
-            if (!id) return;
-            const res = await fetch(`/api/bot-agent/analyze?campaign_id=${id}&period=7`, { method: 'POST' });
-            cached = await res.json();
-            document.getElementById('cacheStatus').textContent = '✅ Loaded: ' + cached.campaign;
-        }
-
-        async function saveRole(id) {
-            await fetch('/api/ai-settings/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: id, provider: document.getElementById(id + '-provider').value, model: 'default', prompt: document.getElementById(id + '-prompt').value, enabled: document.getElementById(id + '-enabled').checked })
-            });
-            document.getElementById(id + '-status').textContent = '✅ Saved';
-        }
-
-        async function testRole(id) {
-            if (!cached) return alert('Load campaign first');
-            document.getElementById(id + '-status').textContent = 'Testing...';
-            const res = await fetch('/api/ai-settings/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: id, provider: document.getElementById(id + '-provider').value, model: 'default', prompt: document.getElementById(id + '-prompt').value, campaign_data: cached })
-            });
-            const data = await res.json();
-            document.getElementById(id + '-status').textContent = '✅ ' + JSON.stringify(data.response);
-        }
-
-        async function saveAll() {
-            for (const r of roles) await saveRole(r.id);
-            alert('All saved!');
-        }
     </script>
 
     <!-- AI Council Modal -->
@@ -195,6 +109,9 @@
                 </button>
             </div>
             <div class="space-y-3">
+                <a href="/ai-connect-models" class="block w-full text-center py-3 rounded-lg bg-purple-600 hover:bg-purple-700 transition font-semibold">
+                    Connect Models
+                </a>
                 <a href="/ai-top5" class="block w-full text-center py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition">
                     Settings Top 5
                 </a>
