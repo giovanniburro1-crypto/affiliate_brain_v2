@@ -23,9 +23,10 @@ TRAFFIC_COLS = {
     'Cost': 'cost', 'Payout': 'revenue'
 }
 
-# Варианты названий колонок OS/Device (регистр и пробелы не важны)
+# Варианты названий колонок (регистр и пробелы не важны)
 COL_OS_ALIASES = ('os',)
 COL_DEVICE_ALIASES = ('device type', 'devicetype', 'device_type')
+COL_TRAFFIC_SOURCE_ALIASES = ('traffic source', 'trafficsource', 'traffic_source')
 
 def is_bot(token2):
     return 'bot' in str(token2).lower() if token2 else False
@@ -96,17 +97,19 @@ def _build_traffic_rename_map(df):
         col_str = str(col).strip()
         if col_str in TRAFFIC_COLS:
             rename[col] = TRAFFIC_COLS[col_str]
-            if TRAFFIC_COLS[col_str] in ('os', 'device_type'):
+            if TRAFFIC_COLS[col_str] in ('os', 'device_type', 'traffic_source'):
                 used_canonical.add(TRAFFIC_COLS[col_str])
             continue
         cl = col_str.lower()
-        # OS: колонка называется ровно "os" (не "os version")
         if cl == 'os' and 'os' not in used_canonical:
             rename[col] = 'os'
             used_canonical.add('os')
         elif cl in COL_DEVICE_ALIASES and 'device_type' not in used_canonical:
             rename[col] = 'device_type'
             used_canonical.add('device_type')
+        elif cl in COL_TRAFFIC_SOURCE_ALIASES and 'traffic_source' not in used_canonical:
+            rename[col] = 'traffic_source'
+            used_canonical.add('traffic_source')
     return rename
 
 @router.post("/upload")

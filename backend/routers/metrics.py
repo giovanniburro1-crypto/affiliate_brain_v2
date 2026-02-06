@@ -7,10 +7,13 @@ from backend.database import get_db
 
 router = APIRouter()
 
+# Исключаем из трафика источники с доп. монетизацией (не только 'AddMonetisation', но и любые со словом monetisation)
+FILTER_OUT_MONETISATION = "AND traffic_source != 'AddMonetisation' AND LOWER(traffic_source) NOT LIKE '%monetisation%'"
+
 
 def _get_totals(db: Session, date_from: date, source: Optional[str]):
     """Единый расчёт тоталов: spend, base_revenue, add_mon, total_profit. Без AS в SELECT — порядок колонок: 0=cost, 1=revenue, 2=conversions, 3=clicks."""
-    source_filter = "AND traffic_source = :source" if source and source != 'all' else "AND traffic_source != 'AddMonetisation'"
+    source_filter = "AND traffic_source = :source" if source and source != 'all' else FILTER_OUT_MONETISATION
     params = {'date_from': date_from}
     if source and source != 'all':
         params['source'] = source
@@ -66,7 +69,9 @@ async def get_campaigns(period: int = Query(7), source: Optional[str] = None, db
 
 @router.get("/metrics/sources")
 async def get_sources(db: Session = Depends(get_db)):
-    result = db.execute(text("SELECT DISTINCT traffic_source FROM traffic_stats WHERE traffic_source IS NOT NULL ORDER BY traffic_source")).fetchall()
+    result = db.execute(text(
+        f"SELECT DISTINCT traffic_source FROM traffic_stats WHERE traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} ORDER BY traffic_source"
+    )).fetchall()
     return {"sources": [r[0] for r in result]}
 
 @router.get("/metrics/daily")
@@ -82,7 +87,9 @@ async def get_daily(period: int = Query(14), db: Session = Depends(get_db)):
 @router.get("/metrics/sources-table")
 async def get_sources_table(period: int = Query(14), db: Session = Depends(get_db)):
     date_from = date.today() - timedelta(days=period)
-    sources = db.execute(text("SELECT DISTINCT traffic_source FROM traffic_stats WHERE date >= :d AND traffic_source IS NOT NULL"), {'d': date_from}).fetchall()
+    sources = db.execute(text(
+        f"SELECT DISTINCT traffic_source FROM traffic_stats WHERE date >= :d AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION}"
+    ), {'d': date_from}).fetchall()
     result = []
     for (src,) in sources:
         daily = db.execute(text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE traffic_source = :s AND date >= :d GROUP BY date ORDER BY date"), {'s': src, 'd': date_from}).fetchall()
@@ -106,7 +113,7 @@ async def get_splits(period: int = Query(14), source: Optional[str] = None, db: 
     date_from = date.today() - timedelta(days=period)
     total_spend, total_base_revenue, add_mon, total_profit, _, _ = _get_totals(db, date_from, source)
 
-    source_filter = "AND traffic_source = :source" if source and source != 'all' else "AND traffic_source != 'AddMonetisation'"
+    source_filter = "AND traffic_source = :source" if source and source != 'all' else FILTER_OUT_MONETISATION
     params = {'date_from': date_from}
     if source and source != 'all':
         params['source'] = source
@@ -228,8 +235,8 @@ async def get_traffic_sources_summary(period: int = Query(14), db: Session = Dep
         "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"
     ), {'d': date_from}).scalar() or 0)
     
-    # Получаем данные по traffic sources из traffic_stats
-    sources = db.execute(text("""
+    # Получаем данные по traffic sources из traffic_stats (исключаем доп. монетизацию)
+    sources = db.execute(text(f"""
         SELECT 
             traffic_source,
             SUM(cost) as spend,
@@ -237,7 +244,7 @@ async def get_traffic_sources_summary(period: int = Query(14), db: Session = Dep
         FROM traffic_stats
         WHERE date >= :d 
           AND traffic_source IS NOT NULL 
-          AND traffic_source != 'AddMonetisation'
+          {FILTER_OUT_MONETISATION}
         GROUP BY traffic_source
     """), {'d': date_from}).fetchall()
     
