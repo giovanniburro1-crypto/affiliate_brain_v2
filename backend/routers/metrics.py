@@ -75,13 +75,43 @@ async def get_sources(db: Session = Depends(get_db)):
     return {"sources": [r[0] for r in result]}
 
 @router.get("/metrics/daily")
-async def get_daily(period: int = Query(14), db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
-    rows = db.execute(text("SELECT date, SUM(cost), SUM(revenue), SUM(conversions) FROM traffic_stats WHERE date >= :d GROUP BY date ORDER BY date"), {'d': date_from}).fetchall()
+async def get_daily(
+    period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)
+):
+    """
+    General Dynamics: данные за выбранный период (ровно period дат: сегодня, вчера, ..., сегодня-(period-1)).
+    С учётом выбранного traffic source. По каждой дате: cost, revenue, clicks (только из traffic_stats).
+    Если данных нет — дата всё равно в ответе с нулями.
+    """
+    today = date.today()
+    date_from = today - timedelta(days=period - 1)  # 7 дней = сегодня, сегодня-1, ..., сегодня-6
+    source_filter = "AND traffic_source = :source" if source and source != "all" else FILTER_OUT_MONETISATION
+    params = {"d": date_from}
+    if source and source != "all":
+        params["source"] = source
+    rows = db.execute(
+        text(f"""
+        SELECT date, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) as clicks
+        FROM traffic_stats
+        WHERE date >= :d AND traffic_source IS NOT NULL {source_filter}
+        GROUP BY date
+        ORDER BY date
+        """),
+        params,
+    ).fetchall()
+    by_date = {row[0]: {"cost": int(row[1] or 0), "revenue": int(row[2] or 0), "conversions": int(row[3] or 0), "clicks": int(row[4] or 0)} for row in rows}
     daily = []
-    for row in rows:
-        cost, revenue = int(row[1] or 0), int(row[2] or 0)
-        daily.append({"date": row[0].isoformat(), "cost": cost, "revenue": revenue, "profit": revenue - cost, "conversions": int(row[3] or 0)})
+    for i in range(period):
+        d = date_from + timedelta(days=i)
+        rec = by_date.get(d, {"cost": 0, "revenue": 0, "conversions": 0, "clicks": 0})
+        daily.append({
+            "date": d.isoformat(),
+            "cost": rec["cost"],
+            "revenue": rec["revenue"],
+            "profit": rec["revenue"] - rec["cost"],
+            "conversions": rec["conversions"],
+            "clicks": rec["clicks"],
+        })
     return {"daily": daily}
 
 @router.get("/metrics/sources-table")

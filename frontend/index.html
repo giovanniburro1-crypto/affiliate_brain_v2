@@ -198,7 +198,7 @@
             try {
                 const period = document.getElementById('periodSelect').value;
                 const source = document.getElementById('sourceSelect').value;
-                await Promise.all([loadSummary(period, source), loadSplits(period, source), loadChart(period), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
+                await Promise.all([loadSummary(period, source), loadSplits(period, source), loadChart(period, source), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
             } finally {
                 applyBtn.disabled = false;
                 applyBtn.innerHTML = 'Apply';
@@ -226,16 +226,21 @@
             document.getElementById('osSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">OS</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.os.map(o => `<tr class="border-b border-zinc-800"><td class="py-1.5">${o.name}</td><td class="text-right">${o.traffic_pct}%</td><td class="text-right">${o.clicks.toLocaleString()}</td><td class="text-right">${o.profit_pct}%</td><td class="text-right ${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
             document.getElementById('deviceSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">Device</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.device.map(d => `<tr class="border-b border-zinc-800"><td class="py-1.5">${d.name}</td><td class="text-right">${d.traffic_pct}%</td><td class="text-right">${d.clicks.toLocaleString()}</td><td class="text-right">${d.profit_pct}%</td><td class="text-right ${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
         }
-        async function loadChart(period) {
-            const res = await fetch(`/api/metrics/daily?period=${period}`, { cache: 'no-store' });
+        async function loadChart(period, source) {
+            const url = `/api/metrics/daily?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             if (chart) chart.destroy();
             chart = new Chart(document.getElementById('chart'), {
                 type: 'line',
-                data: { labels: data.daily.map(d => d.date.slice(5)), datasets: [
-                    { label: 'Revenue', data: data.daily.map(d => d.revenue), borderColor: '#22c55e', tension: 0.4 },
-                    { label: 'Spend', data: data.daily.map(d => d.cost), borderColor: '#ef4444', tension: 0.4 }
-                ]},
+                data: {
+                    labels: data.daily.map(d => d.date.slice(5)),
+                    datasets: [
+                        { label: 'Revenue', data: data.daily.map(d => d.revenue), borderColor: '#22c55e', tension: 0.4 },
+                        { label: 'Spend', data: data.daily.map(d => d.cost), borderColor: '#ef4444', tension: 0.4 },
+                        { label: 'Traffic ÷10', data: data.daily.map(d => (d.clicks || 0) / 10), borderColor: '#3b82f6', tension: 0.4 }
+                    ]
+                },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { ticks: { color: '#9ca3af' } }, y: { ticks: { color: '#9ca3af' } } } }
             });
         }
