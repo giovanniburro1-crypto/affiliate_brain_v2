@@ -6,6 +6,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from backend.database import get_db
+from sqlalchemy.exc import IntegrityError
 from backend.models import TrafficStats, AdditionalMonetization, Orphan
 
 router = APIRouter()
@@ -98,12 +99,34 @@ def _process_traffic(df, db, stats):
         ))
         stats['inserted'] += 1
         if len(batch) >= 5000:
-            db.bulk_save_objects(batch)
-            db.commit()
+            _save_traffic_batch(db, batch)
             batch = []
     if batch:
+        _save_traffic_batch(db, batch)
+
+
+def _save_traffic_batch(db, batch):
+    """
+    Сохраняем партию TrafficStats, игнорируя дубликаты click_id.
+    Сначала пробуем bulk_save_objects (быстро),
+    если падает из-за уникального индекса — вставляем по одной записи.
+    """
+    if not batch:
+        return
+
+    try:
         db.bulk_save_objects(batch)
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        for obj in batch:
+            try:
+                db.add(obj)
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                # дубликат или другая проблема — просто пропускаем
+                continue
 
 def _process_sales(df, db, stats):
     stats['total'] = len(df)

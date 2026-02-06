@@ -294,6 +294,21 @@
             }).join('');
         }
         
+        function openUpload() {
+            const modal = document.getElementById('uploadModal');
+            const status = document.getElementById('uploadStatus');
+            const input = document.getElementById('fileInput');
+            if (status) status.textContent = '';
+            if (input) input.value = '';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeUpload() {
+            const modal = document.getElementById('uploadModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
         async function openOrphans() {
             document.getElementById('orphansModal').classList.remove('hidden');
             document.getElementById('orphansModal').classList.add('flex');
