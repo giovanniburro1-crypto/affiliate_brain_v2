@@ -123,7 +123,8 @@ async def get_splits(period: int = Query(14), source: Optional[str] = None, db: 
     if os_base_revenue_sum == 0:
         os_base_revenue_sum = 1
 
-    os_groups = {"iOS": {"clicks": 0, "profit": 0}, "Android": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}, "Unknown": {"clicks": 0, "profit": 0}}
+    # Только 3 строки: Android, Other, iOS. Unknown считаем как Other.
+    os_groups = {"Android": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}, "iOS": {"clicks": 0, "profit": 0}}
     for row in os_raw:
         os_name = (str(row[0] or 'Unknown')).strip() or 'Unknown'
         clicks = int(row[1] or 0)
@@ -140,15 +141,13 @@ async def get_splits(period: int = Query(14), source: Optional[str] = None, db: 
         elif os_name == "Android":
             os_groups["Android"]["clicks"] += clicks
             os_groups["Android"]["profit"] += profit_os
-        elif os_name == "Unknown":
-            os_groups["Unknown"]["clicks"] += clicks
-            os_groups["Unknown"]["profit"] += profit_os
         else:
+            # Unknown и любые другие → Other
             os_groups["Other"]["clicks"] += clicks
             os_groups["Other"]["profit"] += profit_os
 
     os_result = []
-    for name in ["iOS", "Android", "Other", "Unknown"]:
+    for name in ["Android", "Other", "iOS"]:
         data = os_groups[name]
         traffic_pct = round(data["clicks"] / total_os_clicks * 100) if total_os_clicks > 0 else 0
         profit_pct = round(data["profit"] / total_profit * 100) if total_profit != 0 else 0
@@ -167,7 +166,8 @@ async def get_splits(period: int = Query(14), source: Optional[str] = None, db: 
     if dev_base_revenue_sum == 0:
         dev_base_revenue_sum = 1
 
-    device_groups = {"Mobile": {"clicks": 0, "profit": 0}, "Desktop": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}, "Unknown": {"clicks": 0, "profit": 0}}
+    # Только 3 строки: Mobile, Desktop, Other. Unknown считаем как Other.
+    device_groups = {"Mobile": {"clicks": 0, "profit": 0}, "Desktop": {"clicks": 0, "profit": 0}, "Other": {"clicks": 0, "profit": 0}}
     for row in device_raw:
         dev_name = (str(row[0] or 'Unknown')).strip() or 'Unknown'
         clicks = int(row[1] or 0)
@@ -184,15 +184,13 @@ async def get_splits(period: int = Query(14), source: Optional[str] = None, db: 
         elif dev_name == "Desktop":
             device_groups["Desktop"]["clicks"] += clicks
             device_groups["Desktop"]["profit"] += profit_dev
-        elif dev_name == "Unknown":
-            device_groups["Unknown"]["clicks"] += clicks
-            device_groups["Unknown"]["profit"] += profit_dev
         else:
+            # Unknown и любые другие → Other
             device_groups["Other"]["clicks"] += clicks
             device_groups["Other"]["profit"] += profit_dev
 
     device_result = []
-    for name in ["Mobile", "Desktop", "Other", "Unknown"]:
+    for name in ["Mobile", "Desktop", "Other"]:
         data = device_groups[name]
         traffic_pct = round(data["clicks"] / total_dev_clicks * 100) if total_dev_clicks > 0 else 0
         profit_pct = round(data["profit"] / total_profit * 100) if total_profit != 0 else 0

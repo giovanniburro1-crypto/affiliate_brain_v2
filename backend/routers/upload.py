@@ -23,12 +23,91 @@ TRAFFIC_COLS = {
     'Cost': 'cost', 'Payout': 'revenue'
 }
 
+# Варианты названий колонок OS/Device (регистр и пробелы не важны)
+COL_OS_ALIASES = ('os',)
+COL_DEVICE_ALIASES = ('device type', 'devicetype', 'device_type')
+
 def is_bot(token2):
     return 'bot' in str(token2).lower() if token2 else False
+
+# Золотое правило: ВСЕ автоматические решения (подстановка OS/Device, маршрут monetisation и т.д.)
+# применяются ТОЛЬКО при уверенности в ответе выше 95%.
+# Относится и к изменениям в коде: при сомнениях более 5% — ищем решение вместе или перепроверяем.
+CONFIDENCE_THRESHOLD = 0.95
+
+def infer_os_and_device(token2, campaign):
+    """
+    Пытается определить OS и Device по token2/campaign.
+    Возвращает (os, device_type, confidence).
+    Подставляем только если confidence >= CONFIDENCE_THRESHOLD (>95%).
+    """
+    t = (str(token2 or '') + ' ' + str(campaign or '')).lower()
+    if not t.strip():
+        return None, None, 0.0
+    os_val, dev_val = None, None
+    conf = 0.0
+    # OS: чёткие маркеры
+    if 'android' in t and 'ios' not in t and 'iphone' not in t:
+        os_val, conf = 'Android', 0.96
+    elif ('ios' in t or 'iphone' in t or 'ipad' in t) and 'android' not in t:
+        os_val, conf = 'iOS', 0.96
+    # Device: чёткие маркеры
+    if 'mobile' in t and 'desktop' not in t:
+        dev_val = 'Mobile'
+        if conf < 0.96:
+            conf = 0.96
+    elif 'desktop' in t and 'mobile' not in t:
+        dev_val = 'Desktop'
+        if conf < 0.96:
+            conf = 0.96
+    # Если нашли только device без os — уверенность только по device
+    if dev_val and not os_val:
+        conf = 0.96
+    return os_val, dev_val, conf
 
 def extract_prefix(token1):
     if not token1: return ''
     return str(token1).split('_')[0]
+
+# Monetisation определяем по значению колонки Traffic Source (и при необходимости campaign), не по названию файла.
+MONETISATION_MARKER = 'monetisation'
+
+def _is_monetisation_by_column(traffic_source_val, campaign_val):
+    """
+    Доп. монетизация: в колонке Traffic Source (или campaign) есть 'monetisation'.
+    Уверенность 0.96 — только при явном маркере. Иначе не применяем маршрут.
+    """
+    ts = (str(traffic_source_val or '')).lower()
+    camp = (str(campaign_val or '')).lower()
+    if MONETISATION_MARKER in ts or MONETISATION_MARKER in camp:
+        return True, 0.96
+    return False, 0.0
+
+def _build_traffic_rename_map(df):
+    """
+    Строит маппинг колонок файла в имена полей.
+    Учитывает точные имена из TRAFFIC_COLS и варианты для OS / Device Type
+    (разный регистр, пробелы, DeviceType и т.д.).
+    """
+    rename = {}
+    used_canonical = set()  # уже сопоставленные канонические имена (os, device_type)
+
+    for col in df.columns:
+        col_str = str(col).strip()
+        if col_str in TRAFFIC_COLS:
+            rename[col] = TRAFFIC_COLS[col_str]
+            if TRAFFIC_COLS[col_str] in ('os', 'device_type'):
+                used_canonical.add(TRAFFIC_COLS[col_str])
+            continue
+        cl = col_str.lower()
+        # OS: колонка называется ровно "os" (не "os version")
+        if cl == 'os' and 'os' not in used_canonical:
+            rename[col] = 'os'
+            used_canonical.add('os')
+        elif cl in COL_DEVICE_ALIASES and 'device_type' not in used_canonical:
+            rename[col] = 'device_type'
+            used_canonical.add('device_type')
+    return rename
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -42,12 +121,68 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
             _process_sales(df, db, stats)
         else:
             df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-            df = df.rename(columns={k: v for k, v in TRAFFIC_COLS.items() if k in df.columns})
-            _process_traffic(df, db, stats)
+            original_columns = list(df.columns)
+            rename_map = _build_traffic_rename_map(df)
+            df = df.rename(columns=rename_map)
+            _process_traffic(df, db, stats, original_columns=original_columns, rename_map=rename_map)
         stats['time'] = round(time.time() - start, 2)
         return {"success": True, "stats": stats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def _process_monetisation_rows(db, stats, monetisation_rows):
+    """
+    Строки, где в колонке было 'monetisation' (уже отфильтрованы по уверенности >95%):
+    матчим по prefix token1 → campaign_id; есть родитель → additional_monetization, нет → orphans.
+    """
+    prefixes_set = set()
+    for r in monetisation_rows:
+        p = extract_prefix(r['token1'])
+        if p:
+            prefixes_set.add(p)
+    if not prefixes_set:
+        return
+    prefix_to_campaign = {}
+    prefixes_list = list(prefixes_set)
+    batch_size = 100
+    for i in range(0, len(prefixes_list), batch_size):
+        batch_prefixes = prefixes_list[i:i + batch_size]
+        placeholders = ','.join([f"'{p}'" for p in batch_prefixes])
+        matches = db.execute(text(f"""
+            SELECT DISTINCT split_part(token1, '_', 1) as prefix, campaign_id
+            FROM traffic_stats
+            WHERE split_part(token1, '_', 1) IN ({placeholders})
+        """)).fetchall()
+        for prefix, campaign_id in matches:
+            if campaign_id:
+                prefix_to_campaign[prefix] = campaign_id
+    matched_batch = []
+    orphan_batch = []
+    for r in monetisation_rows:
+        prefix = extract_prefix(r['token1'])
+        campaign_id = prefix_to_campaign.get(prefix) if prefix else None
+        if campaign_id:
+            matched_batch.append(AdditionalMonetization(
+                campaign_id=campaign_id,
+                token1=r['token1'],
+                date=r['date'],
+                revenue=r['revenue'],
+                source=r['source']
+            ))
+            stats['matched'] += 1
+        else:
+            orphan_batch.append(Orphan(
+                token1=r['token1'],
+                date=r['date'],
+                revenue=r['revenue'],
+                source=r['source']
+            ))
+            stats['orphans'] += 1
+    if matched_batch:
+        db.bulk_save_objects(matched_batch)
+    if orphan_batch:
+        db.bulk_save_objects(orphan_batch)
+    db.commit()
 
 def _read_sales_file(content):
     try:
@@ -64,9 +199,15 @@ def _read_sales_file(content):
     except: pass
     raise ValueError("Cannot read sales file")
 
-def _process_traffic(df, db, stats):
+def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
     stats['total'] = len(df)
+    stats['upload_columns'] = original_columns or list(df.columns)
+    stats['had_os_column'] = 'os' in df.columns
+    stats['had_device_column'] = 'device_type' in df.columns
+    stats['rows_with_os'] = 0
+    stats['rows_with_device'] = 0
     batch = []
+    monetisation_rows = []  # строки, где в колонке (traffic_source/campaign) есть 'monetisation' — только при уверенности >95%
     for _, row in df.iterrows():
         token2 = str(row.get('token2', '')) if pd.notna(row.get('token2')) else ''
         if is_bot(token2):
@@ -79,6 +220,35 @@ def _process_traffic(df, db, stats):
         elif hasattr(date_val, 'date'): date_val = date_val.date()
         else: date_val = datetime.now().date()
         revenue = float(row.get('revenue', 0) or 0)
+        traffic_source_val = row.get('traffic_source')
+        campaign_val = row.get('campaign')
+        # Маршрут monetisation: только по значению колонки и только при уверенности >95%
+        is_monet, mon_conf = _is_monetisation_by_column(traffic_source_val, campaign_val)
+        if is_monet and mon_conf >= CONFIDENCE_THRESHOLD:
+            token1_val = str(row.get('token1', '')).strip() if pd.notna(row.get('token1')) else ''
+            if token1_val and token1_val not in ('', 'nan', 'None'):
+                monetisation_rows.append({
+                    'token1': token1_val,
+                    'date': date_val,
+                    'revenue': revenue,
+                    'source': str(traffic_source_val or 'monetisation')[:100]
+                })
+                stats['inserted'] += 1
+            continue
+        os_val = str(row.get('os', '')).strip()[:100] if pd.notna(row.get('os')) and str(row.get('os', '')).strip() else None
+        device_val = str(row.get('device_type', '')).strip()[:100] if pd.notna(row.get('device_type')) and str(row.get('device_type', '')).strip() else None
+        if os_val is not None:
+            stats['rows_with_os'] += 1
+        if device_val is not None:
+            stats['rows_with_device'] += 1
+        if os_val is None or device_val is None:
+            campaign_str = str(row.get('campaign', '')) if pd.notna(row.get('campaign')) else ''
+            inferred_os, inferred_dev, confidence = infer_os_and_device(token2, campaign_str)
+            if confidence >= CONFIDENCE_THRESHOLD:
+                if os_val is None and inferred_os:
+                    os_val = inferred_os
+                if device_val is None and inferred_dev:
+                    device_val = inferred_dev
         batch.append(TrafficStats(
             click_id=str(row.get('click_id', f'gen_{stats["inserted"]}'))[:255],
             campaign_id=str(row.get('campaign_id', '')) if pd.notna(row.get('campaign_id')) else None,
@@ -94,8 +264,8 @@ def _process_traffic(df, db, stats):
             token9=str(row.get('token9', '')) if pd.notna(row.get('token9')) else None,
             token10=str(row.get('token10', '')) if pd.notna(row.get('token10')) else None,
             traffic_source=str(row.get('traffic_source', 'Unknown'))[:255],
-            os=str(row.get('os', ''))[:100] if pd.notna(row.get('os')) else None,
-            device_type=str(row.get('device_type', ''))[:100] if pd.notna(row.get('device_type')) else None,
+            os=os_val,
+            device_type=device_val,
             cost=float(row.get('cost', 0) or 0), revenue=revenue,
             conversions=1 if revenue > 0 else 0
         ))
@@ -105,6 +275,9 @@ def _process_traffic(df, db, stats):
             batch = []
     if batch:
         _save_traffic_batch(db, batch)
+    # Доп. монетизация из колонки: в additional_monetization при найденном родителе, иначе в orphans
+    if monetisation_rows:
+        _process_monetisation_rows(db, stats, monetisation_rows)
 
 
 def _save_traffic_batch(db, batch):

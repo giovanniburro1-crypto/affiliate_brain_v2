@@ -329,7 +329,13 @@
             const form = new FormData(); form.append('file', file);
             const res = await fetch('/api/upload', { method: 'POST', body: form });
             const data = await res.json();
-            document.getElementById('uploadStatus').innerHTML = data.success ? `<span class="text-green-400">Done! ${data.stats.inserted} rows (${data.stats.time}s)</span>` : `<span class="text-red-400">Error</span>`;
+            let msg = data.success ? `<span class="text-green-400">Done! ${data.stats.inserted} rows (${data.stats.time}s)</span>` : `<span class="text-red-400">Error</span>`;
+            if (data.success && data.stats.had_os_column !== undefined) {
+                const osOk = data.stats.had_os_column ? 'yes' : 'no';
+                const devOk = data.stats.had_device_column ? 'yes' : 'no';
+                msg += `<br><span class="text-zinc-400 text-xs">OS column: ${osOk}, Device column: ${devOk}. Rows with OS: ${data.stats.rows_with_os || 0}, with Device: ${data.stats.rows_with_device || 0}</span>`;
+            }
+            document.getElementById('uploadStatus').innerHTML = msg;
             if (data.success) setTimeout(() => { closeUpload(); loadAll(); loadOrphansCount(); }, 1500);
         }
     </script>
