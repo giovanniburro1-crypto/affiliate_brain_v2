@@ -1,7 +1,10 @@
 import json
+from sqlalchemy.orm import Session
+from backend.database import get_db
+from sqlalchemy import text
 from pathlib import Path
 from typing import Dict
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -52,4 +55,18 @@ async def git_commit(data: dict):
         result = subprocess.run(['git', 'push'], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', capture_output=True, text=True)
         return {"success": True, "message": "Pushed to GitHub!"}
     except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.post("/database/clear")
+async def clear_database(db: Session = Depends(get_db)):
+    """Очистка всех данных из БД"""
+    try:
+        db.execute(text("TRUNCATE TABLE traffic_stats CASCADE"))
+        db.execute(text("TRUNCATE TABLE additional_monetization CASCADE"))
+        db.execute(text("TRUNCATE TABLE orphans CASCADE"))
+        db.execute(text("TRUNCATE TABLE matching_logs CASCADE"))
+        db.commit()
+        return {"success": True, "message": "Database cleared"}
+    except Exception as e:
+        db.rollback()
         return {"success": False, "error": str(e)}

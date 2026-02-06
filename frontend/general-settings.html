@@ -4,8 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>General Settings - Affiliate Brain</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.tailwindcss.com">
+    async function clearDB() {
+        if (!confirm('⚠️ This will delete ALL data! Are you sure?')) return;
+        if (!confirm('Really? This cannot be undone!')) return;
+        
+        const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success) {
+            alert('✓ Database cleared!');
+            window.location.href = '/';
+        } else {
+            alert('✗ Error: ' + data.error);
+        }
+    }
+</script>
+    <script src="https://unpkg.com/lucide@latest">
+    async function clearDB() {
+        if (!confirm('⚠️ This will delete ALL data! Are you sure?')) return;
+        if (!confirm('Really? This cannot be undone!')) return;
+        
+        const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success) {
+            alert('✓ Database cleared!');
+            window.location.href = '/';
+        } else {
+            alert('✗ Error: ' + data.error);
+        }
+    }
+</script>
     <style>
         body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
         .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
@@ -43,12 +73,27 @@
             <div class="card p-6">
                 <h3 class="font-semibold mb-4 text-lg">Database Cleanup</h3>
                 <p class="text-zinc-400 text-sm mb-4">Remove all data from the database. This action cannot be undone.</p>
-                <button class="btn-danger px-4 py-2 rounded-lg flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>Clear Database (Coming Soon)
+                <button onclick="clearDB()" class="btn-danger px-4 py-2 rounded-lg flex items-center gap-2 hover:opacity-90">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>Clear Database
                 </button>
             </div>
         </main>
     </div>
-    <script>lucide.createIcons();</script>
+    <script>lucide.createIcons();
+    async function clearDB() {
+        if (!confirm('⚠️ This will delete ALL data! Are you sure?')) return;
+        if (!confirm('Really? This cannot be undone!')) return;
+        
+        const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success) {
+            alert('✓ Database cleared!');
+            window.location.href = '/';
+        } else {
+            alert('✗ Error: ' + data.error);
+        }
+    }
+</script>
 </body>
 </html>
