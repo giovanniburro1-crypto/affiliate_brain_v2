@@ -76,20 +76,30 @@
     <script>
         let agents = [];
         let campaignData = null;
+        let providersConfig = {};  // { "groq": { models: ["llama-3.1-70b", ...], key_set: true }, ... }
         
         async function init() {
             await loadCampaigns();
+            await loadProvidersConfig();
             await loadAgents();
             lucide.createIcons();
         }
         
+        async function loadProvidersConfig() {
+            const res = await fetch('/api/providers/config', { cache: 'no-store' });
+            const data = await res.json();
+            providersConfig = data.providers || {};
+        }
+        
         async function loadCampaigns() {
-            const res = await fetch('/api/metrics/sources');
+            const period = document.getElementById('periodSelect') ? document.getElementById('periodSelect').value : 14;
+            const res = await fetch(`/api/metrics/campaigns?period=${period}`);
             const data = await res.json();
             const select = document.getElementById('campaignSelect');
-            select.innerHTML = data.sources.map(s => 
-                `<option value="${s.traffic_source}">${s.traffic_source}</option>`
-            ).join('');
+            const campaigns = data.campaigns || [];
+            select.innerHTML = campaigns.length
+                ? campaigns.map(c => `<option value="${escapeAttr(c.campaign_id)}">${escapeHtml((c.campaign || '').replace(/^Mediabuys\s*-\s*/i, ''))} (${escapeHtml(c.source || '')})</option>`).join('')
+                : '<option value="">No campaigns</option>';
         }
         
         async function loadAgents() {
@@ -115,7 +125,7 @@
                     <div class="grid grid-cols-2 gap-4 mb-4">
                         <div>
                             <label class="text-sm text-zinc-400 block mb-1">Provider</label>
-                            <select id="provider-${idx}" class="w-full" onchange="updateAgent(${idx})">
+                            <select id="provider-${idx}" class="w-full" onchange="onProviderChange(${idx})">
                                 <option value="groq" ${agent.provider === 'groq' ? 'selected' : ''}>Groq</option>
                                 <option value="openrouter" ${agent.provider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
                                 <option value="deepseek" ${agent.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
@@ -124,7 +134,7 @@
                         </div>
                         <div>
                             <label class="text-sm text-zinc-400 block mb-1">Model</label>
-                            <input type="text" id="model-${idx}" value="${agent.model}" class="w-full" onchange="updateAgent(${idx})">
+                            <div id="model-wrap-${idx}">${getModelBlockHtml(idx)}</div>
                         </div>
                     </div>
                     
@@ -155,25 +165,74 @@
             agents[idx].enabled = enabled;
         }
         
+        function getProviderModels(provider) {
+            return (providersConfig[provider] && providersConfig[provider].models) || [];
+        }
+        
+        function escapeAttr(s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+        function escapeHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        
+        function getModelBlockHtml(idx) {
+            const agent = agents[idx];
+            const models = getProviderModels(agent.provider);
+            const currentModel = (agent.model || '').trim();
+            if (models.length === 0) {
+                return `<input type="text" id="model-custom-${idx}" value="${escapeAttr(currentModel)}" class="w-full" placeholder="e.g. llama-3.1-70b" oninput="updateAgent(${idx})">`;
+            }
+            const inList = models.includes(currentModel);
+            const options = models.map(m => `<option value="${escapeAttr(m)}" ${currentModel === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')
+                + `<option value="__other__" ${!inList ? 'selected' : ''}>Other (type below)</option>`;
+            const inputClass = inList ? 'w-full mt-1 hidden' : 'w-full mt-1';
+            const inputVal = inList ? '' : currentModel;
+            return `<select id="model-select-${idx}" class="w-full" onchange="onModelSelectChange(${idx})">${options}</select>
+                <input type="text" id="model-custom-${idx}" value="${escapeAttr(inputVal)}" class="${inputClass}" placeholder="Model id" oninput="updateAgent(${idx})">`;
+        }
+        
+        function getModelValue(idx) {
+            const sel = document.getElementById(`model-select-${idx}`);
+            const inp = document.getElementById(`model-custom-${idx}`);
+            if (sel && sel.value && sel.value !== '__other__') return sel.value;
+            return inp ? inp.value.trim() : '';
+        }
+        
         function updateAgent(idx) {
             agents[idx].provider = document.getElementById(`provider-${idx}`).value;
-            agents[idx].model = document.getElementById(`model-${idx}`).value;
+            agents[idx].model = getModelValue(idx);
             agents[idx].system_prompt = document.getElementById(`prompt-${idx}`).value;
         }
         
+        function onModelSelectChange(idx) {
+            const sel = document.getElementById(`model-select-${idx}`);
+            const inp = document.getElementById(`model-custom-${idx}`);
+            if (inp) inp.classList.toggle('hidden', sel && sel.value !== '__other__');
+            updateAgent(idx);
+        }
+        
+        function onProviderChange(idx) {
+            updateAgent(idx);
+            const wrap = document.getElementById(`model-wrap-${idx}`);
+            if (wrap) wrap.innerHTML = getModelBlockHtml(idx);
+        }
+        
         async function testAgent(idx) {
+            updateAgent(idx);
             const agent = agents[idx];
             const responseDiv = document.getElementById(`response-${idx}`);
             responseDiv.innerHTML = '<span class="text-yellow-400">Testing...</span>';
             
-            // Get campaign data
-            const campaign = document.getElementById('campaignSelect').value;
+            const campaignId = document.getElementById('campaignSelect').value;
             const period = document.getElementById('periodSelect').value;
             
-            const res = await fetch(`/api/metrics/summary?period=${period}`);
-            const data = await res.json();
+            // Если выбрана кампания — грузим разбивку по token2, offer, jump из БД (реальные цифры для ИИ)
+            let data;
+            if (campaignId) {
+                const res = await fetch(`/api/metrics/campaign-breakdown?campaign_id=${encodeURIComponent(campaignId)}&period=${period}`);
+                data = await res.json();
+            } else {
+                const res = await fetch(`/api/metrics/summary?period=${period}`);
+                data = await res.json();
+            }
             
-            // Test API call
             const testRes = await fetch('/api/agents/test', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -194,6 +253,7 @@
         }
         
         async function saveAgent(idx) {
+            updateAgent(idx);
             const agent = agents[idx];
             const res = await fetch(`/api/agents/${agent.agent_name}`, {
                 method: 'PUT',

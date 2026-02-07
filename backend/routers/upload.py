@@ -17,16 +17,18 @@ TRAFFIC_COLS = {
     'Token 3': 'token3', 'Token 4': 'token4', 'Token 5': 'token5',
     'Token 6': 'token6', 'Token 7': 'token7', 'Token 8': 'token8',
     'Token 9': 'token9', 'Token 10': 'token10', 'Traffic Source': 'traffic_source',
-    'Path': 'path', 'Rule': 'rule', 'Offer': 'offer', 'Lander ID': 'lander_id',
+    'Path': 'path', 'Rule': 'rule', 'Offer': 'offer', 'Offer ID': 'offer', 'Lander ID': 'lander_id',
     'Device Type': 'device_type', 'OS': 'os', 'OS Version': 'os_version',
     'Browser Name': 'browser_name', 'Country': 'country', 'Language': 'language',
-    'Cost': 'cost', 'Payout': 'revenue'
+    'Cost': 'cost', 'Payout': 'revenue', 'Conversion': 'conversions', 'Conversions': 'conversions',
 }
 
 # Варианты названий колонок (регистр и пробелы не важны)
 COL_OS_ALIASES = ('os',)
 COL_DEVICE_ALIASES = ('device type', 'devicetype', 'device_type')
 COL_TRAFFIC_SOURCE_ALIASES = ('traffic source', 'trafficsource', 'traffic_source')
+COL_CONVERSION_ALIASES = ('conversion', 'conversions')
+COL_OFFER_ALIASES = ('offer id', 'offer_id', 'offerid')
 
 def is_bot(token2):
     return 'bot' in str(token2).lower() if token2 else False
@@ -97,11 +99,14 @@ def _build_traffic_rename_map(df):
         col_str = str(col).strip()
         if col_str in TRAFFIC_COLS:
             rename[col] = TRAFFIC_COLS[col_str]
-            if TRAFFIC_COLS[col_str] in ('os', 'device_type', 'traffic_source'):
+            if TRAFFIC_COLS[col_str] in ('os', 'device_type', 'traffic_source', 'conversions', 'offer'):
                 used_canonical.add(TRAFFIC_COLS[col_str])
             continue
-        cl = col_str.lower()
-        if cl == 'os' and 'os' not in used_canonical:
+        cl = col_str.lower().replace(' ', '')
+        if cl in COL_OFFER_ALIASES and 'offer' not in used_canonical:
+            rename[col] = 'offer'
+            used_canonical.add('offer')
+        elif cl == 'os' and 'os' not in used_canonical:
             rename[col] = 'os'
             used_canonical.add('os')
         elif cl in COL_DEVICE_ALIASES and 'device_type' not in used_canonical:
@@ -110,6 +115,9 @@ def _build_traffic_rename_map(df):
         elif cl in COL_TRAFFIC_SOURCE_ALIASES and 'traffic_source' not in used_canonical:
             rename[col] = 'traffic_source'
             used_canonical.add('traffic_source')
+        elif cl in COL_CONVERSION_ALIASES and 'conversions' not in used_canonical:
+            rename[col] = 'conversions'
+            used_canonical.add('conversions')
     return rename
 
 @router.post("/upload")
@@ -223,6 +231,17 @@ def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
         elif hasattr(date_val, 'date'): date_val = date_val.date()
         else: date_val = datetime.now().date()
         revenue = float(row.get('revenue', 0) or 0)
+        # Conversion: из колонки Conversion/Conversions или по правилу «везде где payout — есть conversion»
+        conv_raw = row.get('conversions')
+        if conv_raw is not None and pd.notna(conv_raw):
+            try:
+                conversions = max(0, int(float(conv_raw)))
+            except (ValueError, TypeError):
+                conversions = 1 if revenue > 0 else 0
+        else:
+            conversions = 1 if revenue > 0 else 0
+        if revenue > 0 and conversions < 1:
+            conversions = 1  # в БД конверсия везде, где есть пейаут
         traffic_source_val = row.get('traffic_source')
         campaign_val = row.get('campaign')
         # Маршрут monetisation: только по значению колонки и только при уверенности >95%
@@ -270,7 +289,7 @@ def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
             os=os_val,
             device_type=device_val,
             cost=float(row.get('cost', 0) or 0), revenue=revenue,
-            conversions=1 if revenue > 0 else 0
+            conversions=conversions
         ))
         stats['inserted'] += 1
         if len(batch) >= 5000:

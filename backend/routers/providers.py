@@ -17,6 +17,25 @@ class TestProviderRequest(BaseModel):
 CONFIG_PATH = Path("providers_config.json")
 
 
+@router.get("/providers/config")
+async def get_providers_config():
+    """
+    Возвращает сохранённую конфигурацию провайдеров без API-ключей.
+    Нужно для Settings Top 5: подставить список моделей по выбранному провайдеру.
+    """
+    if not CONFIG_PATH.exists():
+        return {"providers": {}}
+    try:
+        data = json.loads(CONFIG_PATH.read_text())
+        out = {}
+        for name, cfg in data.items():
+            if isinstance(cfg, dict):
+                out[name] = {"models": cfg.get("models") or [], "key_set": bool((cfg.get("key") or "").strip())}
+        return {"providers": out}
+    except Exception:
+        return {"providers": {}}
+
+
 @router.post("/providers/test")
 async def test_provider(req: TestProviderRequest):
     """

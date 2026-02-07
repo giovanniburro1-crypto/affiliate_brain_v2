@@ -67,6 +67,221 @@ async def get_campaigns(period: int = Query(7), source: Optional[str] = None, db
         campaigns.append({"campaign_id": row[0], "campaign": row[1], "source": row[2], "spend": spend, "revenue": revenue, "profit": profit, "roi": roi, "conversions": int(row[5] or 0), "clicks": int(row[6] or 0)})
     return {"campaigns": campaigns}
 
+
+@router.get("/metrics/campaign-breakdown")
+async def get_campaign_breakdown(
+    campaign_id: str = Query(..., description="Campaign ID (token1)"),
+    period: int = Query(14),
+    db: Session = Depends(get_db),
+):
+    """
+    Разбивка по кампании для ИИ: token2 (creative), offer, lander_id (jump).
+    Реальные данные из БД — чтобы модель не «фантазировала», а опиралась на цифры.
+    """
+    date_from = date.today() - timedelta(days=period)
+    params = {"cid": campaign_id, "d": date_from}
+
+    # Итоги по кампании
+    row = db.execute(
+        text("""
+            SELECT SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+        """),
+        params,
+    ).fetchone()
+    spend = int(round(float(row[0] or 0)))
+    base_revenue = int(round(float(row[1] or 0)))
+    conversions = int(row[2] or 0)
+    clicks = int(row[3] or 0)
+    add_mon = db.execute(
+        text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :cid AND date >= :d"),
+        params,
+    ).scalar() or 0
+    revenue = base_revenue + int(add_mon)
+    profit = revenue - spend
+    roi = round((profit / spend * 100) if spend > 0 else 0)
+    epc = round(revenue / clicks, 4) if clicks else 0
+    cr = round(conversions / clicks * 100, 2) if clicks else 0
+
+    summary = {
+        "campaign_id": campaign_id,
+        "spend": spend,
+        "revenue": revenue,
+        "profit": profit,
+        "roi": roi,
+        "conversions": conversions,
+        "clicks": clicks,
+        "epc": epc,
+        "cr_pct": cr,
+    }
+
+    def _rows_to_breakdown(rows, first_key="name"):
+        """first_key: для ИИ используем offer_id вместо name в разбивке по офферу."""
+        out = []
+        for r in rows:
+            s, rev, conv, clk = int(r[1] or 0), int(r[2] or 0), int(r[3] or 0), int(r[4] or 0)
+            out.append({
+                first_key: r[0] or "(empty)",
+                "spend": s,
+                "revenue": rev,
+                "conversions": conv,
+                "clicks": clk,
+                "epc": round(rev / clk, 4) if clk else 0,
+                "cr_pct": round(conv / clk * 100, 2) if clk else 0,
+                "profit": rev - s,
+            })
+        return out
+
+    # По token2 (creative)
+    by_token2 = db.execute(
+        text("""
+            SELECT COALESCE(token2, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY token2
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 50
+        """),
+        params,
+    ).fetchall()
+    # По offer (в ответе для ИИ — offer_id)
+    by_offer = db.execute(
+        text("""
+            SELECT COALESCE(offer, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY offer
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 50
+        """),
+        params,
+    ).fetchall()
+    # По lander_id (jump)
+    by_lander = db.execute(
+        text("""
+            SELECT COALESCE(lander_id, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY lander_id
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 50
+        """),
+        params,
+    ).fetchall()
+    # По OS, Country, Device Type — чтобы ИИ видел контекст и не давал очевидные инсайты (типа «US Android работает»)
+    by_os = db.execute(
+        text("""
+            SELECT COALESCE(os, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY os
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 30
+        """),
+        params,
+    ).fetchall()
+    by_country = db.execute(
+        text("""
+            SELECT COALESCE(country, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY country
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 30
+        """),
+        params,
+    ).fetchall()
+    by_device_type = db.execute(
+        text("""
+            SELECT COALESCE(device_type, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY device_type
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 30
+        """),
+        params,
+    ).fetchall()
+    # Связка token2 + offer + lander_id (топ комбо по профиту)
+    combo = db.execute(
+        text("""
+            SELECT COALESCE(token2, '(empty)'), COALESCE(offer, '(empty)'), COALESCE(lander_id, '(empty)'),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d
+            GROUP BY token2, offer, lander_id
+            HAVING COUNT(*) >= 10
+            ORDER BY SUM(revenue) - SUM(cost) DESC
+            LIMIT 30
+        """),
+        params,
+    ).fetchall()
+    combinations = [
+        {
+            "token2": r[0] or "(empty)",
+            "offer_id": r[1] or "(empty)",
+            "lander_id": r[2] or "(empty)",
+            "spend": int(r[3] or 0),
+            "revenue": int(r[4] or 0),
+            "conversions": int(r[5] or 0),
+            "clicks": int(r[6] or 0),
+            "epc": round(int(r[4] or 0) / (int(r[6] or 0) or 1), 4),
+            "cr_pct": round(int(r[5] or 0) / (int(r[6] or 0) or 1) * 100, 2),
+            "profit": int(r[4] or 0) - int(r[3] or 0),
+        }
+        for r in combo
+    ]
+
+    # Схема полей для ИИ: соответствие ключей в JSON и названий колонок (26 колонок)
+    column_labels = {
+        "token2": "Token 2 (creative)",
+        "offer_id": "Offer ID",
+        "lander_id": "Lander ID (jump)",
+        "os": "OS",
+        "country": "Country",
+        "device_type": "Device Type",
+        "traffic_source": "Traffic Source",
+        "campaign_id": "Campaign ID",
+        "path": "Path",
+        "rule": "Rule",
+        "token1": "Token 1",
+        "token3": "Token 3",
+        "token4": "Token 4",
+        "token5": "Token 5",
+        "token6": "Token 6",
+        "token7": "Token 7",
+        "token8": "Token 8",
+        "token9": "Token 9",
+        "token10": "Token 10",
+        "cost": "Cost",
+        "revenue": "Payout",
+        "conversions": "Conversion",
+        "clicks": "clicks (count)",
+        "epc": "EPC ($)",
+        "cr_pct": "CR (%)",
+        "profit": "profit ($)",
+    }
+
+    return {
+        "column_labels": column_labels,
+        "summary": summary,
+        "by_token2": _rows_to_breakdown(by_token2),
+        "by_offer_id": _rows_to_breakdown(by_offer, first_key="offer_id"),
+        "by_lander_id_jump": _rows_to_breakdown(by_lander, first_key="lander_id"),
+        "by_os": _rows_to_breakdown(by_os, first_key="os"),
+        "by_country": _rows_to_breakdown(by_country, first_key="country"),
+        "by_device_type": _rows_to_breakdown(by_device_type, first_key="device_type"),
+        "top_combinations_token2_offer_id_jump": combinations,
+    }
+
+
 @router.get("/metrics/sources")
 async def get_sources(db: Session = Depends(get_db)):
     result = db.execute(text(
