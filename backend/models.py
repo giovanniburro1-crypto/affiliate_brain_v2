@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, Boolean
+from datetime import datetime
 from sqlalchemy.sql import func
 from backend.database import Base
 
@@ -69,3 +70,13 @@ class AIMemory(Base):
     outcome = Column(String(50))
     roi_after_7days = Column(Float)
     roi_after_14days = Column(Float)
+
+class AIAgent(Base):
+    __tablename__ = 'ai_agents'
+    id = Column(Integer, primary_key=True)
+    agent_name = Column(String(100), unique=True, nullable=False)
+    enabled = Column(Boolean, default=True)
+    provider = Column(String(50))
+    model = Column(String(100))
+    system_prompt = Column(Text)
+    updated_at = Column(DateTime, default=datetime.utcnow)

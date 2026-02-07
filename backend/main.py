@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, Response
 import uvicorn
 from backend.config import settings
 from backend.database import check_db_connection
-from backend.routers import upload_router, metrics_router, bot_agent_router, ai_settings_router, providers_router
+from backend.routers import upload_router, metrics_router, bot_agent_router, ai_settings_router, providers, ai_agents
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,7 +23,8 @@ app.include_router(upload_router, prefix="/api", tags=["Upload"])
 app.include_router(metrics_router, prefix="/api", tags=["Metrics"])
 app.include_router(bot_agent_router, prefix="/api/bot-agent", tags=["Bot Agent"])
 app.include_router(ai_settings_router, prefix="/api/ai-settings", tags=["AI Settings"])
-app.include_router(providers_router, prefix="/api", tags=["Providers"])
+app.include_router(providers.router, prefix="/api", tags=["Providers"])
+app.include_router(ai_agents.router, prefix="/api", tags=["AI Agents"])
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():

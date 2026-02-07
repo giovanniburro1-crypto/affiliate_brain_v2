@@ -12,6 +12,15 @@
         .nav-item { border-radius: 8px; }
         .nav-item:hover { background: rgba(139,92,246,0.1); }
         .nav-item.active { background: #8b5cf6; }
+        select, textarea, input { background: #12121a; border: 1px solid #2a2a3a; color: #fff; padding: 8px; border-radius: 6px; }
+        .btn-primary { background: #8b5cf6; }
+        .btn-success { background: #22c55e; }
+        .toggle-switch { position: relative; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4a4a5a; transition: .4s; border-radius: 24px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .toggle-slider { background-color: #8b5cf6; }
+        input:checked + .toggle-slider:before { transform: translateX(20px); }
     </style>
 </head>
 <body class="min-h-screen">
@@ -32,133 +41,174 @@
                 <a href="/settings" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
             </nav>
         </aside>
+        
         <main class="ml-56 flex-1 p-6">
             <div class="flex items-center gap-3 mb-6">
                 <a href="/settings" class="text-zinc-400 hover:text-white"><i data-lucide="arrow-left" class="w-5 h-5"></i></a>
                 <h1 class="text-2xl font-bold">Settings Top 5</h1>
             </div>
-
-            <!-- Campaign selector for testing agents -->
-            <div class="card p-4 mb-6">
-                <h3 class="font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="bot" class="w-4 h-4"></i>
-                    AI Council Settings
-                </h3>
-                <div class="flex items-center gap-4 mb-4">
-                    <select id="campaignSelect" class="flex-1 px-3 py-2 rounded-lg">
-                        <option value="">Select campaign for testing...</option>
+            
+            <!-- Header: Campaign + Period selector -->
+            <div class="card p-4 mb-6 flex gap-4 items-center">
+                <div class="flex-1">
+                    <label class="text-sm text-zinc-400 block mb-1">Campaign</label>
+                    <select id="campaignSelect" class="w-full">
+                        <option value="">Loading campaigns...</option>
                     </select>
-                    <button onclick="loadCampaign()" class="btn-primary px-4 py-2 rounded-lg">Load</button>
                 </div>
-                <div id="cacheStatus" class="text-xs text-zinc-500 mb-4">No campaign loaded</div>
+                <div class="w-48">
+                    <label class="text-sm text-zinc-400 block mb-1">Period</label>
+                    <select id="periodSelect" class="w-full">
+                        <option value="7">7 days</option>
+                        <option value="14" selected>14 days</option>
+                        <option value="30">30 days</option>
+                    </select>
+                </div>
             </div>
-
-            <!-- Roles configuration -->
-            <div id="rolesContainer" class="space-y-4"></div>
-            <button onclick="saveAll()" class="w-full btn-success py-3 rounded-xl font-bold mt-6">Save All AI Settings</button>
+            
+            <!-- 8 AI Agents -->
+            <div id="agentsContainer" class="space-y-6">
+                <!-- Will be populated by JS -->
+            </div>
         </main>
     </div>
+    
     <script>
-        const roles = [
-            { id: 'bot_pro', name: 'BOT PRO', icon: '👍' },
-            { id: 'bot_con', name: 'BOT CON', icon: '👎' },
-            { id: 'analyst', name: 'ANALYST', icon: '📊' },
-            { id: 'strategist', name: 'STRATEGIST', icon: '🎯' },
-            { id: 'risk', name: 'RISK MANAGER', icon: '⚠️' },
-            { id: 'monetizer', name: 'MONETIZER', icon: '💰' },
-            { id: 'visionary', name: 'VISIONARY', icon: '🔮' },
-            { id: 'ceo', name: 'CEO', icon: '👑' }
-        ];
-        const providers = ['openrouter', 'groq', 'google', 'siliconflow'];
-        let cached = null;
-
-        document.addEventListener('DOMContentLoaded', () => {
+        let agents = [];
+        let campaignData = null;
+        
+        async function init() {
+            await loadCampaigns();
+            await loadAgents();
             lucide.createIcons();
-            renderRoles();
-            loadCampaigns();
-        });
-
-        function renderRoles() {
-            document.getElementById('rolesContainer').innerHTML = roles.map(r => `
-                <div class="card p-4">
-                    <div class="flex items-center gap-3 mb-3">
-                        <span class="text-2xl">${r.icon}</span>
-                        <span class="font-bold">${r.name}</span>
-                        <select id="${r.id}-provider" class="px-2 py-1 rounded text-sm">
-                            ${providers.map(p => `<option value="${p}">${p}</option>`).join('')}
-                        </select>
-                        <label class="ml-auto flex items-center gap-1">
-                            <input type="checkbox" id="${r.id}-enabled" checked> On
+        }
+        
+        async function loadCampaigns() {
+            const res = await fetch('/api/metrics/sources');
+            const data = await res.json();
+            const select = document.getElementById('campaignSelect');
+            select.innerHTML = data.sources.map(s => 
+                `<option value="${s.traffic_source}">${s.traffic_source}</option>`
+            ).join('');
+        }
+        
+        async function loadAgents() {
+            const res = await fetch('/api/agents');
+            const data = await res.json();
+            agents = data.agents;
+            renderAgents();
+        }
+        
+        function renderAgents() {
+            const container = document.getElementById('agentsContainer');
+            container.innerHTML = agents.map((agent, idx) => `
+                <div class="card p-6" id="agent-${idx}">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold">${agent.agent_name}</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${agent.enabled ? 'checked' : ''} 
+                                   onchange="toggleAgent(${idx}, this.checked)">
+                            <span class="toggle-slider"></span>
                         </label>
                     </div>
-                    <textarea id="${r.id}-prompt" rows="2" class="w-full p-2 rounded text-sm" placeholder="Prompt...">
-${r.name} analysis prompt</textarea>
-                    <div class="flex gap-2 mt-2">
-                        <button onclick="saveRole('${r.id}')" class="btn-success px-3 py-1 rounded text-sm">Save</button>
-                        <button onclick="testRole('${r.id}')" class="btn-primary px-3 py-1 rounded text-sm">Test</button>
-                        <span id="${r.id}-status" class="text-xs text-zinc-400 ml-2"></span>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="text-sm text-zinc-400 block mb-1">Provider</label>
+                            <select id="provider-${idx}" class="w-full" onchange="updateAgent(${idx})">
+                                <option value="groq" ${agent.provider === 'groq' ? 'selected' : ''}>Groq</option>
+                                <option value="openrouter" ${agent.provider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
+                                <option value="deepseek" ${agent.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
+                                <option value="google" ${agent.provider === 'google' ? 'selected' : ''}>Google</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-sm text-zinc-400 block mb-1">Model</label>
+                            <input type="text" id="model-${idx}" value="${agent.model}" class="w-full" onchange="updateAgent(${idx})">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-sm text-zinc-400 block mb-1">System Prompt</label>
+                            <textarea id="prompt-${idx}" rows="6" class="w-full" onchange="updateAgent(${idx})">${agent.system_prompt}</textarea>
+                        </div>
+                        <div>
+                            <label class="text-sm text-zinc-400 block mb-1">AI Response Preview</label>
+                            <div id="response-${idx}" class="w-full h-40 bg-zinc-900 rounded-lg p-3 text-sm overflow-y-auto text-zinc-400">
+                                Click "Test" to see response
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3 mt-4">
+                        <button onclick="testAgent(${idx})" class="btn-primary px-4 py-2 rounded-lg">Test</button>
+                        <button onclick="saveAgent(${idx})" class="btn-success px-4 py-2 rounded-lg">Save</button>
+                        <button onclick="resetAgent(${idx})" class="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600">Reset</button>
                     </div>
                 </div>
             `).join('');
+            lucide.createIcons();
         }
-
-        async function loadCampaigns() {
-            const res = await fetch('/api/bot-agent/top5?period=7');
+        
+        function toggleAgent(idx, enabled) {
+            agents[idx].enabled = enabled;
+        }
+        
+        function updateAgent(idx) {
+            agents[idx].provider = document.getElementById(`provider-${idx}`).value;
+            agents[idx].model = document.getElementById(`model-${idx}`).value;
+            agents[idx].system_prompt = document.getElementById(`prompt-${idx}`).value;
+        }
+        
+        async function testAgent(idx) {
+            const agent = agents[idx];
+            const responseDiv = document.getElementById(`response-${idx}`);
+            responseDiv.innerHTML = '<span class="text-yellow-400">Testing...</span>';
+            
+            // Get campaign data
+            const campaign = document.getElementById('campaignSelect').value;
+            const period = document.getElementById('periodSelect').value;
+            
+            const res = await fetch(`/api/metrics/summary?period=${period}`);
             const data = await res.json();
-            document.getElementById('campaignSelect').innerHTML =
-                '<option value="">Select...</option>' +
-                data.campaigns.map(
-                    c => `<option value="${c.campaign_id}">${c.campaign} (ROI: ${c.roi}%)</option>`
-                ).join('');
-        }
-
-        async function loadCampaign() {
-            const id = document.getElementById('campaignSelect').value;
-            if (!id) return;
-            const res = await fetch(`/api/bot-agent/analyze?campaign_id=${id}&period=7`, { method: 'POST' });
-            cached = await res.json();
-            document.getElementById('cacheStatus').textContent = '✅ Loaded: ' + cached.campaign;
-        }
-
-        async function saveRole(id) {
-            await fetch('/api/ai-settings/save', {
+            
+            // Test API call
+            const testRes = await fetch('/api/agents/test', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    role: id,
-                    provider: document.getElementById(id + '-provider').value,
-                    model: 'default',
-                    prompt: document.getElementById(id + '-prompt').value,
-                    enabled: document.getElementById(id + '-enabled').checked
+                    provider: agent.provider,
+                    model: agent.model,
+                    system_prompt: agent.system_prompt,
+                    campaign_data: data
                 })
             });
-            document.getElementById(id + '-status').textContent = '✅ Saved';
-        }
-
-        async function testRole(id) {
-            if (!cached) return alert('Load campaign first');
-            document.getElementById(id + '-status').textContent = 'Testing...';
-            const res = await fetch('/api/ai-settings/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    role: id,
-                    provider: document.getElementById(id + '-provider').value,
-                    model: 'default',
-                    prompt: document.getElementById(id + '-prompt').value,
-                    campaign_data: cached
-                })
-            });
-            const data = await res.json();
-            document.getElementById(id + '-status').textContent = '✅ ' + JSON.stringify(data.response);
-        }
-
-        async function saveAll() {
-            for (const r of roles) {
-                await saveRole(r.id);
+            
+            const result = await testRes.json();
+            if (result.success) {
+                responseDiv.innerHTML = result.response;
+            } else {
+                responseDiv.innerHTML = `<span class="text-red-400">Error: ${result.error}</span>`;
             }
-            alert('All saved!');
         }
+        
+        async function saveAgent(idx) {
+            const agent = agents[idx];
+            const res = await fetch(`/api/agents/${agent.agent_name}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(agent)
+            });
+            const data = await res.json();
+            alert(data.success ? '✓ Saved!' : '✗ Error');
+        }
+        
+        function resetAgent(idx) {
+            location.reload();
+        }
+        
+        init();
     </script>
 </body>
 </html>

@@ -198,7 +198,7 @@
             try {
                 const period = document.getElementById('periodSelect').value;
                 const source = document.getElementById('sourceSelect').value;
-                await Promise.all([loadSummary(period, source), loadSplits(period, source), loadChart(period, source), loadTrafficSourcesSummary(period), loadSourcesTable(period)]);
+                await Promise.all([loadSummary(period, source), loadSplits(period, source), loadChart(period, source), loadTrafficSourcesSummary(period, source), loadSourcesTable(period, source)]);
             } finally {
                 applyBtn.disabled = false;
                 applyBtn.innerHTML = 'Apply';
@@ -245,8 +245,9 @@
             });
         }
         
-        async function loadTrafficSourcesSummary(period) {
-            const res = await fetch(`/api/metrics/traffic-sources-summary?period=${period}`, { cache: 'no-store' });
+        async function loadTrafficSourcesSummary(period, source) {
+            const url = `/api/metrics/traffic-sources-summary?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('trafficSourcesSummary').innerHTML = data.sources.map(s => `
                 <tr class="border-b border-zinc-800">
@@ -259,8 +260,9 @@
             `).join('');
         }
         
-        async function loadSourcesTable(period) {
-            const res = await fetch(`/api/metrics/campaigns-table?period=${period}`, { cache: 'no-store' });
+        async function loadSourcesTable(period, source) {
+            const url = `/api/metrics/campaigns-table?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             
             // Генерируем заголовки дат (сегодня → сегодня-13)
@@ -295,7 +297,7 @@
                 
                 return `<tr class="border-b border-zinc-800">
                     <td class="py-2 px-2 sticky left-0 bg-zinc-900 text-xs">${c.token1}</td>
-                    <td class="py-2 px-2 sticky left-16 bg-zinc-900 text-xs truncate" style="max-width: 200px;">${c.campaign}</td>
+                    <td class="py-2 px-2 sticky left-16 bg-zinc-900 text-xs truncate" style="max-width: 200px;">${(c.campaign || '').replace(/^Mediabuys\s*-\s*/i, '')}</td>
                     <td class="py-2 px-2 text-right text-xs">${c.spend.toLocaleString()}</td>
                     ${dateCells}
                 </tr>`;

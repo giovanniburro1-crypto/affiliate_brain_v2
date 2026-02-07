@@ -257,15 +257,27 @@ async def match_orphan(orphan_id: int, campaign_id: str, db: Session = Depends(g
     return {"success": True}
 
 @router.get("/metrics/traffic-sources-summary")
-async def get_traffic_sources_summary(period: int = Query(14), db: Session = Depends(get_db)):
+async def get_traffic_sources_summary(period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)):
     date_from = date.today() - timedelta(days=period)
-    
-    # Общая additional_monetization за период (ВСЯ, как в summary)
-    total_add = float(db.execute(text(
-        "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"
-    ), {'d': date_from}).scalar() or 0)
-    
-    # Получаем данные по traffic sources из traffic_stats (исключаем доп. монетизацию)
+    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
+    params = {'d': date_from}
+    if source and source != "all":
+        params['source'] = source
+
+    # additional_monetization за период (при выборе источника — только кампании этого источника)
+    if source and source != "all":
+        total_add = float(db.execute(text("""
+            SELECT COALESCE(SUM(am.revenue), 0)
+            FROM additional_monetization am
+            WHERE am.date >= :d
+              AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE traffic_source = :source)
+        """), params).scalar() or 0)
+    else:
+        total_add = float(db.execute(text(
+            "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"
+        ), {'d': date_from}).scalar() or 0)
+
+    # Получаем данные по traffic sources из traffic_stats (с учётом выбранного источника)
     sources = db.execute(text(f"""
         SELECT 
             traffic_source,
@@ -274,9 +286,10 @@ async def get_traffic_sources_summary(period: int = Query(14), db: Session = Dep
         FROM traffic_stats
         WHERE date >= :d 
           AND traffic_source IS NOT NULL 
-          {FILTER_OUT_MONETISATION}
+          {FILTER_OUT_MONETISATION if not (source and source != "all") else ""}
+          {source_filter}
         GROUP BY traffic_source
-    """), {'d': date_from}).fetchall()
+    """), params).fetchall()
     
     # Считаем общий базовый revenue для пропорций
     total_base_revenue = sum(float(row[2] or 0) for row in sources)
@@ -309,33 +322,42 @@ async def get_traffic_sources_summary(period: int = Query(14), db: Session = Dep
     return {"sources": result}
 
 @router.get("/metrics/campaigns-table")
-async def get_campaigns_table(period: int = Query(14), db: Session = Depends(get_db)):
+async def get_campaigns_table(period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)):
     date_from = date.today() - timedelta(days=period)
-    
-    # Получаем топ-25 кампаний по spend
-    campaigns = db.execute(text("""
+    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
+    params = {'d': date_from}
+    if source and source != "all":
+        params['source'] = source
+
+    # Получаем топ-25 кампаний по spend (с учётом выбранного источника)
+    campaigns_query = f"""
         SELECT campaign_id, campaign, SUM(cost) as total_spend
         FROM traffic_stats 
-        WHERE date >= :d AND campaign_id IS NOT NULL
+        WHERE date >= :d AND campaign_id IS NOT NULL {source_filter}
         GROUP BY campaign_id, campaign
         ORDER BY total_spend DESC
         LIMIT 25
-    """), {'d': date_from}).fetchall()
-    
+    """
+    campaigns = db.execute(text(campaigns_query), params).fetchall()
+
     result = []
     for row in campaigns:
         campaign_id = row[0]
         campaign_name = row[1]
         total_spend = int(row[2] or 0)
-        
-        # Получаем данные по дням для этой кампании
-        daily = db.execute(text("""
+        day_params = {'cid': campaign_id, 'd': date_from}
+        if source and source != "all":
+            day_params['source'] = source
+
+        # Получаем данные по дням для этой кампании (с учётом источника)
+        daily_query = f"""
             SELECT date, SUM(cost), SUM(revenue)
             FROM traffic_stats 
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d {source_filter}
             GROUP BY date
             ORDER BY date
-        """), {'cid': campaign_id, 'd': date_from}).fetchall()
+        """
+        daily = db.execute(text(daily_query), day_params).fetchall()
         
         days = {}
         for day_row in daily:
