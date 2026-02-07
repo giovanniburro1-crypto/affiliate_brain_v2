@@ -62,6 +62,10 @@ async def ai_company_analysis():
 async def ai_connect_models():
     with open("frontend/ai-connect-models.html") as f: return f.read()
 
+@app.get("/re-checking", response_class=HTMLResponse)
+async def re_checking():
+    with open("frontend/re-checking.html") as f: return f.read()
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -80,19 +84,3 @@ async def chrome_devtools():
 
 if __name__ == "__main__":
     uvicorn.run("backend.main:app", host=settings.host, port=settings.port, reload=True)
-
-@app.get("/general-settings", response_class=HTMLResponse)
-async def general_settings():
-    with open("frontend/general-settings.html") as f: return f.read()
-
-@app.get("/ai-top5", response_class=HTMLResponse)
-async def ai_top5():
-    with open("frontend/ai-top5.html") as f: return f.read()
-
-@app.get("/ai-search-gold", response_class=HTMLResponse)
-async def ai_search_gold():
-    with open("frontend/ai-search-gold.html") as f: return f.read()
-
-@app.get("/ai-company-analysis", response_class=HTMLResponse)
-async def ai_company_analysis():
-    with open("frontend/ai-company-analysis.html") as f: return f.read()
