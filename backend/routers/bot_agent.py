@@ -3,10 +3,21 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from pydantic import BaseModel
 from backend.database import get_db
 from backend.models import AIMemory
 
 router = APIRouter()
+
+# Переписываем/применяем рекомендации только при уверенности выше 95%
+CONFIDENCE_THRESHOLD = 95
+
+
+class ApplyBody(BaseModel):
+    campaign_id: str
+    verdict: str
+    hide_days: int = 0
+    confidence: float = 0
 
 def calc_volatility(roi_history: List[float]) -> float:
     if len(roi_history) < 2: return 50.0
@@ -96,3 +107,47 @@ async def analyze(campaign_id: str = Query(...), period: int = Query(7), db: Ses
     except: db.rollback()
     
     return {"campaign_id": campaign_id, "campaign": row[0], "source": row[1], **metrics, **analysis}
+
+
+@router.post("/apply")
+async def apply(body: ApplyBody, db: Session = Depends(get_db)):
+    """Применить вердикт только при уверенности ≥95%. Иначе возвращаем ошибку."""
+    if body.confidence < CONFIDENCE_THRESHOLD:
+        return {
+            "success": False,
+            "error": f"Применить можно только при уверенности ≥{CONFIDENCE_THRESHOLD}%. Сейчас: {round(body.confidence)}%."
+        }
+    date_from = date.today() - timedelta(days=14)
+    row = db.execute(
+        text("SELECT campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) FROM traffic_stats WHERE campaign_id = :c AND date >= :d GROUP BY campaign, traffic_source"),
+        {"c": body.campaign_id, "d": date_from}
+    ).fetchone()
+    if not row:
+        return {"success": False, "error": "Кампания не найдена"}
+    spend, revenue = int(row[2] or 0), int(row[3] or 0)
+    daily = db.execute(
+        text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE campaign_id = :c AND date >= :d GROUP BY date ORDER BY date"),
+        {"c": body.campaign_id, "d": date_from}
+    ).fetchall()
+    roi_history = [round((r[2] - r[1]) / r[1] * 100 if r[1] else 0) for r in daily]
+    profit = revenue - spend
+    roi = round((profit / spend * 100) if spend > 0 else 0)
+    metrics = {"roi": roi, "profit": profit, "spend": spend, "revenue": revenue, "conversions": int(row[4] or 0), "clicks": int(row[5] or 0)}
+    analysis = apply_logic(metrics, roi_history)
+    verdict = (body.verdict or "HOLD").upper()
+    if verdict not in ("SCALE", "HOLD", "OPTIMIZE", "STOP"):
+        verdict = "HOLD"
+    try:
+        db.add(AIMemory(
+            campaign_id=body.campaign_id,
+            decision_date=datetime.now(),
+            bot_verdict=verdict,
+            bot_score=analysis["bot_score"],
+            bot_confidence=analysis["confidence"],
+            bot_reasoning=analysis["reasoning"],
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        return {"success": False, "error": "Ошибка записи в БД"}
+    return {"success": True}

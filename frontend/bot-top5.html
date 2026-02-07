@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot TOP-5 Analysis - Affiliate Brain</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
+        .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
+        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
+        .nav-item { border-radius: 8px; }
+        .nav-item:hover { background: rgba(139,92,246,0.1); }
+        .nav-item.active { background: #8b5cf6; }
+        select { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
+        .btn-primary { background: #8b5cf6; }
+        .btn-success { background: #22c55e; }
+        .btn-danger { background: #ef4444; }
+        .btn-blue { background: #3b82f6; }
+        .verdict-SCALE { color: #22c55e; }
+        .verdict-STOP { color: #ef4444; }
+        .verdict-OPTIMIZE { color: #3b82f6; }
+        .verdict-CONTINUE, .verdict-HOLD { color: #eab308; }
+        .confidence-high { color: #22c55e; }
+        .confidence-low { color: #eab308; }
+        .spinner { width: 24px; height: 24px; border: 3px solid #2a2a3a; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .top5-loading { transition: opacity 0.2s; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="flex">
+        <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
+            <div class="flex items-center gap-2 mb-8">
+                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <i data-lucide="brain" class="w-5 h-5"></i>
+                </div>
+                <span class="font-bold">AFFILIATE BRAIN</span>
+            </div>
+            <nav class="flex-1 space-y-1">
+                <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
+                <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
+                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
+                <a href="/bot-top5" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
+                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
+                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
+            </nav>
+        </aside>
+
+        <main class="ml-56 flex-1 p-6 flex flex-col min-h-screen relative">
+            <!-- Индикатор загрузки (как на дашборде) -->
+            <div id="top5Loading" class="top5-loading hidden absolute inset-0 z-10 bg-black/40 flex items-center justify-center rounded-xl" style="margin: -1.5rem;">
+                <div class="card p-6 flex flex-col items-center gap-4">
+                    <div class="spinner"></div>
+                    <span class="text-zinc-300">Loading data...</span>
+                </div>
+            </div>
+            <!-- Header: заголовок, период, кнопки в одной строке -->
+            <div class="flex items-center justify-between gap-4 mb-6">
+                <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="trophy" class="w-6 h-6 text-yellow-400"></i>Bot TOP-5 Analysis</h1>
+                <div class="flex items-center gap-3">
+                    <span class="text-zinc-400 text-sm">Period:</span>
+                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="onPeriodChange()">
+                        <option value="7">Last 7 days</option>
+                        <option value="14">Last 14 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                    </select>
+                    <button type="button" id="playBtn" onclick="onPlayClick()" class="btn-success px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="play" class="w-4 h-4"></i>Play
+                    </button>
+                    <a href="/" class="px-4 py-2 rounded-lg text-sm border border-zinc-600 hover:bg-zinc-800">← Back to Dashboard</a>
+                </div>
+            </div>
+
+            <!-- Two columns 50/50: TOP-5 bot и AI совет -->
+            <div class="flex flex-1 gap-6 min-h-0">
+                <!-- Left: TOP-5 SCALE OPPORTUNITIES -->
+                <div class="flex-1 min-w-0 flex flex-col">
+                    <div class="card p-4 mb-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-lg font-semibold">TOP-5 SCALE OPPORTUNITIES</h2>
+                            <span class="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400">LIVE</span>
+                        </div>
+                        <div class="text-zinc-500 text-sm">
+                            Updated: <span id="updatedTime">--</span> · Period: <span id="periodLabel">30</span> days
+                        </div>
+                    </div>
+                    <div id="top5Cards" class="flex-1 overflow-y-auto space-y-4"></div>
+                </div>
+
+                <!-- Right: AI СОВЕТ (поровну с левым) -->
+                <div class="flex-1 min-w-0 flex flex-col">
+                    <div class="card p-4 flex-1 flex flex-col min-h-0">
+                        <div class="flex items-center gap-2 mb-2">
+                            <h2 class="text-lg font-semibold">AI СОВЕТ — АНАЛИЗ КАМПАНИЙ</h2>
+                            <span class="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">8 AI РОЛЕЙ</span>
+                        </div>
+                        <p class="text-zinc-500 text-sm mb-4">Кликните на кампанию для анализа (OpenRouter + Google + Groq)</p>
+                        <div id="aiPanelContent" class="flex-1 overflow-y-auto rounded-lg bg-zinc-900/50 p-4 text-sm text-zinc-300 min-h-[200px]">
+                            <p class="text-zinc-500">Выберите кампанию и нажмите «Call AI Council», чтобы получить анализ от 8 AI-ролей.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const CONFIDENCE_THRESHOLD = 95; // применяем только при уверенности ≥95%
+        let top5Data = null;
+        let breakdownCache = {};
+        let cachedPeriod = null; // кеш действителен только для этого периода
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            document.getElementById('top5Cards').innerHTML = '<p class="text-zinc-500 py-8 text-center">Нажмите <strong>Play</strong> для загрузки TOP-5.</p>';
+        });
+
+        function onPeriodChange() {
+            const period = document.getElementById('periodSelect').value;
+            document.getElementById('periodLabel').textContent = period;
+            if (cachedPeriod !== null && cachedPeriod !== period) {
+                cachedPeriod = null;
+                breakdownCache = {};
+                top5Data = null;
+                document.getElementById('top5Cards').innerHTML = '<p class="text-zinc-500 py-8 text-center">Период изменён. Нажмите <strong>Play</strong> для загрузки.</p>';
+            }
+        }
+
+        function onPlayClick() {
+            loadTop5();
+        }
+
+        function showTop5Loading(show) {
+            const el = document.getElementById('top5Loading');
+            if (!el) return;
+            if (show) { el.classList.remove('hidden'); el.classList.add('flex'); }
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+
+        function escapeHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        function formatTrend(trend) {
+            if (trend === 'IMPROVING') return '↑ growth';
+            if (trend === 'DECLINING') return '↓ decline';
+            return '→ stable';
+        }
+
+        function bestWorstFromBreakdown(breakdown) {
+            const items = [];
+            if (breakdown.by_os && breakdown.by_os.length) {
+                const best = breakdown.by_os[0];
+                const worst = breakdown.by_os[breakdown.by_os.length - 1];
+                items.push({ label: 'best OS', name: best.os, rev: best.revenue, cost: best.spend });
+                items.push({ label: 'worst OS', name: worst.os, rev: worst.revenue, cost: worst.spend });
+            }
+            if (breakdown.by_token2 && breakdown.by_token2.length) {
+                const best = breakdown.by_token2[0];
+                items.push({ label: 'best Token2', name: best.name, rev: best.revenue, cost: best.spend });
+            }
+            if (breakdown.by_device_type && breakdown.by_device_type.length) {
+                const best = breakdown.by_device_type[0];
+                const worst = breakdown.by_device_type[breakdown.by_device_type.length - 1];
+                items.push({ label: 'best Device', name: best.device_type, rev: best.revenue, cost: best.spend });
+                items.push({ label: 'worst Device', name: worst.device_type, rev: worst.revenue, cost: worst.spend });
+            }
+            return items;
+        }
+
+        async function getBreakdown(campaignId, period) {
+            if (breakdownCache[campaignId]) return breakdownCache[campaignId];
+            const res = await fetch(`/api/metrics/campaign-breakdown?campaign_id=${encodeURIComponent(campaignId)}&period=${period}`);
+            const data = await res.json();
+            breakdownCache[campaignId] = data;
+            return data;
+        }
+
+        async function loadTop5() {
+            showTop5Loading(true);
+            try {
+                const period = document.getElementById('periodSelect').value;
+                document.getElementById('periodLabel').textContent = period;
+                document.getElementById('updatedTime').textContent = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                cachedPeriod = period;
+
+                const res = await fetch(`/api/bot-agent/top5?period=${period}`);
+                const data = await res.json();
+                top5Data = data;
+
+                const campaigns = data.campaigns || [];
+                const periodNum = parseInt(period, 10);
+
+                const cardsHtml = await Promise.all(campaigns.map(async (c, i) => {
+                let breakdown = {};
+                try {
+                    breakdown = await getBreakdown(c.campaign_id, periodNum);
+                } catch (_) {}
+                const items = bestWorstFromBreakdown(breakdown);
+                const shortName = (c.campaign || '').replace(/^[^-]+-\s*/i, '').trim() || c.campaign;
+                const volText = `SCALE volatility ${Math.round(c.volatility || 0)}% data for ${(c.reasoning || '').length ? '3' : '0'} days`;
+                const trendText = formatTrend(c.trend);
+                const confClass = (c.confidence || 0) >= CONFIDENCE_THRESHOLD ? 'confidence-high' : 'confidence-low';
+
+                return `
+                <div class="card p-4" data-campaign-id="${escapeHtml(c.campaign_id)}">
+                    <div class="flex justify-between items-start gap-4">
+                        <div>
+                            <h3 class="font-semibold text-lg">${escapeHtml(shortName)}</h3>
+                            <div class="text-zinc-400 text-sm mt-1">ROI ${c.roi}% • Profit $${c.profit} • Spend $${c.spend} • Clicks ${c.clicks || 0} • Conv ${c.conversions || 0}</div>
+                        </div>
+                        <div class="text-3xl font-bold ${confClass}">${Math.round(c.confidence || 0)}%</div>
+                    </div>
+                    <div class="mt-2 text-zinc-500 text-sm">${volText} ${trendText}</div>
+                    ${items.length ? `<div class="mt-2 space-y-1 text-xs text-zinc-400">${items.slice(0, 6).map(it => `${it.label} ${escapeHtml(it.name)} · Rev $${it.rev} Cost $${it.cost}`).join('<br>')}</div>` : ''}
+                    <div class="mt-4 flex flex-wrap items-center gap-3">
+                        <div class="flex gap-2">
+                            <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="SCALE" ${c.verdict === 'SCALE' ? 'checked' : ''}> <span class="verdict-SCALE">SCALE</span></label>
+                            <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="HOLD" ${(c.verdict === 'CONTINUE' || c.verdict === 'HOLD') ? 'checked' : ''}> <span class="verdict-HOLD">HOLD</span></label>
+                            <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="OPTIMIZE" ${c.verdict === 'OPTIMIZE' ? 'checked' : ''}> <span class="verdict-OPTIMIZE">OPTIMIZE</span></label>
+                        </div>
+                        <select class="px-2 py-1 rounded text-xs bg-zinc-800" id="hideDays-${escapeHtml(c.campaign_id)}">
+                            <option value="0">Hide for: —</option>
+                            <option value="1">1 day</option>
+                            <option value="3" selected>3 days</option>
+                            <option value="7">7 days</option>
+                        </select>
+                        <button type="button" onclick="onApply('${escapeHtml(c.campaign_id)}', ${c.confidence})" class="btn-success px-3 py-1.5 rounded text-sm">Apply</button>
+                        <button type="button" onclick="callAiCouncil('${escapeHtml(c.campaign_id)}', '${escapeHtml((c.campaign || '').replace(/'/g, "\\'"))}', ${periodNum})" class="btn-blue px-3 py-1.5 rounded text-sm">Call AI Council</button>
+                    </div>
+                </div>
+                `;
+                }));
+
+                document.getElementById('top5Cards').innerHTML = cardsHtml.join('');
+                lucide.createIcons();
+            } finally {
+                showTop5Loading(false);
+            }
+        }
+
+        function onApply(campaignId, confidence) {
+            if (confidence < CONFIDENCE_THRESHOLD) {
+                alert('Применить можно только при уверенности ≥95%. Сейчас: ' + Math.round(confidence) + '%.');
+                return;
+            }
+            const verdictEl = document.querySelector(`input[name="verdict-${campaignId}"]:checked`);
+            const verdict = verdictEl ? verdictEl.value : 'HOLD';
+            const hideDaysEl = document.getElementById(`hideDays-${campaignId}`);
+            const hideDays = hideDaysEl ? parseInt(hideDaysEl.value, 10) : 0;
+
+            fetch('/api/bot-agent/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ campaign_id: campaignId, verdict, hide_days: hideDays, confidence })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) alert('Применено.');
+                else alert(data.error || 'Ошибка');
+            })
+            .catch(() => alert('Ошибка сети'));
+        }
+
+        async function callAiCouncil(campaignId, campaignName, period) {
+            const panel = document.getElementById('aiPanelContent');
+            panel.innerHTML = '<p class="text-yellow-400">Загрузка анализа AI Council...</p>';
+
+            try {
+                const res = await fetch('/api/agents/council', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaign_id: campaignId, period })
+                });
+                const data = await res.json();
+
+                if (!data.success) {
+                    panel.innerHTML = '<p class="text-red-400">' + escapeHtml(data.error || 'Ошибка') + '</p>';
+                    return;
+                }
+
+                const results = data.results || [];
+                let html = '<p class="text-zinc-400 mb-2">Кампания: <strong>' + escapeHtml(campaignName) + '</strong></p>';
+                results.forEach(r => {
+                    const text = (r.response || r.error || '—').trim();
+                    const isError = !!r.error;
+                    html += '<div class="mb-4 p-3 rounded bg-zinc-800/50"><div class="font-medium text-purple-400 mb-1">' + escapeHtml(r.agent_name) + '</div><div class="' + (isError ? 'text-red-400' : 'text-zinc-300') + ' whitespace-pre-wrap">' + escapeHtml(text) + '</div></div>';
+                });
+                panel.innerHTML = html;
+            } catch (e) {
+                panel.innerHTML = '<p class="text-red-400">Ошибка: ' + escapeHtml(e.message) + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

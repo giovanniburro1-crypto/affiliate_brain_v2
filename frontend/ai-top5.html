@@ -36,7 +36,7 @@
                 <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
                 <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
-                <a href="/top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
+                <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
                 <a href="/settings" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
             </nav>
@@ -163,6 +163,8 @@
         
         function toggleAgent(idx, enabled) {
             agents[idx].enabled = enabled;
+            updateAgent(idx);
+            saveAgent(idx, true); // сразу сохраняем в БД, чтобы council учитывал только включённых
         }
         
         function getProviderModels(provider) {
@@ -252,16 +254,16 @@
             }
         }
         
-        async function saveAgent(idx) {
+        async function saveAgent(idx, silent) {
             updateAgent(idx);
             const agent = agents[idx];
-            const res = await fetch(`/api/agents/${agent.agent_name}`, {
+            const res = await fetch(`/api/agents/${encodeURIComponent(agent.agent_name)}`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(agent)
             });
             const data = await res.json();
-            alert(data.success ? '✓ Saved!' : '✗ Error');
+            if (!silent) alert(data.success ? '✓ Saved!' : '✗ Error');
         }
         
         function resetAgent(idx) {

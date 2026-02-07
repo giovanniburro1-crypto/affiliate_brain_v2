@@ -34,6 +34,10 @@ async def dashboard():
 async def top5():
     with open("frontend/top5.html") as f: return f.read()
 
+@app.get("/bot-top5", response_class=HTMLResponse)
+async def bot_top5():
+    with open("frontend/bot-top5.html") as f: return f.read()
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page():
     with open("frontend/settings.html") as f: return f.read()
