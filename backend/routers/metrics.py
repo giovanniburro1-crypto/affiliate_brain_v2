@@ -11,15 +11,29 @@ router = APIRouter()
 FILTER_OUT_MONETISATION = "AND traffic_source != 'AddMonetisation' AND LOWER(traffic_source) NOT LIKE '%monetisation%'"
 
 
-def _get_totals(db: Session, date_from: date, source: Optional[str]):
+def _period_or_range(period: int, date_from_str: Optional[str], date_to_str: Optional[str]) -> tuple:
+    """Возвращает (date_from, date_to). Если переданы date_from_str и date_to_str — парсим их, иначе период от сегодня."""
+    today = date.today()
+    if date_from_str and date_to_str:
+        try:
+            d_from = date.fromisoformat(date_from_str.strip()[:10])
+            d_to = date.fromisoformat(date_to_str.strip()[:10])
+            if d_from <= d_to:
+                return (d_from, d_to)
+        except (ValueError, TypeError):
+            pass
+    return (today - timedelta(days=period), today)
+
+
+def _get_totals(db: Session, date_from: date, date_to: date, source: Optional[str]):
     """Единый расчёт тоталов: spend, base_revenue, add_mon, total_profit. Без AS в SELECT — порядок колонок: 0=cost, 1=revenue, 2=conversions, 3=clicks."""
     source_filter = "AND traffic_source = :source" if source and source != 'all' else FILTER_OUT_MONETISATION
-    params = {'date_from': date_from}
+    params = {'date_from': date_from, 'date_to': date_to}
     if source and source != 'all':
         params['source'] = source
     r = db.execute(text(
         f"SELECT COALESCE(SUM(cost),0), COALESCE(SUM(revenue),0), COALESCE(SUM(conversions),0), COUNT(*) "
-        f"FROM traffic_stats WHERE date >= :date_from AND traffic_source IS NOT NULL {source_filter}"
+        f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to AND traffic_source IS NOT NULL {source_filter}"
     ), params).fetchone()
     total_spend = int(round(float(r[0] or 0)))
     total_base_revenue = int(round(float(r[1] or 0)))
@@ -30,13 +44,13 @@ def _get_totals(db: Session, date_from: date, source: Optional[str]):
         add_mon = db.execute(text("""
             SELECT COALESCE(SUM(am.revenue), 0)
             FROM additional_monetization am
-            WHERE am.date >= :date_from
+            WHERE am.date >= :date_from AND am.date <= :date_to
               AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE traffic_source = :source)
         """), params).scalar() or 0
     else:
         add_mon = db.execute(text(
-            "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :date_from"
-        ), {'date_from': date_from}).scalar() or 0
+            "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :date_from AND date <= :date_to"
+        ), {'date_from': date_from, 'date_to': date_to}).scalar() or 0
 
     add_mon = int(round(float(add_mon or 0)))
     total_profit = total_base_revenue + add_mon - total_spend
@@ -44,19 +58,31 @@ def _get_totals(db: Session, date_from: date, source: Optional[str]):
 
 
 @router.get("/metrics/summary")
-async def get_summary(period: int = Query(7), source: Optional[str] = None, db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
-    total_spend, total_base_revenue, add_mon, profit, conversions, clicks = _get_totals(db, date_from, source)
+async def get_summary(
+    period: int = Query(7),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    total_spend, total_base_revenue, add_mon, profit, conversions, clicks = _get_totals(db, date_from, date_to, source)
     total_revenue = total_base_revenue + add_mon
     roi = round((profit / total_spend * 100) if total_spend > 0 else 0)
     return {"spend": total_spend, "revenue": total_revenue, "profit": profit, "roi": roi, "conversions": conversions, "clicks": clicks}
 
 @router.get("/metrics/campaigns")
-async def get_campaigns(period: int = Query(7), source: Optional[str] = None, db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
+async def get_campaigns(
+    period: int = Query(7),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
-    query = text(f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) FROM traffic_stats WHERE date >= :date_from {source_filter} GROUP BY campaign_id, campaign, traffic_source ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 50")
-    params = {'date_from': date_from}
+    query = text(f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} GROUP BY campaign_id, campaign, traffic_source ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 50")
+    params = {'date_from': date_from, 'date_to': date_to}
     if source and source != 'all': params['source'] = source
     rows = db.execute(query, params).fetchall()
     campaigns = []
@@ -72,21 +98,23 @@ async def get_campaigns(period: int = Query(7), source: Optional[str] = None, db
 async def get_campaign_breakdown(
     campaign_id: str = Query(..., description="Campaign ID (token1)"),
     period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
     db: Session = Depends(get_db),
 ):
     """
     Разбивка по кампании для ИИ: token2 (creative), offer, lander_id (jump).
     Реальные данные из БД — чтобы модель не «фантазировала», а опиралась на цифры.
     """
-    date_from = date.today() - timedelta(days=period)
-    params = {"cid": campaign_id, "d": date_from}
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    params = {"cid": campaign_id, "d": date_from, "d_to": date_to}
 
     # Итоги по кампании
     row = db.execute(
         text("""
             SELECT SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
         """),
         params,
     ).fetchone()
@@ -95,7 +123,7 @@ async def get_campaign_breakdown(
     conversions = int(row[2] or 0)
     clicks = int(row[3] or 0)
     add_mon = db.execute(
-        text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :cid AND date >= :d"),
+        text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :cid AND date >= :d AND date <= :d_to AND date <= :d_to"),
         params,
     ).scalar() or 0
     revenue = base_revenue + int(add_mon)
@@ -139,7 +167,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(token2, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY token2
             ORDER BY SUM(revenue) - SUM(cost) DESC
             LIMIT 50
@@ -152,7 +180,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(offer, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY offer
             ORDER BY SUM(revenue) - SUM(cost) DESC
             LIMIT 50
@@ -165,7 +193,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(lander_id, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY lander_id
             ORDER BY SUM(revenue) - SUM(cost) DESC
             LIMIT 50
@@ -178,7 +206,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(os, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY os
             ORDER BY SUM(revenue) - SUM(cost) DESC
             LIMIT 30
@@ -190,7 +218,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(country, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY country
             ORDER BY SUM(revenue) - SUM(cost) DESC
             LIMIT 30
@@ -202,7 +230,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(device_type, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY device_type
             ORDER BY SUM(revenue) - SUM(cost) DESC
             LIMIT 30
@@ -215,7 +243,7 @@ async def get_campaign_breakdown(
             SELECT COALESCE(token2, '(empty)'), COALESCE(offer, '(empty)'), COALESCE(lander_id, '(empty)'),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
             GROUP BY token2, offer, lander_id
             HAVING COUNT(*) >= 10
             ORDER BY SUM(revenue) - SUM(cost) DESC
@@ -291,24 +319,26 @@ async def get_sources(db: Session = Depends(get_db)):
 
 @router.get("/metrics/daily")
 async def get_daily(
-    period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)
+    period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
 ):
     """
-    General Dynamics: данные за выбранный период (ровно period дат: сегодня, вчера, ..., сегодня-(period-1)).
-    С учётом выбранного traffic source. По каждой дате: cost, revenue, clicks (только из traffic_stats).
-    Если данных нет — дата всё равно в ответе с нулями.
+    General Dynamics: данные за выбранный период или кастомный диапазон.
     """
-    today = date.today()
-    date_from = today - timedelta(days=period - 1)  # 7 дней = сегодня, сегодня-1, ..., сегодня-6
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    today = date_to
     source_filter = "AND traffic_source = :source" if source and source != "all" else FILTER_OUT_MONETISATION
-    params = {"d": date_from}
+    params = {"d": date_from, "d_to": date_to}
     if source and source != "all":
         params["source"] = source
     rows = db.execute(
         text(f"""
         SELECT date, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) as clicks
         FROM traffic_stats
-        WHERE date >= :d AND traffic_source IS NOT NULL {source_filter}
+        WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {source_filter}
         GROUP BY date
         ORDER BY date
         """),
@@ -316,7 +346,8 @@ async def get_daily(
     ).fetchall()
     by_date = {row[0]: {"cost": int(row[1] or 0), "revenue": int(row[2] or 0), "conversions": int(row[3] or 0), "clicks": int(row[4] or 0)} for row in rows}
     daily = []
-    for i in range(period):
+    days_count = (date_to - date_from).days + 1
+    for i in range(days_count):
         d = date_from + timedelta(days=i)
         rec = by_date.get(d, {"cost": 0, "revenue": 0, "conversions": 0, "clicks": 0})
         daily.append({
@@ -330,14 +361,19 @@ async def get_daily(
     return {"daily": daily}
 
 @router.get("/metrics/sources-table")
-async def get_sources_table(period: int = Query(14), db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
+async def get_sources_table(
+    period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     sources = db.execute(text(
-        f"SELECT DISTINCT traffic_source FROM traffic_stats WHERE date >= :d AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION}"
-    ), {'d': date_from}).fetchall()
+        f"SELECT DISTINCT traffic_source FROM traffic_stats WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION}"
+    ), {'d': date_from, 'd_to': date_to}).fetchall()
     result = []
     for (src,) in sources:
-        daily = db.execute(text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE traffic_source = :s AND date >= :d GROUP BY date ORDER BY date"), {'s': src, 'd': date_from}).fetchall()
+        daily = db.execute(text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE traffic_source = :s AND date >= :d AND date <= :d_to GROUP BY date ORDER BY date"), {'s': src, 'd': date_from, 'd_to': date_to}).fetchall()
         days = {}
         total_cost, total_revenue = 0, 0
         for row in daily:
@@ -351,22 +387,28 @@ async def get_sources_table(period: int = Query(14), db: Session = Depends(get_d
         roi = round((total_profit / total_cost * 100) if total_cost > 0 else 0)
         result.append({"source": src, "total_cost": total_cost, "total_revenue": total_revenue, "total_profit": total_profit, "roi": roi, "days": days})
     result.sort(key=lambda x: x['total_profit'], reverse=True)
-    return {"sources": result, "date_from": date_from.isoformat(), "date_to": date.today().isoformat()}
+    return {"sources": result, "date_from": date_from.isoformat(), "date_to": date_to.isoformat()}
 
 @router.get("/metrics/splits")
-async def get_splits(period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
-    total_spend, total_base_revenue, add_mon, total_profit, _, _ = _get_totals(db, date_from, source)
+async def get_splits(
+    period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    total_spend, total_base_revenue, add_mon, total_profit, _, _ = _get_totals(db, date_from, date_to, source)
 
     source_filter = "AND traffic_source = :source" if source and source != 'all' else FILTER_OUT_MONETISATION
-    params = {'date_from': date_from}
+    params = {'date_from': date_from, 'date_to': date_to}
     if source and source != 'all':
         params['source'] = source
 
     # OS: один запрос, читаем по именам колонок (cost_sum, revenue_sum), чтобы не зависеть от порядка
     os_raw = db.execute(text(f"""
         SELECT COALESCE(os, 'Unknown'), COUNT(*), SUM(cost), SUM(revenue)
-        FROM traffic_stats WHERE date >= :date_from AND traffic_source IS NOT NULL {source_filter}
+        FROM traffic_stats WHERE date >= :date_from AND date <= :date_to AND traffic_source IS NOT NULL {source_filter}
         GROUP BY COALESCE(os, 'Unknown')
     """), params).fetchall()
 
@@ -409,7 +451,7 @@ async def get_splits(period: int = Query(14), source: Optional[str] = None, db: 
     # Device: порядок колонок 0=device_name, 1=clicks, 2=cost_sum, 3=revenue_sum — читаем по индексу
     device_raw = db.execute(text(f"""
         SELECT COALESCE(device_type, 'Unknown'), COUNT(*), SUM(cost), SUM(revenue)
-        FROM traffic_stats WHERE date >= :date_from AND traffic_source IS NOT NULL {source_filter}
+        FROM traffic_stats WHERE date >= :date_from AND date <= :date_to AND traffic_source IS NOT NULL {source_filter}
         GROUP BY COALESCE(device_type, 'Unknown')
     """), params).fetchall()
 
@@ -472,10 +514,16 @@ async def match_orphan(orphan_id: int, campaign_id: str, db: Session = Depends(g
     return {"success": True}
 
 @router.get("/metrics/traffic-sources-summary")
-async def get_traffic_sources_summary(period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
+async def get_traffic_sources_summary(
+    period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     source_filter = "AND traffic_source = :source" if source and source != "all" else ""
-    params = {'d': date_from}
+    params = {'d': date_from, 'd_to': date_to}
     if source and source != "all":
         params['source'] = source
 
@@ -484,13 +532,13 @@ async def get_traffic_sources_summary(period: int = Query(14), source: Optional[
         total_add = float(db.execute(text("""
             SELECT COALESCE(SUM(am.revenue), 0)
             FROM additional_monetization am
-            WHERE am.date >= :d
+            WHERE am.date >= :d AND am.date <= :d_to
               AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE traffic_source = :source)
         """), params).scalar() or 0)
     else:
         total_add = float(db.execute(text(
-            "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d"
-        ), {'d': date_from}).scalar() or 0)
+            "SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE date >= :d AND date <= :d_to"
+        ), params).scalar() or 0)
 
     # Получаем данные по traffic sources из traffic_stats (с учётом выбранного источника)
     sources = db.execute(text(f"""
@@ -499,7 +547,7 @@ async def get_traffic_sources_summary(period: int = Query(14), source: Optional[
             SUM(cost) as spend,
             SUM(revenue) as base_revenue
         FROM traffic_stats
-        WHERE date >= :d 
+        WHERE date >= :d AND date <= :d_to
           AND traffic_source IS NOT NULL 
           {FILTER_OUT_MONETISATION if not (source and source != "all") else ""}
           {source_filter}
@@ -537,10 +585,16 @@ async def get_traffic_sources_summary(period: int = Query(14), source: Optional[
     return {"sources": result}
 
 @router.get("/metrics/campaigns-table")
-async def get_campaigns_table(period: int = Query(14), source: Optional[str] = None, db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
+async def get_campaigns_table(
+    period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     source_filter = "AND traffic_source = :source" if source and source != "all" else ""
-    params = {'d': date_from}
+    params = {'d': date_from, 'd_to': date_to}
     if source and source != "all":
         params['source'] = source
 
@@ -548,7 +602,7 @@ async def get_campaigns_table(period: int = Query(14), source: Optional[str] = N
     campaigns_query = f"""
         SELECT campaign_id, campaign, SUM(cost) as total_spend
         FROM traffic_stats 
-        WHERE date >= :d AND campaign_id IS NOT NULL {source_filter}
+        WHERE date >= :d AND date <= :d_to AND campaign_id IS NOT NULL {source_filter}
         GROUP BY campaign_id, campaign
         ORDER BY total_spend DESC
         LIMIT 25
@@ -560,7 +614,7 @@ async def get_campaigns_table(period: int = Query(14), source: Optional[str] = N
         campaign_id = row[0]
         campaign_name = row[1]
         total_spend = int(row[2] or 0)
-        day_params = {'cid': campaign_id, 'd': date_from}
+        day_params = {'cid': campaign_id, 'd': date_from, 'd_to': date_to}
         if source and source != "all":
             day_params['source'] = source
 
@@ -568,7 +622,7 @@ async def get_campaigns_table(period: int = Query(14), source: Optional[str] = N
         daily_query = f"""
             SELECT date, SUM(cost), SUM(revenue)
             FROM traffic_stats 
-            WHERE campaign_id = :cid AND date >= :d {source_filter}
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {source_filter}
             GROUP BY date
             ORDER BY date
         """

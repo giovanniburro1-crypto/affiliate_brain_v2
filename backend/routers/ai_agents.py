@@ -40,6 +40,8 @@ class TestRequest(BaseModel):
 class CouncilRequest(BaseModel):
     campaign_id: str
     period: int = 14
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
 
 @router.get("/agents")
 async def get_agents(db: Session = Depends(get_db)):
@@ -193,10 +195,16 @@ async def council(req: CouncilRequest, request: Request, db: Session = Depends(g
             return {"success": False, "error": "Нет включённых агентов. Включите агентов в Settings."}
 
         base_url = str(request.base_url).rstrip("/")
+        params = {"campaign_id": req.campaign_id}
+        if req.date_from and req.date_to:
+            params["date_from"] = req.date_from
+            params["date_to"] = req.date_to
+        else:
+            params["period"] = req.period
         async with httpx.AsyncClient(timeout=30.0) as http_client:
             br = await http_client.get(
                 f"{base_url}/api/metrics/campaign-breakdown",
-                params={"campaign_id": req.campaign_id, "period": req.period},
+                params=params,
             )
             if br.status_code != 200:
                 return {"success": False, "error": "Не удалось загрузить разбивку кампании."}

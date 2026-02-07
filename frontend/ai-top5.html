@@ -61,11 +61,17 @@
                 </div>
                 <div class="w-48">
                     <label class="text-sm text-zinc-400 block mb-1">Period</label>
-                    <select id="periodSelect" class="w-full">
+                    <select id="periodSelect" class="w-full" onchange="toggleCustomDate()">
                         <option value="7">7 days</option>
                         <option value="14" selected>14 days</option>
                         <option value="30">30 days</option>
+                        <option value="custom">Custom date</option>
                     </select>
+                    <div id="customDateRange" class="hidden flex items-center gap-2 mt-2">
+                        <input type="date" id="customDateFrom" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                        <span class="text-zinc-500">—</span>
+                        <input type="date" id="customDateTo" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                    </div>
                 </div>
             </div>
             
@@ -82,10 +88,36 @@
         let providersConfig = {};  // { "groq": { models: ["llama-3.1-70b", ...], key_set: true }, ... }
         
         async function init() {
+            setDefaultCustomDates();
+            toggleCustomDate();
             await loadCampaigns();
             await loadProvidersConfig();
             await loadAgents();
             lucide.createIcons();
+        }
+        function setDefaultCustomDates() {
+            const to = new Date();
+            const from = new Date(to);
+            from.setDate(from.getDate() - 13);
+            const elFrom = document.getElementById('customDateFrom');
+            const elTo = document.getElementById('customDateTo');
+            if (elFrom) elFrom.value = from.toISOString().slice(0, 10);
+            if (elTo) elTo.value = to.toISOString().slice(0, 10);
+        }
+        function toggleCustomDate() {
+            const el = document.getElementById('customDateRange');
+            if (!el) return;
+            if (document.getElementById('periodSelect').value === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); }
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+        function getPeriodParams() {
+            const sel = document.getElementById('periodSelect');
+            if (sel && sel.value === 'custom') {
+                const from = document.getElementById('customDateFrom');
+                const to = document.getElementById('customDateTo');
+                if (from && to && from.value && to.value) return 'date_from=' + encodeURIComponent(from.value) + '&date_to=' + encodeURIComponent(to.value);
+            }
+            return 'period=' + (sel ? sel.value : 14);
         }
         
         async function loadProvidersConfig() {
@@ -95,8 +127,8 @@
         }
         
         async function loadCampaigns() {
-            const period = document.getElementById('periodSelect') ? document.getElementById('periodSelect').value : 14;
-            const res = await fetch(`/api/metrics/campaigns?period=${period}`);
+            const periodParam = getPeriodParams();
+            const res = await fetch(`/api/metrics/campaigns?${periodParam}`);
             const data = await res.json();
             const select = document.getElementById('campaignSelect');
             const campaigns = data.campaigns || [];
@@ -226,15 +258,13 @@
             responseDiv.innerHTML = '<span class="text-yellow-400">Testing...</span>';
             
             const campaignId = document.getElementById('campaignSelect').value;
-            const period = document.getElementById('periodSelect').value;
-            
-            // Если выбрана кампания — грузим разбивку по token2, offer, jump из БД (реальные цифры для ИИ)
+            const periodParam = getPeriodParams();
             let data;
             if (campaignId) {
-                const res = await fetch(`/api/metrics/campaign-breakdown?campaign_id=${encodeURIComponent(campaignId)}&period=${period}`);
+                const res = await fetch(`/api/metrics/campaign-breakdown?campaign_id=${encodeURIComponent(campaignId)}&${periodParam}`);
                 data = await res.json();
             } else {
-                const res = await fetch(`/api/metrics/summary?period=${period}`);
+                const res = await fetch(`/api/metrics/summary?${periodParam}`);
                 data = await res.json();
             }
             

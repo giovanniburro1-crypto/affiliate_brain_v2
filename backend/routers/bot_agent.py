@@ -1,5 +1,5 @@
 from datetime import date, timedelta, datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -60,18 +60,36 @@ def apply_logic(metrics: Dict, roi_history: List[float]) -> Dict:
     
     return {"verdict": verdict, "bot_score": round(bot_score, 1), "confidence": round(confidence, 1), "reasoning": reasons.get(verdict, ""), "volatility": round(volatility, 1), "trend": trend}
 
+def _period_or_range(period: int, date_from_str: Optional[str], date_to_str: Optional[str]) -> tuple:
+    today = date.today()
+    if date_from_str and date_to_str:
+        try:
+            d_from = date.fromisoformat(date_from_str.strip()[:10])
+            d_to = date.fromisoformat(date_to_str.strip()[:10])
+            if d_from <= d_to:
+                return (d_from, d_to)
+        except (ValueError, TypeError):
+            pass
+    return (today - timedelta(days=period), today)
+
+
 @router.get("/top5")
-async def get_top5(period: int = Query(7), db: Session = Depends(get_db)):
-    date_from = date.today() - timedelta(days=period)
-    rows = db.execute(text("SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) FROM traffic_stats WHERE date >= :d AND campaign_id IS NOT NULL GROUP BY campaign_id, campaign, traffic_source HAVING SUM(cost) > 0 ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 20"), {'d': date_from}).fetchall()
+async def get_top5(
+    period: int = Query(7),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    rows = db.execute(text("SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) FROM traffic_stats WHERE date >= :d AND date <= :d_to AND campaign_id IS NOT NULL GROUP BY campaign_id, campaign, traffic_source HAVING SUM(cost) > 0 ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 20"), {'d': date_from, 'd_to': date_to}).fetchall()
     
     campaigns = []
     for row in rows:
         cid, spend, revenue = row[0], int(row[3] or 0), int(row[4] or 0)
-        daily = db.execute(text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE campaign_id = :c AND date >= :d GROUP BY date ORDER BY date"), {'c': cid, 'd': date_from}).fetchall()
+        daily = db.execute(text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE campaign_id = :c AND date >= :d AND date <= :d_to GROUP BY date ORDER BY date"), {'c': cid, 'd': date_from, 'd_to': date_to}).fetchall()
         roi_history = [round((r[2]-r[1])/r[1]*100 if r[1] else 0) for r in daily]
         
-        add_mon = db.execute(text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :c AND date >= :d"), {'c': cid, 'd': date_from}).scalar() or 0
+        add_mon = db.execute(text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :c AND date >= :d AND date <= :d_to"), {'c': cid, 'd': date_from, 'd_to': date_to}).scalar() or 0
         revenue += int(add_mon)
         profit = revenue - spend
         roi = round((profit / spend * 100) if spend > 0 else 0)

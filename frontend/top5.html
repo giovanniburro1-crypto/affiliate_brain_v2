@@ -50,7 +50,15 @@
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="trophy" class="w-6 h-6 text-yellow-400"></i>TOP-5 МАСШТАБИРОВАТЬ</h1>
                 <div class="flex items-center gap-3">
-                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm"><option value="7" selected>7 дней</option><option value="14">14 дней</option></select>
+                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate()">
+                        <option value="7" selected>7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option>
+                        <option value="custom">Кастом дата</option>
+                    </select>
+                    <div id="customDateRange" class="hidden flex items-center gap-2">
+                        <input type="date" id="customDateFrom" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                        <span class="text-zinc-500">—</span>
+                        <input type="date" id="customDateTo" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                    </div>
                     <button onclick="loadTop5()" class="btn-primary px-4 py-2 rounded-lg text-sm">Обновить</button>
                 </div>
             </div>
@@ -70,11 +78,32 @@
         </main>
     </div>
     <script>
-        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadTop5(); });
-        
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); setDefaultCustomDates(); toggleCustomDate(); loadTop5(); });
+        function setDefaultCustomDates() {
+            const to = new Date();
+            const from = new Date(to);
+            from.setDate(from.getDate() - 6);
+            document.getElementById('customDateFrom').value = from.toISOString().slice(0, 10);
+            document.getElementById('customDateTo').value = to.toISOString().slice(0, 10);
+        }
+        function toggleCustomDate() {
+            const el = document.getElementById('customDateRange');
+            if (!el) return;
+            if (document.getElementById('periodSelect').value === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); }
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+        function getPeriodParams() {
+            const sel = document.getElementById('periodSelect');
+            if (sel.value === 'custom') {
+                const from = document.getElementById('customDateFrom').value;
+                const to = document.getElementById('customDateTo').value;
+                if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
+            }
+            return 'period=' + sel.value;
+        }
         async function loadTop5() {
-            const period = document.getElementById('periodSelect').value;
-            const res = await fetch(`/api/bot-agent/top5?period=${period}`);
+            const periodParam = getPeriodParams();
+            const res = await fetch(`/api/bot-agent/top5?${periodParam}`);
             const data = await res.json();
             
             document.getElementById('totalProfit').textContent = '$' + data.summary.total_profit.toLocaleString();

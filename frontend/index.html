@@ -81,9 +81,15 @@
                 <h1 class="text-2xl font-bold">Dashboard</h1>
                 <div class="flex items-center gap-3">
                     <select id="sourceSelect" class="px-3 py-2 rounded-lg text-sm"><option value="all">All Sources</option></select>
-                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm">
+                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate()">
                         <option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option>
+                        <option value="custom">Custom date</option>
                     </select>
+                    <div id="customDateRange" class="hidden flex items-center gap-2">
+                        <input type="date" id="customDateFrom" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                        <span class="text-zinc-500">—</span>
+                        <input type="date" id="customDateTo" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                    </div>
                     <button id="applyBtn" onclick="loadAll()" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 min-w-[100px] justify-center">Apply</button>
                 </div>
             </div>
@@ -177,7 +183,29 @@
         let chart;
         const colors = ['#8b5cf6', '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#ec4899'];
         
-        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadSources(); loadAll(); loadOrphansCount(); });
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); setDefaultCustomDates(); toggleCustomDate(); loadSources(); loadAll(); loadOrphansCount(); });
+        
+        function setDefaultCustomDates() {
+            const to = new Date();
+            const from = new Date(to);
+            from.setDate(from.getDate() - 13);
+            document.getElementById('customDateFrom').value = from.toISOString().slice(0, 10);
+            document.getElementById('customDateTo').value = to.toISOString().slice(0, 10);
+        }
+        function toggleCustomDate() {
+            const el = document.getElementById('customDateRange');
+            if (document.getElementById('periodSelect').value === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); }
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+        function getPeriodParams() {
+            const sel = document.getElementById('periodSelect');
+            if (sel.value === 'custom') {
+                const from = document.getElementById('customDateFrom').value;
+                const to = document.getElementById('customDateTo').value;
+                if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
+            }
+            return 'period=' + sel.value;
+        }
         
         async function loadSources() {
             const res = await fetch('/api/metrics/sources', { cache: 'no-store' });
@@ -199,9 +227,9 @@
             loadingEl.classList.remove('hidden');
             loadingEl.classList.add('flex');
             try {
-                const period = document.getElementById('periodSelect').value;
+                const periodParam = getPeriodParams();
                 const source = document.getElementById('sourceSelect').value;
-                await Promise.all([loadSummary(period, source), loadSplits(period, source), loadChart(period, source), loadTrafficSourcesSummary(period, source), loadSourcesTable(period, source)]);
+                await Promise.all([loadSummary(periodParam, source), loadSplits(periodParam, source), loadChart(periodParam, source), loadTrafficSourcesSummary(periodParam, source), loadSourcesTable(periodParam, source)]);
             } finally {
                 applyBtn.disabled = false;
                 applyBtn.innerHTML = 'Apply';
@@ -210,8 +238,8 @@
             }
         }
         
-        async function loadSummary(period, source) {
-            const url = `/api/metrics/summary?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+        async function loadSummary(periodParam, source) {
+            const url = `/api/metrics/summary?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const d = await res.json();
             document.getElementById('statSpend').textContent = '$' + d.spend.toLocaleString();
@@ -222,15 +250,15 @@
             document.getElementById('statRoi').className = 'text-2xl font-bold ' + (d.roi >= 0 ? 'profit-green' : 'profit-red');
         }
         
-        async function loadSplits(period, source) {
-            const url = `/api/metrics/splits?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+        async function loadSplits(periodParam, source) {
+            const url = `/api/metrics/splits?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('osSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">OS</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.os.map(o => `<tr class="border-b border-zinc-800"><td class="py-1.5">${o.name}</td><td class="text-right">${o.traffic_pct}%</td><td class="text-right">${o.clicks.toLocaleString()}</td><td class="text-right">${o.profit_pct}%</td><td class="text-right ${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
             document.getElementById('deviceSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">Device</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.device.map(d => `<tr class="border-b border-zinc-800"><td class="py-1.5">${d.name}</td><td class="text-right">${d.traffic_pct}%</td><td class="text-right">${d.clicks.toLocaleString()}</td><td class="text-right">${d.profit_pct}%</td><td class="text-right ${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
         }
-        async function loadChart(period, source) {
-            const url = `/api/metrics/daily?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+        async function loadChart(periodParam, source) {
+            const url = `/api/metrics/daily?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             if (chart) chart.destroy();
@@ -248,8 +276,8 @@
             });
         }
         
-        async function loadTrafficSourcesSummary(period, source) {
-            const url = `/api/metrics/traffic-sources-summary?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+        async function loadTrafficSourcesSummary(periodParam, source) {
+            const url = `/api/metrics/traffic-sources-summary?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('trafficSourcesSummary').innerHTML = data.sources.map(s => `
@@ -263,18 +291,25 @@
             `).join('');
         }
         
-        async function loadSourcesTable(period, source) {
-            const url = `/api/metrics/campaigns-table?period=${period}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+        async function loadSourcesTable(periodParam, source) {
+            const url = `/api/metrics/campaigns-table?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             
-            // Генерируем заголовки дат (сегодня → сегодня-13)
-            const today = new Date();
-            const dates = [];
-            for (let i = 0; i <= 13; i++) {
-                const d = new Date(today);
-                d.setDate(d.getDate() - i);
-                dates.push(d.toISOString().slice(5, 10)); // MM-DD
+            // Даты: из данных (ключи days) или по умолчанию последние 14 дней
+            let dates = [];
+            if (data.campaigns && data.campaigns.length) {
+                const allKeys = new Set();
+                data.campaigns.forEach(c => { Object.keys(c.days || {}).forEach(k => allKeys.add(k)); });
+                dates = [...allKeys].sort();
+            }
+            if (!dates.length) {
+                const today = new Date();
+                for (let i = 0; i <= 13; i++) {
+                    const d = new Date(today);
+                    d.setDate(d.getDate() - i);
+                    dates.push(d.toISOString().slice(5, 10));
+                }
             }
             
             // Вставляем заголовки дат (делаем один раз, при первом вызове)
