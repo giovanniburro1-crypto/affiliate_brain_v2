@@ -35,9 +35,63 @@
             </nav>
         </aside>
         <main class="ml-56 flex-1 p-6">
-            <h1 class="text-2xl font-bold">Company Analysis</h1>
+            <h1 class="text-2xl font-bold mb-6">Company Analysis</h1>
+            <div class="card p-4 mb-6" style="background:#1a1a24; border:1px solid #2a2a3a; border-radius:12px;">
+                <div class="flex gap-4 items-end flex-wrap">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="text-sm text-zinc-400 block mb-1">Campaign</label>
+                        <select id="campaignSelect" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-white">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="w-40">
+                        <label class="text-sm text-zinc-400 block mb-1">Period</label>
+                        <select id="periodSelect" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-white">
+                            <option value="7">7 days</option>
+                            <option value="14" selected>14 days</option>
+                            <option value="30">30 days</option>
+                        </select>
+                    </div>
+                    <button id="loadBtn" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 font-medium">Analyze</button>
+                </div>
+            </div>
+            <div id="analysisResult" class="space-y-4"></div>
         </main>
     </div>
-    <script>lucide.createIcons();</script>
+    <script>
+        lucide.createIcons();
+        async function loadCampaigns() {
+            const res = await fetch('/api/metrics/campaigns?period=30');
+            const data = await res.json();
+            const sel = document.getElementById('campaignSelect');
+            const campaigns = data.campaigns || [];
+            sel.innerHTML = campaigns.length
+                ? campaigns.map(c => `<option value="${(c.campaign_id||'').replace(/"/g,'&quot;')}">${(c.campaign||'').replace(/^[^-]+-\s*/i,'')} (${c.source||''})</option>`).join('')
+                : '<option value="">No campaigns</option>';
+        }
+        document.getElementById('loadBtn').onclick = async () => {
+            const cid = document.getElementById('campaignSelect').value;
+            const period = document.getElementById('periodSelect').value;
+            if (!cid) { alert('Select campaign'); return; }
+            const res = await fetch(`/api/company-analytics/analysis?campaign_id=${encodeURIComponent(cid)}&period=${period}`);
+            const data = await res.json();
+            const div = document.getElementById('analysisResult');
+            if (!data.success) {
+                div.innerHTML = '<p class="text-red-400">' + (data.error || 'Error') + '</p>';
+                return;
+            }
+            const a = data.analysis;
+            const lines = (a.summary_lines || []).map(l => '<div class="text-zinc-300 py-1">' + l.replace(/</g,'&lt;') + '</div>').join('');
+            div.innerHTML = `
+                <div class="card p-6" style="background:#1a1a24; border:1px solid #2a2a3a; border-radius:12px;">
+                    <h2 class="text-xl font-bold mb-4">${(a.campaign||'').replace(/</g,'&lt;')}</h2>
+                    <div class="text-zinc-400 text-sm mb-4">ROI ${a.roi}% • Profit $${a.profit} • Spend $${a.spend} • Clicks ${a.clicks} • Conv ${a.conversions}</div>
+                    <div class="space-y-1 mb-4">${lines}</div>
+                    <div class="text-xs text-zinc-500">Volatility ${a.volatility}% • ${a.days_with_data}/${a.total_days} days</div>
+                </div>
+            `;
+        };
+        loadCampaigns();
+    </script>
 </body>
 </html>

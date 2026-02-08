@@ -99,7 +99,7 @@
                 const to = document.getElementById('customDateTo').value;
                 if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
             }
-            return 'period=' + sel.value;
+            return 'period=' + (sel ? sel.value : '30');
         }
         async function loadTop5() {
             const periodParam = getPeriodParams();
@@ -128,7 +128,7 @@
                             <div><div class="text-zinc-500 text-xs">Conf</div><div class="text-xl font-bold">${Math.round(c.confidence)}%</div></div>
                         </div>
                     </div>
-                    <div class="mt-3 p-3 bg-zinc-800/50 rounded-lg text-sm text-zinc-300">${c.reasoning}</div>
+                    <div class="mt-3 p-3 bg-zinc-800/50 rounded-lg text-sm text-zinc-300">${(c.reasoning || (c.summary_lines || []).join('; ')).replace(/</g,'&lt;')}</div>
                 </div>
             `).join('');
             

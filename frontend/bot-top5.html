@@ -225,16 +225,12 @@
 
                 const campaigns = data.campaigns || [];
 
-                const cardsHtml = await Promise.all(campaigns.map(async (c, i) => {
-                let breakdown = {};
-                try {
-                    breakdown = await getBreakdown(c.campaign_id, periodParam);
-                } catch (_) {}
-                const items = bestWorstFromBreakdown(breakdown);
+                const cardsHtml = campaigns.map((c, i) => {
                 const shortName = (c.campaign || '').replace(/^[^-]+-\s*/i, '').trim() || c.campaign;
-                const volText = `SCALE volatility ${Math.round(c.volatility || 0)}% data for ${(c.reasoning || '').length ? '3' : '0'} days`;
-                const trendText = formatTrend(c.trend);
+                const trendText = formatTrend(c.trend || 'UNKNOWN');
                 const confClass = (c.confidence || 0) >= CONFIDENCE_THRESHOLD ? 'confidence-high' : 'confidence-low';
+                const summaryLines = c.summary_lines || [];
+                const linesHtml = summaryLines.map(line => `<div class="text-zinc-400 text-sm">${escapeHtml(line)}</div>`).join('');
 
                 return `
                 <div class="card p-4" data-campaign-id="${escapeHtml(c.campaign_id)}">
@@ -245,8 +241,8 @@
                         </div>
                         <div class="text-3xl font-bold ${confClass}">${Math.round(c.confidence || 0)}%</div>
                     </div>
-                    <div class="mt-2 text-zinc-500 text-sm">${volText} ${trendText}</div>
-                    ${items.length ? `<div class="mt-2 space-y-1 text-xs text-zinc-400">${items.slice(0, 6).map(it => `${it.label} ${escapeHtml(it.name)} · Rev $${it.rev} Cost $${it.cost}`).join('<br>')}</div>` : ''}
+                    <div class="mt-2 text-zinc-500 text-sm">${trendText}</div>
+                    <div class="mt-2 space-y-1">${linesHtml}</div>
                     <div class="mt-4 flex flex-wrap items-center gap-3">
                         <div class="flex gap-2">
                             <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="SCALE" ${c.verdict === 'SCALE' ? 'checked' : ''}> <span class="verdict-SCALE">SCALE</span></label>
@@ -264,7 +260,7 @@
                     </div>
                 </div>
                 `;
-                }));
+                });
 
                 document.getElementById('top5Cards').innerHTML = cardsHtml.join('');
                 lucide.createIcons();
