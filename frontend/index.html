@@ -38,6 +38,21 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .spinner { width: 24px; height: 24px; border: 3px solid #2a2a3a; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; }
         .dashboard-loading { transition: opacity 0.2s; }
+        .campaigns-table-wrap {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+            border: 1px solid #2a2a3a;
+            border-radius: 10px;
+            background: #12121a;
+        }
+        .campaigns-table-wrap::-webkit-scrollbar { height: 10px; }
+        .campaigns-table-wrap::-webkit-scrollbar-track { background: #1a1a24; border-radius: 5px; }
+        .campaigns-table-wrap::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
+        .campaigns-table-wrap::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        .campaigns-table { min-width: max-content; }
+        .campaigns-table th:nth-child(n+4), .campaigns-table td:nth-child(n+4) { min-width: 2.75rem; }
+        .campaigns-table .date-col { font-size: 10px; color: #a1a1aa; white-space: nowrap; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -137,14 +152,14 @@
             </div>
             <div class="card p-4 mb-6">
                 <h3 class="font-semibold mb-4">GENERAL ANALYSIS BY CAMPAIGNS</h3>
-                <div style="max-height: 600px; overflow-y: auto;">
-                    <table class="w-full text-xs">
-                        <thead class="sticky top-0 bg-zinc-900">
+                <div class="campaigns-table-wrap">
+                    <table class="w-full text-xs campaigns-table">
+                        <thead class="sticky top-0 bg-zinc-900 z-[1]">
                             <tr class="text-zinc-400 text-xs border-b border-zinc-700">
-                                <th class="text-left py-2 px-2 sticky left-0 bg-zinc-900">Token1</th>
-                                <th class="text-left py-2 px-2 sticky left-16 bg-zinc-900">Campaign</th>
-                                <th class="text-right py-2 px-2">Spend</th>
-                                <th class="text-center py-2 px-1" id="dateHeaders"></th>
+                                <th class="text-left py-2 px-2 sticky left-0 bg-zinc-900 z-[2]">Token1</th>
+                                <th class="text-left py-2 px-2 sticky left-16 bg-zinc-900 z-[2]">Campaign</th>
+                                <th class="text-right py-2 px-2 bg-zinc-900">Spend</th>
+                                <th class="text-center py-2 px-1 bg-zinc-900 date-col" id="dateHeaders"></th>
                             </tr>
                         </thead>
                         <tbody id="campaignsTable"></tbody>
@@ -205,6 +220,46 @@
                 if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
             }
             return 'period=' + sel.value;
+        }
+        
+        /** Возвращает массив дат выбранного периода в формате MM-DD (как в API campaigns-table). */
+        function getPeriodDateList() {
+            const sel = document.getElementById('periodSelect');
+            let dateFrom, dateTo;
+            if (sel.value === 'custom') {
+                const fromStr = document.getElementById('customDateFrom').value;
+                const toStr = document.getElementById('customDateTo').value;
+                if (!fromStr || !toStr) {
+                    const today = new Date();
+                    dateTo = today;
+                    dateFrom = new Date(today);
+                    dateFrom.setDate(dateFrom.getDate() - 13);
+                } else {
+                    dateFrom = new Date(fromStr);
+                    dateTo = new Date(toStr);
+                }
+            } else {
+                const days = parseInt(sel.value, 10) || 14;
+                dateTo = new Date();
+                dateFrom = new Date(dateTo);
+                dateFrom.setDate(dateFrom.getDate() - (days - 1));
+            }
+            const list = [];
+            const cur = new Date(dateFrom);
+            while (cur <= dateTo) {
+                const m = String(cur.getMonth() + 1).padStart(2, '0');
+                const d = String(cur.getDate()).padStart(2, '0');
+                list.push(m + '-' + d);
+                cur.setDate(cur.getDate() + 1);
+            }
+            return list;
+        }
+        
+        /** Для блока GENERAL ANALYSIS BY CAMPAIGNS: макс. 30 дней, обратный порядок (слева — старые, вправо — сегодня). */
+        function getCampaignTableDateList() {
+            const full = getPeriodDateList();
+            const max30 = full.slice(-30);
+            return max30.reverse();
         }
         
         async function loadSources() {
@@ -296,27 +351,19 @@
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             
-            // Даты: из данных (ключи days) или по умолчанию последние 14 дней
-            let dates = [];
-            if (data.campaigns && data.campaigns.length) {
-                const allKeys = new Set();
-                data.campaigns.forEach(c => { Object.keys(c.days || {}).forEach(k => allKeys.add(k)); });
-                dates = [...allKeys].sort();
-            }
-            if (!dates.length) {
-                const today = new Date();
-                for (let i = 0; i <= 13; i++) {
-                    const d = new Date(today);
-                    d.setDate(d.getDate() - i);
-                    dates.push(d.toISOString().slice(5, 10));
-                }
-            }
+            // Даты: макс. 30 дней, обратный порядок (слева старые, вправо сегодня); нет данных — 0
+            const dates = getCampaignTableDateList();
+            // Подписи дат: DD.MM для читаемости
+            const dateLabels = dates.map(d => {
+                const [mm, dd] = d.split('-');
+                return dd + '.' + mm;
+            });
             
-            // Вставляем заголовки дат (делаем один раз, при первом вызове)
+            // Вставляем заголовки дат (внутри блока с прокруткой)
             const headerCell = document.getElementById('dateHeaders');
             if (headerCell) {
-                headerCell.outerHTML = dates.map(d => 
-                    `<th class="text-center py-2 px-1 text-xs">${d}</th>`
+                headerCell.outerHTML = dateLabels.map((label, i) => 
+                    `<th class="text-center py-2 px-1 date-col" title="${dates[i]}">${label}</th>`
                 ).join('');
             }
             
