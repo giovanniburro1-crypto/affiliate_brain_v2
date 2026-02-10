@@ -249,10 +249,12 @@
                             <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="HOLD" ${(c.verdict === 'CONTINUE' || c.verdict === 'HOLD') ? 'checked' : ''}> <span class="verdict-HOLD">HOLD</span></label>
                             <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="OPTIMIZE" ${c.verdict === 'OPTIMIZE' ? 'checked' : ''}> <span class="verdict-OPTIMIZE">OPTIMIZE</span></label>
                         </div>
-                        <select class="px-2 py-1 rounded text-xs bg-zinc-800" id="hideDays-${escapeHtml(c.campaign_id)}">
-                            <option value="0">Hide for: —</option>
+                        <select class="px-2 py-1 rounded text-xs bg-zinc-800" id="recheckDays-${escapeHtml(c.campaign_id)}">
+                            <option value="0">Речек: некогда</option>
                             <option value="1">1 day</option>
+                            <option value="2">2 days</option>
                             <option value="3" selected>3 days</option>
+                            <option value="5">5 days</option>
                             <option value="7">7 days</option>
                         </select>
                         <button type="button" onclick="onApply('${escapeHtml(c.campaign_id)}', ${c.confidence})" class="btn-success px-3 py-1.5 rounded text-sm">Apply</button>
@@ -270,23 +272,19 @@
         }
 
         function onApply(campaignId, confidence) {
-            if (confidence < CONFIDENCE_THRESHOLD) {
-                alert('Применить можно только при уверенности ≥95%. Сейчас: ' + Math.round(confidence) + '%.');
-                return;
-            }
             const verdictEl = document.querySelector(`input[name="verdict-${campaignId}"]:checked`);
             const verdict = verdictEl ? verdictEl.value : 'HOLD';
-            const hideDaysEl = document.getElementById(`hideDays-${campaignId}`);
-            const hideDays = hideDaysEl ? parseInt(hideDaysEl.value, 10) : 0;
+            const recheckEl = document.getElementById(`recheckDays-${campaignId}`);
+            const recheckAfterDays = recheckEl ? parseInt(recheckEl.value, 10) : 0;
 
             fetch('/api/bot-agent/apply', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ campaign_id: campaignId, verdict, hide_days: hideDays, confidence })
+                body: JSON.stringify({ campaign_id: campaignId, verdict, recheck_after_days: recheckAfterDays, confidence })
             })
             .then(r => r.json())
             .then(data => {
-                if (data.success) alert('Применено.');
+                if (data.success) alert(data.message || 'Готово.');
                 else alert(data.error || 'Ошибка');
             })
             .catch(() => alert('Ошибка сети'));

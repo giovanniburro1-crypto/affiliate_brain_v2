@@ -1,16 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Re-checking - Affiliate Brain</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
         .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
+        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
         .nav-item { border-radius: 8px; }
         .nav-item:hover { background: rgba(139,92,246,0.1); }
         .nav-item.active { background: #8b5cf6; }
+        select { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
+        .btn-primary { background: #8b5cf6; }
+        .btn-success { background: #22c55e; }
+        .btn-danger { background: #ef4444; }
+        .btn-blue { background: #3b82f6; }
+        .verdict-SCALE { color: #22c55e; }
+        .verdict-STOP { color: #ef4444; }
+        .verdict-OPTIMIZE { color: #3b82f6; }
+        .verdict-CONTINUE, .verdict-HOLD { color: #eab308; }
+        .spinner { width: 24px; height: 24px; border: 3px solid #2a2a3a; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen">
@@ -34,10 +47,190 @@
                 <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
             </nav>
         </aside>
-        <main class="ml-56 flex-1 p-6">
-            <h1 class="text-2xl font-bold">Re-checking</h1>
+
+        <main class="ml-56 flex-1 p-6 flex flex-col min-h-0">
+            <div class="flex items-center justify-between gap-4 mb-6">
+                <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="refresh-cw" class="w-6 h-6 text-purple-400"></i>Re-checking</h1>
+                <button type="button" onclick="loadQueue()" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">Обновить</button>
+            </div>
+
+            <div id="recheckLoading" class="hidden flex items-center justify-center gap-2 py-8 text-zinc-400">
+                <div class="spinner"></div>
+                <span>Загрузка очереди...</span>
+            </div>
+
+            <div id="recheckEmpty" class="hidden py-12 text-center text-zinc-500">
+                <p class="mb-2">Очередь речека пуста.</p>
+                <p class="text-sm">Добавьте кампании с TOP-5: выберите период речека (1/2/3/5/7 days) и нажмите Apply.</p>
+            </div>
+
+            <div id="recheckCards" class="flex-1 overflow-y-auto space-y-4"></div>
         </main>
     </div>
-    <script>lucide.createIcons();</script>
+
+    <script>
+        function escapeHtml(s) {
+            return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function copyId(el) {
+            const t = el.dataset.copy || '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(t).then(() => { el.title = 'Скопировано!'; }).catch(() => { copyFallback(t); el.title = 'Скопировано!'; });
+            } else {
+                copyFallback(t);
+                el.title = 'Скопировано!';
+            }
+        }
+        function copyFallback(t) {
+            const ta = document.createElement('textarea');
+            ta.value = t;
+            ta.style.cssText = 'position:fixed;opacity:0;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+
+        function daysAgoText(days) {
+            if (days === 0) return 'today';
+            if (days === 1) return '1 day ago';
+            return days + ' days ago';
+        }
+
+        function getPeriodParamsForCard(cardId) {
+            const sel = document.getElementById('periodSelect-' + cardId);
+            if (!sel) return { periodParam: 'period=7', period: 7 };
+            if (sel.value === 'custom') {
+                const from = document.getElementById('customDateFrom-' + cardId)?.value;
+                const to = document.getElementById('customDateTo-' + cardId)?.value;
+                if (from && to) return { periodParam: 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to), period: null, date_from: from, date_to: to };
+            }
+            const period = parseInt(sel.value, 10) || 7;
+            return { periodParam: 'period=' + period, period: period };
+        }
+
+        async function loadQueue() {
+            document.getElementById('recheckLoading').classList.remove('hidden');
+            document.getElementById('recheckLoading').classList.add('flex');
+            document.getElementById('recheckEmpty').classList.add('hidden');
+            document.getElementById('recheckCards').innerHTML = '';
+
+            try {
+                const res = await fetch('/api/bot-agent/recheck-queue', { cache: 'no-store' });
+                const list = await res.json();
+                if (!Array.isArray(list) || list.length === 0) {
+                    document.getElementById('recheckEmpty').classList.remove('hidden');
+                    document.getElementById('recheckCards').innerHTML = '';
+                } else {
+                    document.getElementById('recheckEmpty').classList.add('hidden');
+                    const cardsHtml = list.map(item => {
+                        const shortName = (item.campaign || '').replace(/^[^-]+-\s*/i, '').trim() || item.campaign || item.campaign_id;
+                        const verdictClass = 'verdict-' + (item.verdict || 'HOLD');
+                        const safeId = escapeHtml(String(item.id));
+                        const safeCid = escapeHtml(item.campaign_id || '');
+                        const copyAttr = (item.campaign_id || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+                        return `
+                        <div class="card p-4" data-queue-id="${safeId}" data-campaign-id="${safeCid}">
+                            <div class="flex justify-between items-start gap-4 flex-wrap">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="font-semibold text-lg">${escapeHtml(shortName)}
+                                        <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${copyAttr}" onclick="copyId(this)" title="Скопировать ID">(${escapeHtml(item.campaign_id || '')})</span>
+                                    </h3>
+                                    <span class="px-2 py-0.5 rounded text-xs ${verdictClass}">${escapeHtml(item.verdict || 'HOLD')} · ${daysAgoText(item.days_ago)}</span>
+                                </div>
+                                <button type="button" onclick="removeFromQueue(${safeId})" class="text-zinc-500 hover:text-red-400 text-sm">Удалить из очереди</button>
+                            </div>
+                            <div class="mt-4 flex flex-wrap items-center gap-3">
+                                <span class="text-zinc-500 text-sm">Период:</span>
+                                <select id="periodSelect-${safeId}" class="px-2 py-1.5 rounded text-sm bg-zinc-800" onchange="toggleCustomDateForCard('${safeId}')">
+                                    <option value="7">Last 7 days</option>
+                                    <option value="14">Last 14 days</option>
+                                    <option value="30">Last 30 days</option>
+                                    <option value="custom">Custom date</option>
+                                </select>
+                                <div id="customDateRange-${safeId}" class="hidden items-center gap-2">
+                                    <input type="date" id="customDateFrom-${safeId}" class="px-2 py-1 rounded text-sm bg-zinc-800 border border-zinc-600">
+                                    <span class="text-zinc-500">—</span>
+                                    <input type="date" id="customDateTo-${safeId}" class="px-2 py-1 rounded text-sm bg-zinc-800 border border-zinc-600">
+                                </div>
+                                <button type="button" onclick="loadAnalysis('${safeCid}', '${safeId}')" class="btn-success px-3 py-1.5 rounded text-sm">Apply</button>
+                            </div>
+                            <div id="analysisBlock-${safeId}" class="mt-4 hidden"></div>
+                        </div>
+                        `;
+                    });
+                    document.getElementById('recheckCards').innerHTML = cardsHtml.join('');
+                }
+            } catch (e) {
+                document.getElementById('recheckCards').innerHTML = '<p class="text-red-400">Ошибка загрузки очереди.</p>';
+            } finally {
+                document.getElementById('recheckLoading').classList.add('hidden');
+                document.getElementById('recheckLoading').classList.remove('flex');
+                lucide.createIcons();
+            }
+        }
+
+        function toggleCustomDateForCard(cardId) {
+            const el = document.getElementById('customDateRange-' + cardId);
+            const sel = document.getElementById('periodSelect-' + cardId);
+            if (!el || !sel) return;
+            if (sel.value === 'custom') {
+                el.classList.remove('hidden');
+                el.classList.add('flex');
+                const to = new Date();
+                const from = new Date(to);
+                from.setDate(from.getDate() - 6);
+                const fromInp = document.getElementById('customDateFrom-' + cardId);
+                const toInp = document.getElementById('customDateTo-' + cardId);
+                if (fromInp) fromInp.value = from.toISOString().slice(0, 10);
+                if (toInp) toInp.value = to.toISOString().slice(0, 10);
+            } else {
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+            }
+        }
+
+        async function loadAnalysis(campaignId, cardId) {
+            const params = getPeriodParamsForCard(cardId);
+            let url = '/api/bot-agent/campaign-analysis?campaign_id=' + encodeURIComponent(campaignId);
+            if (params.period != null) url += '&period=' + params.period;
+            if (params.date_from) url += '&date_from=' + encodeURIComponent(params.date_from) + '&date_to=' + encodeURIComponent(params.date_to);
+
+            const block = document.getElementById('analysisBlock-' + cardId);
+            if (!block) return;
+            block.classList.remove('hidden');
+            block.innerHTML = '<p class="text-zinc-500">Загрузка анализа...</p>';
+
+            try {
+                const res = await fetch(url, { cache: 'no-store' });
+                const data = await res.json();
+                if (data.error) {
+                    block.innerHTML = '<p class="text-red-400">' + escapeHtml(data.error) + '</p>';
+                    return;
+                }
+                const lines = data.summary_lines || [];
+                block.innerHTML = '<div class="space-y-1">' + lines.map(l => '<div class="text-zinc-400 text-sm">' + escapeHtml(l) + '</div>').join('') + '</div>';
+            } catch (e) {
+                block.innerHTML = '<p class="text-red-400">Ошибка загрузки анализа.</p>';
+            }
+        }
+
+        async function removeFromQueue(itemId) {
+            if (!confirm('Удалить из очереди речека?')) return;
+            try {
+                const res = await fetch('/api/bot-agent/recheck-queue/' + itemId, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) loadQueue();
+                else alert(data.error || 'Ошибка');
+            } catch (e) {
+                alert('Ошибка сети');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            loadQueue();
+        });
+    </script>
 </body>
 </html>

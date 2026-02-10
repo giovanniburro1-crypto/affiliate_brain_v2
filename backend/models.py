@@ -72,6 +72,16 @@ class AIMemory(Base):
     roi_after_7days = Column(Float)
     roi_after_14days = Column(Float)
 
+class RecheckQueue(Base):
+    __tablename__ = "recheck_queue"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(String(100), nullable=False)
+    campaign = Column(String(255))
+    verdict = Column(String(50))
+    recheck_after_days = Column(Integer, default=0)
+    applied_at = Column(DateTime, server_default=func.now())
+
+
 class AIAgent(Base):
     __tablename__ = 'ai_agents'
     id = Column(Integer, primary_key=True)
