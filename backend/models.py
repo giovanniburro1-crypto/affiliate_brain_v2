@@ -39,6 +39,7 @@ class TrafficStats(Base):
 class AdditionalMonetization(Base):
     __tablename__ = "additional_monetization"
     id = Column(Integer, primary_key=True)
+    click_id = Column(String(255), unique=True, nullable=True)  # уникален как в traffic_stats; NULL для sale
     campaign_id = Column(String(100))
     token1 = Column(String(255))
     date = Column(Date)
