@@ -496,6 +496,9 @@ class Top5Service:
             weakness_segments = self._find_weakness_segments(
                 segments, spend, profit, clicks, limit=5
             )
+            # Не показывать один и тот же сегмент и как силу, и как слабость
+            power_keys = {(s["type"], str(s["value"])) for s in power_segments}
+            weakness_segments = [w for w in weakness_segments if (w["type"], str(w["value"])) not in power_keys]
             has_zacepy = self._check_zacepy(segments)
             killers = self._find_profit_killers(
                 segments, revenue, conversions, spend
@@ -630,6 +633,9 @@ class Top5Service:
         segments = self._get_campaign_segments(campaign_id, row[2], date_from, date_to)
         power_segments = self._find_power_segments(segments, profit, clicks, limit=3)
         weakness_segments = self._find_weakness_segments(segments, spend, profit, clicks, limit=5)
+        # Не показывать один и тот же сегмент и как силу, и как слабость
+        power_keys = {(s["type"], str(s["value"])) for s in power_segments}
+        weakness_segments = [w for w in weakness_segments if (w["type"], str(w["value"])) not in power_keys]
         has_zacepy = self._check_zacepy(segments)
         killers = self._find_profit_killers(segments, revenue, conversions, spend)
         if killers and not has_zacepy:
