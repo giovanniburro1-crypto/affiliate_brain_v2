@@ -92,6 +92,15 @@
             if (document.getElementById('periodSelect').value === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); }
             else { el.classList.add('hidden'); el.classList.remove('flex'); }
         }
+        function copyId(el) {
+            const t = el.dataset.copy || '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(t).then(() => { el.title='Скопировано!'; }).catch(() => { copyFallback(t); el.title='Скопировано!'; });
+            } else { copyFallback(t); el.title='Скопировано!'; }
+        }
+        function copyFallback(t) {
+            const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText='position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        }
         function getPeriodParams() {
             const sel = document.getElementById('periodSelect');
             if (sel.value === 'custom') {
@@ -116,7 +125,7 @@
                         <div class="rank-${i+1} w-12 h-12 rounded-lg flex items-center justify-center text-xl font-bold">#${i+1}</div>
                         <div class="flex-1">
                             <div class="flex items-center gap-2 mb-1">
-                                <h3 class="font-semibold">${c.campaign}</h3>
+                                <h3 class="font-semibold">${c.campaign} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(c.campaign_id||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${c.campaign_id || ''})</span></h3>
                                 <span class="verdict-${c.verdict} px-2 py-0.5 rounded text-xs">${c.verdict}</span>
                             </div>
                             <div class="text-zinc-500 text-sm">${c.source}</div>

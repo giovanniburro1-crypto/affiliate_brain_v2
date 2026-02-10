@@ -173,6 +173,15 @@
         }
 
         function escapeHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function copyId(el) {
+            const t = el.dataset.copy || '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(t).then(() => { el.title='Скопировано!'; }).catch(() => { copyFallback(t); el.title='Скопировано!'; });
+            } else { copyFallback(t); el.title='Скопировано!'; }
+        }
+        function copyFallback(t) {
+            const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText='position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        }
 
         function formatTrend(trend) {
             if (trend === 'IMPROVING') return '↑ growth';
@@ -236,7 +245,7 @@
                 <div class="card p-4" data-campaign-id="${escapeHtml(c.campaign_id)}">
                     <div class="flex justify-between items-start gap-4">
                         <div>
-                            <h3 class="font-semibold text-lg">${escapeHtml(shortName)}</h3>
+                            <h3 class="font-semibold text-lg">${escapeHtml(shortName)} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(c.campaign_id||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${escapeHtml(c.campaign_id || '')})</span></h3>
                             <div class="text-zinc-400 text-sm mt-1">ROI ${c.roi}% • Profit $${c.profit} • Spend $${c.spend} • Clicks ${c.clicks || 0} • Conv ${c.conversions || 0}</div>
                         </div>
                         <div class="text-3xl font-bold ${confClass}">${Math.round(c.confidence || 0)}%</div>
