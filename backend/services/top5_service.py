@@ -68,7 +68,7 @@ def _calc_volatility(
 
 
 def _calc_trend(daily_impact: List[float]) -> str:
-    """IMPROVING / DECLINING / STABLE по последним дням."""
+    """IMPROVING / DECLINING / STABLE по последним дням (legacy)."""
     if len(daily_impact) < 4:
         return "UNKNOWN"
     mid = len(daily_impact) // 2
@@ -79,6 +79,29 @@ def _calc_trend(daily_impact: List[float]) -> str:
     if second < first * 0.9:
         return "DECLINING"
     return "STABLE"
+
+
+def _calc_trend_last_n_days(daily_impact: List[float]) -> str:
+    """
+    ↑ last N days или ↓ last N days.
+    N = длина последней подряд идущей серии положительного или отрицательного impact (min 2 дня).
+    Если серия < 2 дней — возвращаем пустую строку или "—".
+    """
+    if not daily_impact or len(daily_impact) < 2:
+        return ""
+    count = 0
+    first_sign = daily_impact[-1] >= 0
+    for d in reversed(daily_impact):
+        sign = d >= 0
+        if sign == first_sign:
+            count += 1
+        else:
+            break
+    if count < 2:
+        return ""
+    if first_sign:
+        return f"↑ last {count} days"
+    return f"↓ last {count} days"
 
 
 def _stability_factor(volatility: float) -> float:
@@ -198,19 +221,69 @@ class Top5Service:
                 )
         return segments
 
-    def _find_strengths(
-        self, segments: List[Dict], limit: int = 2
+    def _find_power_segments(
+        self,
+        segments: List[Dict],
+        total_profit: float,
+        total_clicks: int,
+        limit: int = 3,
     ) -> List[Dict]:
-        """2 лучших сегмента по Impact и ROI (комбинация)."""
-        good = [s for s in segments if s["profit"] > 0 and s["conversions"] >= 1]
+        """
+        POWER: segment_profit / total_profit ≥ 10%.
+        Исключить очевидные: segment_clicks / total_clicks >= 90%.
+        Max 3. X% traffic volume, Y% profit traffic.
+        """
+        if total_profit <= 0 or total_clicks <= 0:
+            return []
+        good = []
+        for s in segments:
+            if s["profit"] <= 0:
+                continue
+            profit_share = (s["profit"] / total_profit) * 100
+            if profit_share < 10:
+                continue
+            traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
+            if traffic_share >= 90:
+                continue
+            good.append({**s, "traffic_pct": round(traffic_share, 0), "profit_pct": round(profit_share, 0)})
         good.sort(key=lambda x: (x["profit"], x["roi"]), reverse=True)
         return good[:limit]
 
-    def _find_weaknesses(
-        self, segments: List[Dict], limit: int = 2
+    def _find_weakness_segments(
+        self,
+        segments: List[Dict],
+        total_cost: float,
+        total_profit: float,
+        total_clicks: int,
+        limit: int = 5,
     ) -> List[Dict]:
-        """2 худших сегмента (отрицательный impact или 0 conv при значимом spend)."""
-        bad = [s for s in segments if s["profit"] < 0 or (s["conversions"] == 0 and s["spend"] > 0)]
+        """
+        WEAKNESS: segment_cost / total_cost ≥ 10%,
+        AND |segment_impact| / total_profit ≥ 10% (если total_profit > 0).
+        При total_profit ≤ 0 — только условие по cost.
+        Исключить очевидные: traffic_share >= 90%.
+        """
+        if total_cost <= 0 or total_clicks <= 0:
+            return []
+        bad = []
+        for s in segments:
+            cost_share = (s["spend"] / total_cost) * 100
+            if cost_share < 10:
+                continue
+            traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
+            if traffic_share >= 90:
+                continue
+            if total_profit > 0:
+                impact = s["revenue"] - s["spend"]
+                impact_share = (abs(impact) / abs(total_profit)) * 100
+                if impact_share < 10:
+                    continue
+            profit_pct = round((s["profit"] / total_profit) * 100, 0) if total_profit != 0 else 0
+            bad.append({
+                **s,
+                "traffic_pct": round(traffic_share, 0),
+                "profit_pct": int(profit_pct),
+            })
         bad.sort(key=lambda x: (x["profit"], -x["spend"]))
         return bad[:limit]
 
@@ -255,50 +328,50 @@ class Top5Service:
     def _build_summary_lines(
         self,
         campaign: Dict,
-        strengths: List[Dict],
-        weaknesses: List[Dict],
-        killers: List[Dict],
+        power_segments: List[Dict],
+        weakness_segments: List[Dict],
+        add_mon: float,
         add_mon_pct: float,
         days_with_data: int,
         total_days: int,
         volatility: float,
+        trend_str: str,
     ) -> List[str]:
         """
-        Формат 4-6 строк:
-        1: ROI • Profit • Spend • Clicks • Conv
-        2-3: [СИЛА] ...
-        4-5: [СЛАБОСТЬ] ...
-        6: [ВЫВОД] + доп. монетизация + волатильность
+        Порядок: metrics → trend+volatility → add.monetization → proposition → POWER → WEAKNESS.
+        Без дублирования первой строки.
         """
         lines = []
         c = campaign
+        # 1. Metrics
         lines.append(
             f"ROI {c.get('roi', 0)}% • Profit ${c.get('profit', 0)} • Spend ${c.get('spend', 0)} • "
             f"Clicks {c.get('clicks', 0)} • Conv {c.get('conversions', 0)}"
         )
-
-        for s in strengths[:2]:
-            cr = round((s["conversions"] / s["clicks"] * 100), 1) if s.get("clicks") else 0
-            lines.append(
-                f"[СИЛА] {s['type']} {s['value']}: CR {cr}% • Rev ${s['revenue']} • Profit ${s['profit']}"
-            )
-        if not strengths:
-            lines.append("[СИЛА] Нет явных доноров профита")
-
-        for w in weaknesses[:2]:
-            lines.append(
-                f"[СЛАБОСТЬ] {w['type']} {w['value']}: Rev ${w['revenue']} Cost ${w['spend']} Conv {w['conversions']}"
-            )
-
-        # Киллеры + вывод
+        # 2. Trend + Volatility
+        trend_vol = trend_str
+        if trend_vol:
+            trend_vol += f"  Volatility {volatility:.1f}% • {days_with_data}/{total_days} дней"
+        else:
+            trend_vol = f"Volatility {volatility:.1f}% • {days_with_data}/{total_days} дней"
+        lines.append(trend_vol)
+        # 3. Add. monetization: X% profit Y$ (X = add_mon/total_revenue*100, Y = add_mon). Показываем для ВСЕХ кампаний.
+        lines.append(f"Add. monetization: {add_mon_pct:.0f}% profit ${add_mon}")
+        # 4. Proposition
         verdict = c.get("verdict", "HOLD")
-        out = f"[ВЫВОД] {verdict}"
-        if add_mon_pct > 0:
-            out += f" • Доп. монетизация: {add_mon_pct:.0f}% профита"
-        out += f" • Волатильность {volatility:.1f}% • {days_with_data}/{total_days} дней"
-        if killers:
-            out += f" • Stop: {', '.join(k['value'] for k in killers[:3])}"
-        lines.append(out)
+        lines.append(f"[Proposition] {verdict}")
+        # 5. POWER
+        for s in power_segments:
+            lines.append(
+                f"[POWER] {s['type']} {s['value']}: {s.get('traffic_pct', 0)}% of traffic volume "
+                f"{s.get('profit_pct', 0)}% of profit traffic • {s['conversions']} Conv • Profit ${s['profit']}"
+            )
+        # 6. WEAKNESS
+        for w in weakness_segments:
+            lines.append(
+                f"[WEAKNESS] {w['type']} {w['value']}: {w.get('traffic_pct', 0)}% of traffic volume "
+                f"{w.get('profit_pct', 0)}% of profit traffic • {w['conversions']} Conv • Profit ${w['profit']}"
+            )
         return lines
 
     def get_top5(
@@ -358,7 +431,8 @@ class Top5Service:
             revenue = base_revenue + add_mon
             profit = revenue - spend
             roi = round((profit / spend * 100) if spend > 0 else 0)
-            add_mon_pct = round((add_mon / profit * 100), 1) if profit > 0 and add_mon > 0 else 0.0
+            # X% = add_mon / total_revenue (доля доп.монетизации в выручке, как в трекере; не add_mon/profit)
+            add_mon_pct = round((add_mon / revenue * 100), 1) if revenue > 0 else 0.0
 
             # Дневные метрики для волатильности
             daily = self._get_daily_metrics(cid, date_from, date_to)
@@ -416,15 +490,20 @@ class Top5Service:
             segments = self._get_campaign_segments(
                 cid, row[2], date_from, date_to
             )
-            strengths = self._find_strengths(segments)
-            weaknesses = self._find_weaknesses(segments)
+            power_segments = self._find_power_segments(
+                segments, profit, clicks, limit=3
+            )
+            weakness_segments = self._find_weakness_segments(
+                segments, spend, profit, clicks, limit=5
+            )
             has_zacepy = self._check_zacepy(segments)
             killers = self._find_profit_killers(
                 segments, revenue, conversions, spend
             )
             if killers and not has_zacepy:
-                killers = []  # Не рекомендуем резать, если нет зацепов
+                killers = []
 
+            trend_str = _calc_trend_last_n_days(daily_impact)
             summary_lines = self._build_summary_lines(
                 {
                     "roi": roi,
@@ -434,13 +513,14 @@ class Top5Service:
                     "conversions": conversions,
                     "verdict": verdict,
                 },
-                strengths,
-                weaknesses,
-                killers,
+                power_segments,
+                weakness_segments,
+                add_mon,
                 add_mon_pct,
                 days_with_data,
                 total_days,
                 volatility,
+                trend_str,
             )
 
             campaigns.append(
@@ -465,8 +545,8 @@ class Top5Service:
                     "bot_score": round(opp_score / 5, 1),
                     "summary_lines": summary_lines,
                     "reasoning": "; ".join(summary_lines),
-                    "strengths": strengths,
-                    "weaknesses": weaknesses,
+                    "strengths": power_segments,
+                    "weaknesses": weakness_segments,
                     "profit_killers": killers,
                     "trend": trend,
                 }
@@ -513,7 +593,7 @@ class Top5Service:
         revenue = base_revenue + add_mon
         profit = revenue - spend
         roi = round((profit / spend * 100) if spend > 0 else 0)
-        add_mon_pct = round((add_mon / profit * 100), 1) if profit > 0 and add_mon > 0 else 0.0
+        add_mon_pct = round((add_mon / revenue * 100), 1) if revenue > 0 else 0.0
         daily = self._get_daily_metrics(campaign_id, date_from, date_to)
         days_with_data = len(daily)
         if days_with_data < 1:
@@ -548,15 +628,16 @@ class Top5Service:
         confidence = min(100, max(10, (days_with_data / 14) * 50 + (clicks / 1000) * 30 - (volatility / 100) * 20 + stability_factor * 15))
         confidence = round(confidence, 1)
         segments = self._get_campaign_segments(campaign_id, row[2], date_from, date_to)
-        strengths = self._find_strengths(segments)
-        weaknesses = self._find_weaknesses(segments)
+        power_segments = self._find_power_segments(segments, profit, clicks, limit=3)
+        weakness_segments = self._find_weakness_segments(segments, spend, profit, clicks, limit=5)
         has_zacepy = self._check_zacepy(segments)
         killers = self._find_profit_killers(segments, revenue, conversions, spend)
         if killers and not has_zacepy:
             killers = []
+        trend_str = _calc_trend_last_n_days(daily_impact)
         summary_lines = self._build_summary_lines(
             {"roi": roi, "profit": profit, "spend": spend, "clicks": clicks, "conversions": conversions, "verdict": verdict},
-            strengths, weaknesses, killers, add_mon_pct, days_with_data, total_days, volatility,
+            power_segments, weakness_segments, add_mon, add_mon_pct, days_with_data, total_days, volatility, trend_str,
         )
         return {
             "campaign_id": campaign_id,
@@ -579,8 +660,8 @@ class Top5Service:
             "bot_score": round(opp_score / 5, 1),
             "summary_lines": summary_lines,
             "reasoning": "; ".join(summary_lines),
-            "strengths": strengths,
-            "weaknesses": weaknesses,
+            "strengths": power_segments,
+            "weaknesses": weakness_segments,
             "profit_killers": killers,
             "trend": trend,
         }

@@ -183,12 +183,6 @@
             const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText='position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         }
 
-        function formatTrend(trend) {
-            if (trend === 'IMPROVING') return '↑ growth';
-            if (trend === 'DECLINING') return '↓ decline';
-            return '→ stable';
-        }
-
         function bestWorstFromBreakdown(breakdown) {
             const items = [];
             if (breakdown.by_os && breakdown.by_os.length) {
@@ -236,7 +230,6 @@
 
                 const cardsHtml = campaigns.map((c, i) => {
                 const shortName = (c.campaign || '').replace(/^[^-]+-\s*/i, '').trim() || c.campaign;
-                const trendText = formatTrend(c.trend || 'UNKNOWN');
                 const confClass = (c.confidence || 0) >= CONFIDENCE_THRESHOLD ? 'confidence-high' : 'confidence-low';
                 const summaryLines = c.summary_lines || [];
                 const linesHtml = summaryLines.map(line => `<div class="text-zinc-400 text-sm">${escapeHtml(line)}</div>`).join('');
@@ -246,11 +239,9 @@
                     <div class="flex justify-between items-start gap-4">
                         <div>
                             <h3 class="font-semibold text-lg">${escapeHtml(shortName)} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(c.campaign_id||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${escapeHtml(c.campaign_id || '')})</span></h3>
-                            <div class="text-zinc-400 text-sm mt-1">ROI ${c.roi}% • Profit $${c.profit} • Spend $${c.spend} • Clicks ${c.clicks || 0} • Conv ${c.conversions || 0}</div>
                         </div>
                         <div class="text-3xl font-bold ${confClass}">${Math.round(c.confidence || 0)}%</div>
                     </div>
-                    <div class="mt-2 text-zinc-500 text-sm">${trendText}</div>
                     <div class="mt-2 space-y-1">${linesHtml}</div>
                     <div class="mt-4 flex flex-wrap items-center gap-3">
                         <div class="flex gap-2">

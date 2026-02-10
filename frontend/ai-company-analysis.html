@@ -94,9 +94,7 @@
             div.innerHTML = `
                 <div class="card p-6" style="background:#1a1a24; border:1px solid #2a2a3a; border-radius:12px;">
                     <h2 class="text-xl font-bold mb-4">${(a.campaign||'').replace(/</g,'&lt;')} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(a.campaign_id||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${(a.campaign_id||'').replace(/</g,'&lt;')})</span></h2>
-                    <div class="text-zinc-400 text-sm mb-4">ROI ${a.roi}% • Profit $${a.profit} • Spend $${a.spend} • Clicks ${a.clicks} • Conv ${a.conversions}</div>
-                    <div class="space-y-1 mb-4">${lines}</div>
-                    <div class="text-xs text-zinc-500">Volatility ${a.volatility}% • ${a.days_with_data}/${a.total_days} days</div>
+                    <div class="space-y-1">${lines}</div>
                 </div>
             `;
         };
