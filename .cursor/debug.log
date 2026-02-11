@@ -1,11 +1,35 @@
-{"location": "bot_agent:apply:recheck_branch", "message": "entering recheck branch", "data": {"recheck_days": 3, "campaign_id": "706"}, "timestamp": "2026-02-10T21:24:56.575031Z", "hypothesisId": "H1"}
-{"location": "bot_agent:_ensure_recheck_queue_table:entry", "message": "ensure table entry", "data": {}, "timestamp": "2026-02-10T21:24:56.577880Z", "hypothesisId": "H1"}
-{"location": "bot_agent:_ensure_recheck_queue_table:before_execute", "message": "executing CREATE TABLE", "data": {"sql_preview": "\nCREATE TABLE IF NOT EXISTS recheck_queue (\n    id SERIAL PRIMARY KEY,\n    campa"}, "timestamp": "2026-02-10T21:24:56.578194Z", "hypothesisId": "H2"}
-{"location": "bot_agent:_ensure_recheck_queue_table:after_execute", "message": "execute done, committing", "data": {}, "timestamp": "2026-02-10T21:24:57.041500Z", "hypothesisId": "H2"}
-{"location": "bot_agent:_ensure_recheck_queue_table:after_commit", "message": "commit done", "data": {}, "timestamp": "2026-02-10T21:24:57.114975Z", "hypothesisId": "H2"}
-{"location": "bot_agent:apply:after_ensure", "message": "ensure returned without exception", "data": {}, "timestamp": "2026-02-10T21:24:57.115837Z", "hypothesisId": "H1"}
-{"location": "bot_agent:apply:before_select", "message": "about to SELECT from recheck_queue", "data": {"campaign_id": "706"}, "timestamp": "2026-02-10T21:24:57.116243Z", "hypothesisId": "H5"}
-{"location": "bot_agent:_ensure_recheck_queue_table:entry", "message": "ensure table entry", "data": {}, "timestamp": "2026-02-10T21:25:08.136071Z", "hypothesisId": "H1"}
-{"location": "bot_agent:_ensure_recheck_queue_table:before_execute", "message": "executing CREATE TABLE", "data": {"sql_preview": "\nCREATE TABLE IF NOT EXISTS recheck_queue (\n    id SERIAL PRIMARY KEY,\n    campa"}, "timestamp": "2026-02-10T21:25:08.136528Z", "hypothesisId": "H2"}
-{"location": "bot_agent:_ensure_recheck_queue_table:after_execute", "message": "execute done, committing", "data": {}, "timestamp": "2026-02-10T21:25:08.438566Z", "hypothesisId": "H2"}
-{"location": "bot_agent:_ensure_recheck_queue_table:after_commit", "message": "commit done", "data": {}, "timestamp": "2026-02-10T21:25:08.489922Z", "hypothesisId": "H2"}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"traffichunt _2026-02-06_10_57_32.xlsx"},"timestamp":1770803485945}
+{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770803497459}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":" affmy (adness 4 ivan)_2026-02-06_10_55_07.xlsx"},"timestamp":1770803528506}
+{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770803533223}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":" approach x_2026-02-06_10_51_47.xlsx"},"timestamp":1770803588887}
+{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770803609725}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"additional monetisation_2026-02-06_10_59_52.xlsx"},"timestamp":1770803656057}
+{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770803675719}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"981_i_add","date":"2026-01-26"},"timestamp":1770803675896}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"981_i_add","date":"2026-01-26"},"timestamp":1770803675896}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"981_i_add","date":"2026-01-26"},"timestamp":1770803675896}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"981_i_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"122_i_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"122_i_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"882_i_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"122_i_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"904_i_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":true,"token1":"122_i_add_add","date":"2026-01-26"},"timestamp":1770803675897}
+{"hypothesisId":"H1,H2","location":"upload.py:_process_monetisation_rows","message":"Monet dedup","data":{"before":15962,"after":15962},"timestamp":1770803697325}
+{"hypothesisId":"H4","location":"upload.py:_insert_monetisation_with_upsert","message":"Upsert entry","data":{"rows":15962,"batches":32},"timestamp":1770803697326}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"push monetisation _2026-02-06_11_02_07.xlsx"},"timestamp":1770803740064}
+{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770803749320}
+{"hypothesisId":"H1,H2","location":"upload.py:_process_monetisation_rows","message":"Monet dedup","data":{"before":28600,"after":28600},"timestamp":1770803752484}
+{"hypothesisId":"H4","location":"upload.py:_insert_monetisation_with_upsert","message":"Upsert entry","data":{"rows":28600,"batches":58},"timestamp":1770803752485}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"sale_27-05.26.xlsx"},"timestamp":1770803831660}
+{"hypothesisId":"H2","location":"upload.py:_process_sales","message":"Sales start","data":{"rows_count":2019,"unique_token1_date":1777},"timestamp":1770803833412}
+{"hypothesisId":"H2","location":"upload.py:_process_sales_upsert","message":"Sales before upsert","data":{"total_rows":1150,"unique_click_ids":1150},"timestamp":1770803833481}
+{"hypothesisId":"H4","location":"upload.py:_insert_monetisation_with_upsert","message":"Upsert entry","data":{"rows":1150,"batches":3},"timestamp":1770803833481}
+{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"additional monetisation_2026-02-06_10_59_52.xlsx"},"timestamp":1770804403057}
+{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770804422704}
+{"hypothesisId":"H1,H2","location":"upload.py:_process_monetisation_rows","message":"Monet dedup","data":{"before":15962,"after":15962},"timestamp":1770804444879}
+{"hypothesisId":"H4","location":"upload.py:_insert_monetisation_with_upsert","message":"Upsert entry","data":{"rows":15962,"batches":32},"timestamp":1770804444880}
+{"location": "bot_agent:_ensure_recheck_queue_table:entry", "message": "ensure table entry", "data": {}, "timestamp": "2026-02-11T10:08:03.999446Z", "hypothesisId": "H1"}
+{"location": "bot_agent:_ensure_recheck_queue_table:before_execute", "message": "executing CREATE TABLE on engine connection", "data": {"sql_preview": "\nCREATE TABLE IF NOT EXISTS recheck_queue (\n    id SERIAL PRIMARY KEY,\n    campa"}, "timestamp": "2026-02-11T10:08:04.000083Z", "hypothesisId": "H2"}
+{"location": "bot_agent:_ensure_recheck_queue_table:after_commit", "message": "commit done on engine connection", "data": {}, "timestamp": "2026-02-11T10:08:04.308001Z", "hypothesisId": "H2"}

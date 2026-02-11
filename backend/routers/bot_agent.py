@@ -53,27 +53,25 @@ CREATE TABLE IF NOT EXISTS recheck_queue (
 
 
 def _ensure_recheck_queue_table(db: Session) -> None:
-    """Создать таблицу recheck_queue при первом обращении, если её нет."""
+    """Создать таблицу recheck_queue при первом обращении, если её нет. DDL выполняется на отдельном соединении движка и коммитится там, чтобы таблица была видна сессии и пулу."""
     # #region agent log
     _debug_log("bot_agent:_ensure_recheck_queue_table:entry", "ensure table entry", {}, "H1")
     # #endregion
     try:
+        engine = db.get_bind()
         # #region agent log
-        _debug_log("bot_agent:_ensure_recheck_queue_table:before_execute", "executing CREATE TABLE", {"sql_preview": RECHECK_QUEUE_CREATE_SQL[:80]}, "H2")
+        _debug_log("bot_agent:_ensure_recheck_queue_table:before_execute", "executing CREATE TABLE on engine connection", {"sql_preview": RECHECK_QUEUE_CREATE_SQL[:80]}, "H2")
         # #endregion
-        db.execute(text(RECHECK_QUEUE_CREATE_SQL))
+        with engine.connect() as conn:
+            conn.execute(text(RECHECK_QUEUE_CREATE_SQL))
+            conn.commit()
         # #region agent log
-        _debug_log("bot_agent:_ensure_recheck_queue_table:after_execute", "execute done, committing", {}, "H2")
-        # #endregion
-        db.commit()
-        # #region agent log
-        _debug_log("bot_agent:_ensure_recheck_queue_table:after_commit", "commit done", {}, "H2")
+        _debug_log("bot_agent:_ensure_recheck_queue_table:after_commit", "commit done on engine connection", {}, "H2")
         # #endregion
     except Exception as e:
         # #region agent log
         _debug_log("bot_agent:_ensure_recheck_queue_table:exception", "ensure failed", {"error": str(e), "type": type(e).__name__}, "H4")
         # #endregion
-        db.rollback()
         raise
 
 

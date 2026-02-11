@@ -75,19 +75,28 @@ def extract_prefix(token1):
 
 def _sale_click_id(token1: str, date_val, col2: str, revenue: float) -> str:
     """
-    Уникальный click_id для sale-строки: sale_YYYYMMDD_token1Suffix;col2_revenue
-    Пример: sale_20260127_t_zp;p_i_1.8
-    Fallback при отсутствии col2: sale_YYYYMMDD_token1_revenue
+    Уникальный click_id для sale-строки: sale_PREFIX_YYYYMMDD_suffix;col2_revenue
+    Пример: sale_1338_20260127_i_bb;add_0.4
+    Включает PREFIX чтобы избежать коллизий между разными кампаниями
     """
     date_compact = date_val.strftime('%Y%m%d') if hasattr(date_val, 'strftime') else str(date_val).replace('-', '')[:8]
     token1_str = str(token1).strip()
-    token1_suffix = token1_str.split('_', 1)[1] if '_' in token1_str else token1_str
+    
+    # Разделяем на prefix и suffix
+    if '_' in token1_str:
+        prefix = token1_str.split('_', 1)[0]
+        suffix = token1_str.split('_', 1)[1]
+    else:
+        prefix = token1_str
+        suffix = ''
+    
     revenue_safe = str(revenue).replace(',', '.') if revenue is not None else '0'
     col2_safe = (str(col2 or '').strip().replace(';', '')).replace(' ', '')[:50]
+    
     if col2_safe:
-        cid = f"sale_{date_compact}_{token1_suffix};{col2_safe}_{revenue_safe}"
+        cid = f"sale_{prefix}_{date_compact}_{suffix};{col2_safe}_{revenue_safe}"
     else:
-        cid = f"sale_{date_compact}_{token1_str}_{revenue_safe}"
+        cid = f"sale_{prefix}_{date_compact}_{suffix}_{revenue_safe}"
     return cid[:255]
 
 # Monetisation определяем по значению колонки Traffic Source (и при необходимости campaign), не по названию файла.
