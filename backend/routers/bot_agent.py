@@ -5,7 +5,7 @@ TOP-5 Bot Agent — API для отбора кампаний на масштаб
 import json
 import os
 from datetime import date, timedelta, datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -38,6 +38,9 @@ class ApplyBody(BaseModel):
     hide_days: int = 0  # legacy, map to recheck_after_days
     recheck_after_days: int = 0  # 0 = некогда, 1/2/3/5/7 = add to queue
     confidence: float = 0
+    bot_proposal: Optional[str] = None
+    user_comment: Optional[str] = None
+    context_snapshot: Optional[Dict[str, Any]] = None
 
 
 RECHECK_QUEUE_CREATE_SQL = """
@@ -214,6 +217,57 @@ async def get_campaign_analysis(
     return c
 
 
+@router.get("/campaign-decisions")
+async def get_campaign_decisions(
+    campaign_id: str = Query(..., description="Campaign ID"),
+    db: Session = Depends(get_db),
+):
+    """История решений по кампании из ai_memory."""
+    try:
+        rows = db.execute(
+            text("""
+                SELECT decision_date, bot_verdict, user_choice, user_comment, context_snapshot, bot_reasoning
+                FROM ai_memory
+                WHERE campaign_id = :cid
+                ORDER BY decision_date DESC
+                LIMIT 50
+            """),
+            {"cid": campaign_id},
+        ).fetchall()
+    except Exception:
+        try:
+            rows = db.execute(
+                text("""
+                    SELECT decision_date, bot_verdict, user_choice, bot_reasoning
+                    FROM ai_memory
+                    WHERE campaign_id = :cid
+                    ORDER BY decision_date DESC
+                    LIMIT 50
+                """),
+                {"cid": campaign_id},
+            ).fetchall()
+        except Exception:
+            return {"decisions": []}
+        rows = [(r[0], r[1], r[2], None, None, r[3]) for r in rows]
+    result = []
+    for r in rows:
+        ctx = None
+        if len(r) > 4 and r[4]:
+            try:
+                ctx = json.loads(r[4])
+            except (json.JSONDecodeError, TypeError):
+                ctx = {"raw": r[4]}
+        result.append({
+            "decision_date": r[0].isoformat() if hasattr(r[0], "isoformat") else str(r[0]),
+            "bot_proposal": r[1],
+            "user_choice": r[2],
+            "user_comment": r[3] if len(r) > 3 else None,
+            "context_snapshot": ctx,
+            "bot_reasoning": r[5] if len(r) > 5 else None,
+        })
+    return {"decisions": result}
+
+
 @router.delete("/recheck-queue/{item_id}")
 async def delete_recheck_queue_item(item_id: int, db: Session = Depends(get_db)):
     """Удалить запись из очереди речека."""
@@ -253,19 +307,40 @@ async def apply(body: ApplyBody, db: Session = Depends(get_db)):
     conversions = int(row[4] or 0)
     profit = revenue - spend
     roi = round((profit / spend * 100) if spend > 0 else 0)
-    verdict = (body.verdict or "HOLD").upper()
-    if verdict not in ("SCALE", "HOLD", "OPTIMIZE", "STOP"):
+    verdict = (body.verdict or "HOLD").upper().strip()
+    allowed = ("SCALE", "HOLD", "OPTIMIZE", "STOP")
+    if "," in verdict:
+        parts = [p.strip() for p in verdict.split(",") if p.strip() in allowed]
+        verdict = ",".join(parts) if parts else "HOLD"
+    elif verdict not in allowed:
         verdict = "HOLD"
+
+    bot_proposal = (body.bot_proposal or verdict).upper().strip()
+    if "," in bot_proposal:
+        bp_parts = [p.strip() for p in bot_proposal.split(",") if p.strip() in allowed]
+        bot_proposal = ",".join(bp_parts) if bp_parts else verdict
+    elif bot_proposal not in allowed:
+        bot_proposal = verdict
+
+    context_json = None
+    if body.context_snapshot:
+        try:
+            context_json = json.dumps(body.context_snapshot, ensure_ascii=False)
+        except (TypeError, ValueError):
+            context_json = str(body.context_snapshot)
 
     try:
         db.add(
             AIMemory(
                 campaign_id=body.campaign_id,
                 decision_date=datetime.now(),
-                bot_verdict=verdict,
+                bot_verdict=bot_proposal,
                 bot_score=0,
                 bot_confidence=body.confidence,
                 bot_reasoning=f"Applied: {verdict}",
+                user_choice=verdict,
+                user_comment=body.user_comment,
+                context_snapshot=context_json,
             )
         )
         db.commit()

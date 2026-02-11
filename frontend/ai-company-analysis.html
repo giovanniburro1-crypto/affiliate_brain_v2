@@ -2,15 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Company Analysis - Affiliate Brain</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaign Analysis - Affiliate Brain</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
         .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
+        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
         .nav-item { border-radius: 8px; }
         .nav-item:hover { background: rgba(139,92,246,0.1); }
         .nav-item.active { background: #8b5cf6; }
+        select { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
+        .verdict-SCALE { color: #22c55e; }
+        .verdict-STOP { color: #ef4444; }
+        .verdict-OPTIMIZE { color: #3b82f6; }
+        .verdict-HOLD { color: #eab308; }
+        .profit-green { color: #22c55e; }
+        .profit-red { color: #ef4444; }
+        .campaigns-table-wrap { overflow-x: auto; overflow-y: auto; max-height: 400px; border: 1px solid #2a2a3a; border-radius: 10px; background: #12121a; }
+        .campaigns-table { min-width: max-content; }
+        .campaigns-table th, .campaigns-table td { min-width: 2.75rem; }
+        .campaigns-table .date-col { font-size: 10px; color: #a1a1aa; white-space: nowrap; }
+        .period-btn { padding: 6px 12px; border-radius: 8px; background: #2a2a3a; font-size: 13px; cursor: pointer; }
+        .period-btn.active { background: #8b5cf6; }
+        .period-btn:hover { background: #3f3f46; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -26,8 +42,8 @@
                 <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
                 <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
-                <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
-                <a href="/ai-company-analysis" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="building-2" class="w-4 h-4"></i>Company Analysis</a>
+                <a href="/top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
+                <a href="/ai-company-analysis" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
                 <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search" class="w-4 h-4"></i>Search for Gold</a>
                 <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw" class="w-4 h-4"></i>Re-checking</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
@@ -35,40 +51,106 @@
             </nav>
         </aside>
         <main class="ml-56 flex-1 p-6">
-            <h1 class="text-2xl font-bold mb-6">Company Analysis</h1>
-            <div class="card p-4 mb-6" style="background:#1a1a24; border:1px solid #2a2a3a; border-radius:12px;">
+            <h1 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="building-2" class="w-6 h-6 text-purple-400"></i>Campaign Analysis</h1>
+
+            <!-- Filters -->
+            <div class="card p-4 mb-6">
                 <div class="flex gap-4 items-end flex-wrap">
-                    <div class="flex-1 min-w-[200px]">
-                        <label class="text-sm text-zinc-400 block mb-1">Campaign</label>
-                        <select id="campaignSelect" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-white">
-                            <option value="">Loading...</option>
+                    <div class="min-w-[180px]">
+                        <label class="text-sm text-zinc-400 block mb-1">Traffic Source</label>
+                        <select id="sourceSelect" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-white" onchange="onSourceChange()">
+                            <option value="">Select source...</option>
                         </select>
                     </div>
-                    <div class="w-40">
-                        <label class="text-sm text-zinc-400 block mb-1">Period</label>
-                        <select id="periodSelect" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-white">
-                            <option value="7">7 days</option>
-                            <option value="14" selected>14 days</option>
-                            <option value="30">30 days</option>
+                    <div class="flex-1 min-w-[220px]">
+                        <label class="text-sm text-zinc-400 block mb-1">Campaign (cost &gt; $20)</label>
+                        <select id="campaignSelect" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-white">
+                            <option value="">Select campaign...</option>
                         </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-zinc-400">Period:</label>
+                        <div class="flex gap-1">
+                            <button type="button" class="period-btn" data-period="3" onclick="setPeriod(3)">3</button>
+                            <button type="button" class="period-btn" data-period="7" onclick="setPeriod(7)">7</button>
+                            <button type="button" class="period-btn active" data-period="14" onclick="setPeriod(14)">14</button>
+                            <button type="button" class="period-btn" data-period="30" onclick="setPeriod(30)">30</button>
+                            <button type="button" class="period-btn" data-period="custom" onclick="setPeriod('custom')">Custom</button>
+                        </div>
+                    </div>
+                    <div id="customDateRange" class="hidden flex items-center gap-2">
+                        <input type="date" id="customDateFrom" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                        <span class="text-zinc-500">—</span>
+                        <input type="date" id="customDateTo" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
                     </div>
                     <button id="loadBtn" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 font-medium">Analyze</button>
                 </div>
             </div>
-            <div id="analysisResult" class="space-y-4"></div>
+
+            <div id="analysisResult" class="space-y-6"></div>
         </main>
     </div>
     <script>
         lucide.createIcons();
+        let currentPeriod = 14;
+        let currentCampaignId = null;
+        let currentAnalysisData = null;
+
+        function setDefaultCustomDates() {
+            const to = new Date();
+            const from = new Date(to);
+            from.setDate(from.getDate() - 13);
+            document.getElementById('customDateFrom').value = from.toISOString().slice(0, 10);
+            document.getElementById('customDateTo').value = to.toISOString().slice(0, 10);
+        }
+        function setPeriod(p) {
+            currentPeriod = p;
+            document.querySelectorAll('.period-btn').forEach(b => { b.classList.remove('active'); if (b.dataset.period == p) b.classList.add('active'); });
+            const el = document.getElementById('customDateRange');
+            if (p === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); setDefaultCustomDates(); }
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+        function getPeriodParams() {
+            if (currentPeriod === 'custom') {
+                const from = document.getElementById('customDateFrom').value;
+                const to = document.getElementById('customDateTo').value;
+                if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
+            }
+            return 'period=' + currentPeriod;
+        }
+        function getPeriodNum() {
+            if (currentPeriod === 'custom') {
+                const from = document.getElementById('customDateFrom').value;
+                const to = document.getElementById('customDateTo').value;
+                if (from && to) return Math.ceil((new Date(to) - new Date(from)) / 86400000);
+            }
+            return typeof currentPeriod === 'number' ? currentPeriod : 14;
+        }
+
+        async function loadSources() {
+            const res = await fetch('/api/metrics/sources');
+            const data = await res.json();
+            const sel = document.getElementById('sourceSelect');
+            sel.innerHTML = '<option value="">Select source...</option>' + (data.sources || []).map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+        function onSourceChange() {
+            loadCampaigns();
+            document.getElementById('campaignSelect').innerHTML = '<option value="">Select campaign...</option>';
+        }
         async function loadCampaigns() {
-            const res = await fetch('/api/metrics/campaigns?period=30');
+            const source = document.getElementById('sourceSelect').value;
+            if (!source) return;
+            const periodParam = getPeriodParams();
+            const res = await fetch(`/api/metrics/campaigns?source=${encodeURIComponent(source)}&min_cost=20&${periodParam}`);
             const data = await res.json();
             const sel = document.getElementById('campaignSelect');
             const campaigns = data.campaigns || [];
             sel.innerHTML = campaigns.length
-                ? campaigns.map(c => `<option value="${(c.campaign_id||'').replace(/"/g,'&quot;')}">${(c.campaign||'').replace(/^[^-]+-\s*/i,'')} (${c.source||''})</option>`).join('')
-                : '<option value="">No campaigns</option>';
+                ? campaigns.map(c => `<option value="${(c.campaign_id||'').replace(/"/g,'&quot;')}">${(c.campaign||'').replace(/^[^-]+-\s*/i,'')} ($${c.spend})</option>`).join('')
+                : '<option value="">No campaigns (min $20)</option>';
         }
+
+        function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
         function copyId(el) {
             const t = el.dataset.copy || '';
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -78,27 +160,207 @@
         function copyFallback(t) {
             const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText='position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         }
-        document.getElementById('loadBtn').onclick = async () => {
-            const cid = document.getElementById('campaignSelect').value;
-            const period = document.getElementById('periodSelect').value;
-            if (!cid) { alert('Select campaign'); return; }
-            const res = await fetch(`/api/company-analytics/analysis?campaign_id=${encodeURIComponent(cid)}&period=${period}`);
-            const data = await res.json();
-            const div = document.getElementById('analysisResult');
-            if (!data.success) {
-                div.innerHTML = '<p class="text-red-400">' + (data.error || 'Error') + '</p>';
-                return;
+
+        function getDateList() {
+            let dateFrom, dateTo;
+            if (currentPeriod === 'custom') {
+                const fromStr = document.getElementById('customDateFrom').value;
+                const toStr = document.getElementById('customDateTo').value;
+                if (!fromStr || !toStr) { const t = new Date(); dateTo = t; dateFrom = new Date(t); dateFrom.setDate(dateFrom.getDate() - 13); }
+                else { dateFrom = new Date(fromStr); dateTo = new Date(toStr); }
+            } else {
+                const days = getPeriodNum() || 14;
+                dateTo = new Date();
+                dateFrom = new Date(dateTo);
+                dateFrom.setDate(dateFrom.getDate() - (days - 1));
             }
-            const a = data.analysis;
-            const lines = (a.summary_lines || []).map(l => '<div class="text-zinc-300 py-1">' + l.replace(/</g,'&lt;') + '</div>').join('');
-            div.innerHTML = `
-                <div class="card p-6" style="background:#1a1a24; border:1px solid #2a2a3a; border-radius:12px;">
-                    <h2 class="text-xl font-bold mb-4">${(a.campaign||'').replace(/</g,'&lt;')} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(a.campaign_id||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${(a.campaign_id||'').replace(/</g,'&lt;')})</span></h2>
-                    <div class="space-y-1">${lines}</div>
-                </div>
-            `;
-        };
-        loadCampaigns();
+            const list = [];
+            const cur = new Date(dateFrom);
+            while (cur <= dateTo) {
+                const m = String(cur.getMonth() + 1).padStart(2, '0');
+                const d = String(cur.getDate()).padStart(2, '0');
+                list.push(m + '-' + d);
+                cur.setDate(cur.getDate() + 1);
+            }
+            return list.slice(-30).reverse();
+        }
+
+        document.getElementById('loadBtn').onclick = loadAnalysis;
+
+        async function loadAnalysis() {
+            const cid = document.getElementById('campaignSelect').value;
+            const source = document.getElementById('sourceSelect').value;
+            if (!cid) { alert('Select Traffic Source and Campaign'); return; }
+            if (!source) { alert('Select Traffic Source first'); return; }
+
+            const periodParam = getPeriodParams();
+            document.getElementById('loadBtn').disabled = true;
+            document.getElementById('loadBtn').textContent = 'Loading...';
+
+            try {
+                const [analysisRes, dailyRes, decisionsRes] = await Promise.all([
+                    fetch(`/api/company-analytics/analysis?campaign_id=${encodeURIComponent(cid)}&${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '')),
+                    fetch(`/api/metrics/campaign-daily-row?campaign_id=${encodeURIComponent(cid)}&${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '')).catch(() => ({})),
+                    fetch(`/api/bot-agent/campaign-decisions?campaign_id=${encodeURIComponent(cid)}`).catch(() => ({}))
+                ]);
+                const analysisData = await analysisRes.json();
+                const dailyData = dailyRes.ok && dailyRes.json ? await dailyRes.json() : { days: {}, found: false };
+                const decisionsData = decisionsRes.ok && decisionsRes.json ? await decisionsRes.json() : { decisions: [] };
+
+                currentCampaignId = cid;
+                currentAnalysisData = analysisData;
+
+                const div = document.getElementById('analysisResult');
+                if (!analysisData.success) {
+                    div.innerHTML = '<p class="text-red-400">' + escapeHtml(analysisData.error || 'Error') + '</p>';
+                    return;
+                }
+
+                const a = analysisData.analysis;
+                const dates = getDateList();
+                const dateLabels = dates.map(d => { const [mm, dd] = d.split('-'); return dd + '.' + mm; });
+                const days = analysisData.days || dailyData.days || {};
+                const dateCells = dates.map(d => {
+                    const dayData = days[d];
+                    if (!dayData) return '<td class="px-1 py-1 text-center text-xs">—</td>';
+                    const bg = dayData.color === 'red' ? 'bg-red-900/30' : (dayData.color === 'green' ? 'bg-green-900/30' : '');
+                    return `<td class="px-1 py-1 text-center text-xs ${bg}">${dayData.profit}</td>`;
+                }).join('');
+
+                const conclusions = analysisData.parameter_conclusions || {};
+                const paramOrder = ['date_click','campaign_id','path','rule','offer_id','lander_id','traffic_source','device_type','country','os','os_version','browser_name','language','payout','conversion','cost','token1','token2','token3','token4','token5','token6','token7','token8','token9','token10'];
+                const paramLabels = { date_click:'Date Click', campaign_id:'Campaign ID', path:'Path', rule:'Rule', offer_id:'Offer ID', lander_id:'Lander ID',
+                    traffic_source:'Traffic Source', device_type:'Device Type', country:'Country', os:'OS', os_version:'OS Version', browser_name:'Browser Name',
+                    language:'Language', payout:'Payout', conversion:'Conversion', cost:'Cost',
+                    token1:'Token 1', token2:'Token 2', token3:'Token 3', token4:'Token 4', token5:'Token 5',
+                    token6:'Token 6', token7:'Token 7', token8:'Token 8', token9:'Token 9', token10:'Token 10' };
+
+                const paramCards = paramOrder.map(key => {
+                    const c = conclusions[key] || {};
+                    const label = paramLabels[key] || key;
+                    return `<div class="p-3 rounded-lg bg-zinc-800/50 border border-zinc-700"><div class="text-sm font-medium text-zinc-300 mb-1">${escapeHtml(label)}</div><div class="text-xs text-zinc-400">${escapeHtml(c.conclusion || '—')}</div></div>`;
+                }).join('');
+
+                const botProposal = a.verdict || 'HOLD';
+                const decisions = decisionsData.decisions || [];
+
+                div.innerHTML = `
+                    <div class="card p-4">
+                        <h2 class="text-xl font-bold mb-2">${escapeHtml(a.campaign || '')} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${escapeHtml(a.campaign_id||'')}" onclick="copyId(this)" title="Скопировать">(${escapeHtml(a.campaign_id||'')})</span></h2>
+                        <div class="text-zinc-500 text-sm mb-4">${(a.summary_lines||[]).map(l => escapeHtml(l)).join(' • ')}</div>
+                    </div>
+
+                    <div class="card p-4">
+                        <h3 class="font-semibold mb-4">Динамика по дням</h3>
+                        <div class="campaigns-table-wrap">
+                            <table class="campaigns-table w-full text-xs">
+                                <thead class="sticky top-0 bg-zinc-900 z-[1]">
+                                    <tr class="text-zinc-400 text-xs border-b border-zinc-700">
+                                        ${dateLabels.map((l,i) => `<th class="text-center py-2 px-1 date-col" title="${dates[i]}">${l}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-zinc-800">
+                                        ${dateCells}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card p-4">
+                        <h3 class="font-semibold mb-4">Анализ по параметрам (26 столбцов)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            ${paramCards}
+                        </div>
+                    </div>
+
+                    <div class="card p-4">
+                        <h3 class="font-semibold mb-4">Решение</h3>
+                        <p class="text-zinc-500 text-sm mb-3">Бот предлагает: <span class="verdict-${botProposal} font-medium">${botProposal}</span></p>
+                        <div class="flex flex-wrap items-center gap-4 mb-3">
+                            <div class="flex gap-3">
+                                <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="verdict" value="SCALE" class="rounded"> <span class="verdict-SCALE">SCALE</span></label>
+                                <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="verdict" value="HOLD" class="rounded"> <span class="verdict-HOLD">HOLD</span></label>
+                                <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="verdict" value="OPTIMIZE" class="rounded"> <span class="verdict-OPTIMIZE">OPTIMIZE</span></label>
+                                <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="verdict" value="STOP" class="rounded"> <span class="verdict-STOP">STOP</span></label>
+                            </div>
+                            <select id="recheckSelect" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                                <option value="0">Recheck: нет</option>
+                                <option value="1">1 day</option>
+                                <option value="2">2 days</option>
+                                <option value="3" selected>3 days</option>
+                                <option value="5">5 days</option>
+                                <option value="7">7 days</option>
+                            </select>
+                            <input type="text" id="userComment" placeholder="Комментарий (опционально)" class="px-3 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600 flex-1 min-w-[200px]">
+                            <button type="button" onclick="onApply()" class="px-5 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 font-semibold text-white border-2 border-green-500">Apply — записать в память</button>
+                        </div>
+                    </div>
+
+                    <div class="card p-4">
+                        <h3 class="font-semibold mb-4">История решений</h3>
+                        <div id="decisionsList" class="space-y-2">
+                            ${decisions.length ? decisions.map(d => `
+                                <div class="p-3 rounded bg-zinc-800/50 text-sm">
+                                    <span class="text-zinc-500">${escapeHtml(d.decision_date)}</span>
+                                    — Бот: <span class="verdict-${d.bot_proposal||'HOLD'}">${escapeHtml(d.bot_proposal||'')}</span>
+                                    → Выбрано: <span class="verdict-${d.user_choice||'HOLD'}">${escapeHtml(d.user_choice||'')}</span>
+                                    ${d.user_comment ? '<br><span class="text-zinc-400">' + escapeHtml(d.user_comment) + '</span>' : ''}
+                                </div>
+                            `).join('') : '<p class="text-zinc-500 text-sm">Нет записей</p>'}
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+            } finally {
+                document.getElementById('loadBtn').disabled = false;
+                document.getElementById('loadBtn').textContent = 'Analyze';
+            }
+        }
+
+        async function onApply() {
+            const cid = currentCampaignId;
+            if (!cid) { alert('Сначала загрузите анализ'); return; }
+            const checked = Array.from(document.querySelectorAll('input[name="verdict"]:checked')).map(el => el.value);
+            const verdict = checked.length ? checked.join(',') : 'HOLD';
+            const recheck = parseInt(document.getElementById('recheckSelect')?.value || 0, 10);
+            const comment = document.getElementById('userComment')?.value?.trim() || '';
+
+            const body = {
+                campaign_id: cid,
+                verdict,
+                recheck_after_days: recheck,
+                confidence: currentAnalysisData?.analysis?.confidence || 0,
+                bot_proposal: currentAnalysisData?.analysis?.verdict || 'HOLD',
+                user_comment: comment || undefined,
+                context_snapshot: currentAnalysisData ? {
+                    profit: currentAnalysisData.analysis?.profit,
+                    roi: currentAnalysisData.analysis?.roi,
+                    volatility: currentAnalysisData.analysis?.volatility,
+                    conversions: currentAnalysisData.analysis?.conversions,
+                    spend: currentAnalysisData.analysis?.spend,
+                    period_days: getPeriodNum(),
+                    bot_conclusions: Object.values(currentAnalysisData.parameter_conclusions || {}).map(c => c.conclusion).filter(Boolean)
+                } : undefined
+            };
+
+            const res = await fetch('/api/bot-agent/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message || 'Применено');
+                loadAnalysis();
+            } else {
+                alert(data.error || 'Ошибка');
+            }
+        }
+
+        setDefaultCustomDates();
+        loadSources();
     </script>
 </body>
 </html>

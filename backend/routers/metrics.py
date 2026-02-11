@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from typing import Optional
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -77,13 +77,22 @@ async def get_campaigns(
     date_from_param: Optional[str] = Query(None, alias="date_from"),
     date_to_param: Optional[str] = Query(None, alias="date_to"),
     source: Optional[str] = None,
+    min_cost: int = Query(0, description="Minimum spend filter (e.g. 20 for $20)"),
     db: Session = Depends(get_db),
 ):
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
-    query = text(f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} GROUP BY campaign_id, campaign, traffic_source ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 50")
+    having = " HAVING SUM(cost) >= :min_cost" if min_cost > 0 else ""
+    query = text(
+        f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
+        f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} "
+        f"GROUP BY campaign_id, campaign, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 50"
+    )
     params = {'date_from': date_from, 'date_to': date_to}
-    if source and source != 'all': params['source'] = source
+    if source and source != 'all':
+        params['source'] = source
+    if min_cost > 0:
+        params['min_cost'] = min_cost
     rows = db.execute(query, params).fetchall()
     campaigns = []
     for row in rows:
@@ -92,6 +101,144 @@ async def get_campaigns(
         roi = round((profit / spend * 100) if spend > 0 else 0)
         campaigns.append({"campaign_id": row[0], "campaign": row[1], "source": row[2], "spend": spend, "revenue": revenue, "profit": profit, "roi": roi, "conversions": int(row[5] or 0), "clicks": int(row[6] or 0)})
     return {"campaigns": campaigns}
+
+
+def get_campaign_breakdown_data(
+    db: Session,
+    campaign_id: str,
+    date_from: date,
+    date_to: date,
+) -> Dict[str, Any]:
+    """Возвращает breakdown по кампании (для внутреннего использования)."""
+    params = {"cid": campaign_id, "d": date_from, "d_to": date_to}
+    row = db.execute(
+        text("""
+            SELECT SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        """),
+        params,
+    ).fetchone()
+    spend = int(round(float(row[0] or 0)))
+    base_revenue = int(round(float(row[1] or 0)))
+    conversions = int(row[2] or 0)
+    clicks = int(row[3] or 0)
+    add_mon = db.execute(
+        text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :cid AND date >= :d AND date <= :d_to"),
+        params,
+    ).scalar() or 0
+    revenue = base_revenue + int(add_mon)
+    profit = revenue - spend
+    roi = round((profit / spend * 100) if spend > 0 else 0)
+    epc = round(revenue / clicks, 4) if clicks else 0
+    cr = round(conversions / clicks * 100, 2) if clicks else 0
+    summary = {
+        "campaign_id": campaign_id,
+        "spend": spend,
+        "revenue": revenue,
+        "profit": profit,
+        "roi": roi,
+        "conversions": conversions,
+        "clicks": clicks,
+        "epc": epc,
+        "cr_pct": cr,
+    }
+
+    def _rows(rows, first_key="name"):
+        out = []
+        for r in rows:
+            s, rev, conv, clk = int(r[1] or 0), int(r[2] or 0), int(r[3] or 0), int(r[4] or 0)
+            out.append({
+                first_key: r[0] or "(empty)",
+                "spend": s, "revenue": rev, "conversions": conv, "clicks": clk,
+                "epc": round(rev / clk, 4) if clk else 0,
+                "cr_pct": round(conv / clk * 100, 2) if clk else 0,
+                "profit": rev - s,
+            })
+        return out
+
+    by_token2 = db.execute(text("""
+        SELECT COALESCE(token2, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token2 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 50
+    """), params).fetchall()
+    by_offer = db.execute(text("""
+        SELECT COALESCE(offer, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY offer ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 50
+    """), params).fetchall()
+    by_lander = db.execute(text("""
+        SELECT COALESCE(lander_id, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY lander_id ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 50
+    """), params).fetchall()
+    by_os = db.execute(text("""
+        SELECT COALESCE(os, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY os ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_country = db.execute(text("""
+        SELECT COALESCE(country, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY country ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_device_type = db.execute(text("""
+        SELECT COALESCE(device_type, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY device_type ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_path = db.execute(text("""
+        SELECT COALESCE(path, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY path ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_rule = db.execute(text("""
+        SELECT COALESCE(rule, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY rule ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    combo = db.execute(text("""
+        SELECT COALESCE(token2, '(empty)'), COALESCE(offer, '(empty)'), COALESCE(lander_id, '(empty)'),
+               SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token2, offer, lander_id HAVING COUNT(*) >= 10
+        ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    combinations = [
+        {
+            "token2": r[0] or "(empty)",
+            "offer_id": r[1] or "(empty)",
+            "lander_id": r[2] or "(empty)",
+            "spend": int(r[3] or 0), "revenue": int(r[4] or 0),
+            "conversions": int(r[5] or 0), "clicks": int(r[6] or 0),
+            "epc": round(int(r[4] or 0) / (int(r[6] or 0) or 1), 4),
+            "cr_pct": round(int(r[5] or 0) / (int(r[6] or 0) or 1) * 100, 2),
+            "profit": int(r[4] or 0) - int(r[3] or 0),
+        }
+        for r in combo
+    ]
+    column_labels = {
+        "token2": "Token 2 (creative)", "offer_id": "Offer ID", "lander_id": "Lander ID (jump)",
+        "os": "OS", "country": "Country", "device_type": "Device Type",
+        "traffic_source": "Traffic Source", "campaign_id": "Campaign ID", "path": "Path", "rule": "Rule",
+        "token1": "Token 1", "token3": "Token 3", "token4": "Token 4", "token5": "Token 5",
+        "token6": "Token 6", "token7": "Token 7", "token8": "Token 8", "token9": "Token 9", "token10": "Token 10",
+        "cost": "Cost", "revenue": "Payout", "conversions": "Conversion", "clicks": "clicks (count)",
+        "epc": "EPC ($)", "cr_pct": "CR (%)", "profit": "profit ($)",
+    }
+    return {
+        "column_labels": column_labels,
+        "summary": summary,
+        "by_token2": _rows(by_token2),
+        "by_offer_id": _rows(by_offer, first_key="offer_id"),
+        "by_lander_id_jump": _rows(by_lander, first_key="lander_id"),
+        "by_os": _rows(by_os, first_key="os"),
+        "by_country": _rows(by_country, first_key="country"),
+        "by_device_type": _rows(by_device_type, first_key="device_type"),
+        "by_path": _rows(by_path, first_key="path"),
+        "by_rule": _rows(by_rule, first_key="rule"),
+        "top_combinations_token2_offer_id_jump": combinations,
+    }
 
 
 @router.get("/metrics/campaign-breakdown")
@@ -107,207 +254,7 @@ async def get_campaign_breakdown(
     Реальные данные из БД — чтобы модель не «фантазировала», а опиралась на цифры.
     """
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    params = {"cid": campaign_id, "d": date_from, "d_to": date_to}
-
-    # Итоги по кампании
-    row = db.execute(
-        text("""
-            SELECT SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-        """),
-        params,
-    ).fetchone()
-    spend = int(round(float(row[0] or 0)))
-    base_revenue = int(round(float(row[1] or 0)))
-    conversions = int(row[2] or 0)
-    clicks = int(row[3] or 0)
-    add_mon = db.execute(
-        text("SELECT COALESCE(SUM(revenue),0) FROM additional_monetization WHERE campaign_id = :cid AND date >= :d AND date <= :d_to AND date <= :d_to"),
-        params,
-    ).scalar() or 0
-    revenue = base_revenue + int(add_mon)
-    profit = revenue - spend
-    roi = round((profit / spend * 100) if spend > 0 else 0)
-    epc = round(revenue / clicks, 4) if clicks else 0
-    cr = round(conversions / clicks * 100, 2) if clicks else 0
-
-    summary = {
-        "campaign_id": campaign_id,
-        "spend": spend,
-        "revenue": revenue,
-        "profit": profit,
-        "roi": roi,
-        "conversions": conversions,
-        "clicks": clicks,
-        "epc": epc,
-        "cr_pct": cr,
-    }
-
-    def _rows_to_breakdown(rows, first_key="name"):
-        """first_key: для ИИ используем offer_id вместо name в разбивке по офферу."""
-        out = []
-        for r in rows:
-            s, rev, conv, clk = int(r[1] or 0), int(r[2] or 0), int(r[3] or 0), int(r[4] or 0)
-            out.append({
-                first_key: r[0] or "(empty)",
-                "spend": s,
-                "revenue": rev,
-                "conversions": conv,
-                "clicks": clk,
-                "epc": round(rev / clk, 4) if clk else 0,
-                "cr_pct": round(conv / clk * 100, 2) if clk else 0,
-                "profit": rev - s,
-            })
-        return out
-
-    # По token2 (creative)
-    by_token2 = db.execute(
-        text("""
-            SELECT COALESCE(token2, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY token2
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 50
-        """),
-        params,
-    ).fetchall()
-    # По offer (в ответе для ИИ — offer_id)
-    by_offer = db.execute(
-        text("""
-            SELECT COALESCE(offer, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY offer
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 50
-        """),
-        params,
-    ).fetchall()
-    # По lander_id (jump)
-    by_lander = db.execute(
-        text("""
-            SELECT COALESCE(lander_id, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY lander_id
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 50
-        """),
-        params,
-    ).fetchall()
-    # По OS, Country, Device Type — чтобы ИИ видел контекст и не давал очевидные инсайты (типа «US Android работает»)
-    by_os = db.execute(
-        text("""
-            SELECT COALESCE(os, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY os
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 30
-        """),
-        params,
-    ).fetchall()
-    by_country = db.execute(
-        text("""
-            SELECT COALESCE(country, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY country
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 30
-        """),
-        params,
-    ).fetchall()
-    by_device_type = db.execute(
-        text("""
-            SELECT COALESCE(device_type, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY device_type
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 30
-        """),
-        params,
-    ).fetchall()
-    # Связка token2 + offer + lander_id (топ комбо по профиту)
-    combo = db.execute(
-        text("""
-            SELECT COALESCE(token2, '(empty)'), COALESCE(offer, '(empty)'), COALESCE(lander_id, '(empty)'),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-            FROM traffic_stats
-            WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-            GROUP BY token2, offer, lander_id
-            HAVING COUNT(*) >= 10
-            ORDER BY SUM(revenue) - SUM(cost) DESC
-            LIMIT 30
-        """),
-        params,
-    ).fetchall()
-    combinations = [
-        {
-            "token2": r[0] or "(empty)",
-            "offer_id": r[1] or "(empty)",
-            "lander_id": r[2] or "(empty)",
-            "spend": int(r[3] or 0),
-            "revenue": int(r[4] or 0),
-            "conversions": int(r[5] or 0),
-            "clicks": int(r[6] or 0),
-            "epc": round(int(r[4] or 0) / (int(r[6] or 0) or 1), 4),
-            "cr_pct": round(int(r[5] or 0) / (int(r[6] or 0) or 1) * 100, 2),
-            "profit": int(r[4] or 0) - int(r[3] or 0),
-        }
-        for r in combo
-    ]
-
-    # Схема полей для ИИ: соответствие ключей в JSON и названий колонок (26 колонок)
-    column_labels = {
-        "token2": "Token 2 (creative)",
-        "offer_id": "Offer ID",
-        "lander_id": "Lander ID (jump)",
-        "os": "OS",
-        "country": "Country",
-        "device_type": "Device Type",
-        "traffic_source": "Traffic Source",
-        "campaign_id": "Campaign ID",
-        "path": "Path",
-        "rule": "Rule",
-        "token1": "Token 1",
-        "token3": "Token 3",
-        "token4": "Token 4",
-        "token5": "Token 5",
-        "token6": "Token 6",
-        "token7": "Token 7",
-        "token8": "Token 8",
-        "token9": "Token 9",
-        "token10": "Token 10",
-        "cost": "Cost",
-        "revenue": "Payout",
-        "conversions": "Conversion",
-        "clicks": "clicks (count)",
-        "epc": "EPC ($)",
-        "cr_pct": "CR (%)",
-        "profit": "profit ($)",
-    }
-
-    return {
-        "column_labels": column_labels,
-        "summary": summary,
-        "by_token2": _rows_to_breakdown(by_token2),
-        "by_offer_id": _rows_to_breakdown(by_offer, first_key="offer_id"),
-        "by_lander_id_jump": _rows_to_breakdown(by_lander, first_key="lander_id"),
-        "by_os": _rows_to_breakdown(by_os, first_key="os"),
-        "by_country": _rows_to_breakdown(by_country, first_key="country"),
-        "by_device_type": _rows_to_breakdown(by_device_type, first_key="device_type"),
-        "top_combinations_token2_offer_id_jump": combinations,
-    }
+    return get_campaign_breakdown_data(db, campaign_id, date_from, date_to)
 
 
 @router.get("/metrics/sources")
@@ -663,6 +610,125 @@ async def get_campaigns_table(
         })
     
     return {'campaigns': result, 'date_from': date_from.strftime('%Y-%m-%d')}
+
+
+def get_campaign_daily_days(
+    db: Session,
+    campaign_id: str,
+    date_from: date,
+    date_to: date,
+    source: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Возвращает days[MM-DD] = {profit, color} для внутреннего использования."""
+    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
+    params = {'cid': campaign_id, 'd': date_from, 'd_to': date_to}
+    if source and source != "all":
+        params['source'] = source
+    daily_query = f"""
+        SELECT date, SUM(cost), SUM(revenue)
+        FROM traffic_stats
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {source_filter}
+        GROUP BY date
+        ORDER BY date
+    """
+    daily = db.execute(text(daily_query), params).fetchall()
+    days = {}
+    for day_row in daily:
+        day_date = day_row[0].strftime('%m-%d')
+        day_spend = int(day_row[1] or 0)
+        day_base_revenue = int(day_row[2] or 0)
+        day_add_revenue = db.execute(text("""
+            SELECT COALESCE(SUM(revenue), 0)
+            FROM additional_monetization
+            WHERE campaign_id = :cid AND date = :dt
+        """), {'cid': campaign_id, 'dt': day_row[0]}).scalar() or 0
+        day_total_revenue = day_base_revenue + int(day_add_revenue)
+        day_profit = day_total_revenue - day_spend
+        day_profit_pct = (day_profit / day_spend * 100) if day_spend > 0 else 0
+        color = 'red' if day_profit_pct < -10 else ('green' if day_profit_pct > 10 else 'none')
+        days[day_date] = {'profit': day_profit, 'color': color}
+    return days
+
+
+@router.get("/metrics/campaign-daily-row")
+async def get_campaign_daily_row(
+    campaign_id: str = Query(..., description="Campaign ID"),
+    period: int = Query(14),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Динамика по одной кампании: days[MM-DD] = {profit, color}.
+    last14: суммарные метрики за последние 14 дней.
+    """
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
+    params = {'cid': campaign_id, 'd': date_from, 'd_to': date_to}
+    if source and source != "all":
+        params['source'] = source
+
+    # Campaign name and total spend for the period
+    meta = db.execute(text(f"""
+        SELECT campaign, SUM(cost), SUM(revenue)
+        FROM traffic_stats
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {source_filter}
+        GROUP BY campaign
+    """), params).fetchone()
+    if not meta:
+        return {"found": False, "campaign_id": campaign_id}
+
+    campaign_name = meta[0] or campaign_id
+    total_spend = int(meta[1] or 0)
+    total_revenue = int(meta[2] or 0)
+
+    # Daily data
+    daily_query = f"""
+        SELECT date, SUM(cost), SUM(revenue)
+        FROM traffic_stats
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {source_filter}
+        GROUP BY date
+        ORDER BY date
+    """
+    days = get_campaign_daily_days(db, campaign_id, date_from, date_to, source)
+
+    # Last 14 days (fixed window from today)
+    last14_to = date.today()
+    last14_from = last14_to - timedelta(days=13)
+    last14_params = {'cid': campaign_id, 'd': last14_from, 'd_to': last14_to}
+    if source and source != "all":
+        last14_params['source'] = source
+    last14_row = db.execute(text(f"""
+        SELECT SUM(cost), SUM(revenue)
+        FROM traffic_stats
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {source_filter}
+    """), last14_params).fetchone()
+    last14_add = db.execute(text("""
+        SELECT COALESCE(SUM(revenue), 0)
+        FROM additional_monetization
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+    """), last14_params).scalar() or 0
+    last14_spend = int(last14_row[0] or 0)
+    last14_revenue = int(last14_row[1] or 0) + int(last14_add)
+    last14_profit = last14_revenue - last14_spend
+    last14_roi = round((last14_profit / last14_spend * 100) if last14_spend > 0 else 0)
+
+    return {
+        "found": True,
+        "campaign_id": campaign_id,
+        "campaign": campaign_name,
+        "spend": total_spend,
+        "days": days,
+        "last14": {
+            "spend": last14_spend,
+            "revenue": last14_revenue,
+            "profit": last14_profit,
+            "roi": last14_roi,
+        },
+        "date_from": date_from.strftime('%Y-%m-%d'),
+        "date_to": date_to.strftime('%Y-%m-%d'),
+    }
 
 
 @router.get("/metrics/upload-dates")

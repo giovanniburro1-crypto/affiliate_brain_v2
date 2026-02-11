@@ -68,6 +68,8 @@ class AIMemory(Base):
     ai_verdict = Column(String(50))
     ai_confidence = Column(Float)
     user_choice = Column(String(50))
+    user_comment = Column(Text)
+    context_snapshot = Column(Text)
     outcome = Column(String(50))
     roi_after_7days = Column(Float)
     roi_after_14days = Column(Float)

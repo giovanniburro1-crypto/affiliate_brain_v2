@@ -2,6 +2,7 @@
 Company Analytics — полный анализ кампании с использованием Logic_Blocks (Brain).
 Используется на странице Company Analysis. Logic_Blocks обновляется отдельно.
 """
+from datetime import date, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.brain import KnowledgeBase
 from backend.services.top5_service import Top5Service
+from backend.services.campaign_analysis_service import get_parameter_conclusions
+from backend.routers.metrics import get_campaign_breakdown_data, get_campaign_daily_days
 
 router = APIRouter()
 
@@ -19,16 +22,17 @@ async def get_company_analysis(
     period: int = Query(14),
     date_from_param: Optional[str] = Query(None, alias="date_from"),
     date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = Query(None, description="Traffic source filter"),
     db: Session = Depends(get_db),
 ):
     """
     Полный анализ кампании для страницы Company Analytics.
-    Объединяет: Top5Service (сегменты, волатильность, 4-6 строк) + Brain (правила, паттерны).
+    Объединяет: Top5Service (сегменты, волатильность, 4-6 строк) + Brain (правила, паттерны)
+    + выводы по 26 параметрам.
     """
     brain = KnowledgeBase()
     service = Top5Service(db, brain)
 
-    from datetime import date, timedelta
     today = date.today()
     if date_from_param and date_to_param:
         try:
@@ -53,6 +57,18 @@ async def get_company_analysis(
     if not analysis:
         return {"success": False, "error": "Campaign not found"}
 
+    # Breakdown и выводы по 26 параметрам
+    breakdown = get_campaign_breakdown_data(db, campaign_id, date_from, date_to)
+    # Динамика по дням (days[MM-DD] = {profit, color})
+    daily_days = get_campaign_daily_days(db, campaign_id, date_from, date_to, source)
+    volatility = analysis.get("volatility", 0) or 0
+    parameter_conclusions = get_parameter_conclusions(
+        breakdown=breakdown,
+        campaign_summary=breakdown.get("summary", {}),
+        volatility=volatility,
+        brain=brain,
+    )
+
     # Знания из Brain (Logic_Blocks)
     core_rules = brain.get_core_rules()
     killer_rules = brain.get_killer_rules()
@@ -65,6 +81,9 @@ async def get_company_analysis(
         "success": True,
         "campaign_id": campaign_id,
         "analysis": analysis,
+        "parameter_conclusions": parameter_conclusions,
+        "breakdown": breakdown,
+        "days": daily_days,
         "brain": {
             "core_rules": core_rules,
             "killer_rules": killer_rules,
