@@ -83,10 +83,11 @@ async def get_campaigns(
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
     having = " HAVING SUM(cost) >= :min_cost" if min_cost > 0 else ""
+    limit_val = 500 if min_cost > 0 else 50
     query = text(
         f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
         f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} "
-        f"GROUP BY campaign_id, campaign, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT 50"
+        f"GROUP BY campaign_id, campaign, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT {limit_val}"
     )
     params = {'date_from': date_from, 'date_to': date_to}
     if source and source != 'all':
@@ -197,11 +198,66 @@ def get_campaign_breakdown_data(
         FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
         GROUP BY rule ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
     """), params).fetchall()
+    by_token3 = db.execute(text("""
+        SELECT COALESCE(token3, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token3 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token4 = db.execute(text("""
+        SELECT COALESCE(token4, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token4 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token5 = db.execute(text("""
+        SELECT COALESCE(token5, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token5 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token6 = db.execute(text("""
+        SELECT COALESCE(token6, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token6 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token7 = db.execute(text("""
+        SELECT COALESCE(token7, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token7 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token8 = db.execute(text("""
+        SELECT COALESCE(token8, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token8 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token9 = db.execute(text("""
+        SELECT COALESCE(token9, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token9 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_token10 = db.execute(text("""
+        SELECT COALESCE(token10, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY token10 ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_os_version = db.execute(text("""
+        SELECT COALESCE(os_version, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY os_version ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_browser_name = db.execute(text("""
+        SELECT COALESCE(browser_name, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY browser_name ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
+    by_language = db.execute(text("""
+        SELECT COALESCE(language, '(empty)'), SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY language ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
+    """), params).fetchall()
     combo = db.execute(text("""
         SELECT COALESCE(token2, '(empty)'), COALESCE(offer, '(empty)'), COALESCE(lander_id, '(empty)'),
                SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
         FROM traffic_stats WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-        GROUP BY token2, offer, lander_id HAVING COUNT(*) >= 10
+        GROUP BY token2, offer, lander_id HAVING COUNT(*) >= 1
         ORDER BY SUM(revenue) - SUM(cost) DESC LIMIT 30
     """), params).fetchall()
     combinations = [
@@ -217,6 +273,31 @@ def get_campaign_breakdown_data(
         }
         for r in combo
     ]
+    path_offer_combo = db.execute(text("""
+        SELECT COALESCE(path, '(empty)'), COALESCE(rule, '(empty)'), COALESCE(offer, '(empty)'), COALESCE(lander_id, '(empty)'),
+               SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+        FROM traffic_stats
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+        GROUP BY path, rule, offer, lander_id
+        HAVING COUNT(*) >= 1
+        ORDER BY SUM(revenue) - SUM(cost) DESC
+        LIMIT 50
+    """), params).fetchall()
+    path_offer_lander = [
+        {
+            "path": r[0] or "(empty)",
+            "rule": r[1] or "(empty)",
+            "offer_id": r[2] or "(empty)",
+            "lander_id": r[3] or "(empty)",
+            "spend": int(r[4] or 0),
+            "revenue": int(r[5] or 0),
+            "conversions": int(r[6] or 0),
+            "clicks": int(r[7] or 0),
+            "profit": int(r[5] or 0) - int(r[4] or 0),
+            "roi": round((int(r[5] or 0) - int(r[4] or 0)) / int(r[4] or 1) * 100) if r[4] else 0,
+        }
+        for r in path_offer_combo
+    ]
     column_labels = {
         "token2": "Token 2 (creative)", "offer_id": "Offer ID", "lander_id": "Lander ID (jump)",
         "os": "OS", "country": "Country", "device_type": "Device Type",
@@ -230,6 +311,14 @@ def get_campaign_breakdown_data(
         "column_labels": column_labels,
         "summary": summary,
         "by_token2": _rows(by_token2),
+        "by_token3": _rows(by_token3, first_key="token3"),
+        "by_token4": _rows(by_token4, first_key="token4"),
+        "by_token5": _rows(by_token5, first_key="token5"),
+        "by_token6": _rows(by_token6, first_key="token6"),
+        "by_token7": _rows(by_token7, first_key="token7"),
+        "by_token8": _rows(by_token8, first_key="token8"),
+        "by_token9": _rows(by_token9, first_key="token9"),
+        "by_token10": _rows(by_token10, first_key="token10"),
         "by_offer_id": _rows(by_offer, first_key="offer_id"),
         "by_lander_id_jump": _rows(by_lander, first_key="lander_id"),
         "by_os": _rows(by_os, first_key="os"),
@@ -237,7 +326,11 @@ def get_campaign_breakdown_data(
         "by_device_type": _rows(by_device_type, first_key="device_type"),
         "by_path": _rows(by_path, first_key="path"),
         "by_rule": _rows(by_rule, first_key="rule"),
+        "by_os_version": _rows(by_os_version, first_key="os_version"),
+        "by_browser_name": _rows(by_browser_name, first_key="browser_name"),
+        "by_language": _rows(by_language, first_key="language"),
         "top_combinations_token2_offer_id_jump": combinations,
+        "path_offer_lander": path_offer_lander,
     }
 
 

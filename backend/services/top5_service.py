@@ -16,7 +16,7 @@ MIN_CLICKS = 100
 MIN_DAYS_WITH_DATA = 3
 MIN_SPEND = 15
 CONFIDENCE_THRESHOLD = 95
-SEGMENT_MIN_CLICKS = 15
+SEGMENT_MIN_CLICKS = 5
 
 # Разрешённые колонки для сегментации (защита от SQL injection)
 _ALLOWED_SEGMENT_COLS = frozenset(

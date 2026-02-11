@@ -23,14 +23,16 @@ def _format_conclusion(
     worst: Optional[Dict],
     name_key: str = "name",
 ) -> str:
-    """Форматирует короткий вывод: что работает, что нет."""
+    """Форматирует короткий вывод: что работает, что нет. Показываем топ и худший даже при profit=0."""
     parts = []
-    if best and best.get("profit", 0) > 0:
+    if best:
         name = best.get(name_key, best.get("offer_id", best.get("lander_id", "—")))
-        parts.append(f"Лучший: {name} (profit ${best.get('profit', 0)})")
-    if worst and worst.get("profit", 0) < 0 and worst != best:
+        prof = best.get("profit", 0)
+        parts.append(f"Топ: {name} (profit ${prof})")
+    if worst and worst != best:
         name = worst.get(name_key, worst.get("offer_id", worst.get("lander_id", "—")))
-        parts.append(f"Слабый: {name} (profit ${worst.get('profit', 0)})")
+        prof = worst.get("profit", 0)
+        parts.append(f"Худший: {name} (profit ${prof})")
     return "; ".join(parts) if parts else "Недостаточно данных"
 
 
@@ -133,12 +135,27 @@ def get_parameter_conclusions(
         "conclusion": _format_conclusion("os", best_os, worst_os, name_key="os") if by_os else "Нет разбивки по OS.",
     }
 
-    # 11–12. OS Version, Browser Name — обычно нет в breakdown
-    conclusions["os_version"] = {"metrics": {}, "conclusion": "Нет детальной разбивки в отчёте."}
-    conclusions["browser_name"] = {"metrics": {}, "conclusion": "Нет детальной разбивки в отчёте."}
+    # 11–12. OS Version, Browser Name
+    by_os_version = breakdown.get("by_os_version") or []
+    best_ov, worst_ov = _best_worst(by_os_version)
+    conclusions["os_version"] = {
+        "metrics": {"count": len(by_os_version)},
+        "conclusion": _format_conclusion("os_version", best_ov, worst_ov, name_key="os_version") if by_os_version else "Нет разбивки по OS Version.",
+    }
+    by_browser = breakdown.get("by_browser_name") or []
+    best_br, worst_br = _best_worst(by_browser)
+    conclusions["browser_name"] = {
+        "metrics": {"count": len(by_browser)},
+        "conclusion": _format_conclusion("browser", best_br, worst_br, name_key="browser_name") if by_browser else "Нет разбивки по Browser.",
+    }
 
     # 13. Language
-    conclusions["language"] = {"metrics": {}, "conclusion": "Нет детальной разбивки в отчёте."}
+    by_language = breakdown.get("by_language") or []
+    best_lang, worst_lang = _best_worst(by_language)
+    conclusions["language"] = {
+        "metrics": {"count": len(by_language)},
+        "conclusion": _format_conclusion("language", best_lang, worst_lang, name_key="language") if by_language else "Нет разбивки по Language.",
+    }
 
     # 14. Payout (revenue)
     conclusions["payout"] = {
@@ -164,9 +181,77 @@ def get_parameter_conclusions(
     conclusions["token1"] = {"metrics": {}, "conclusion": "Token1 = Campaign ID. Без отдельного анализа."}
     conclusions["token2"] = {
         "metrics": {"count": len(by_token2)},
-        "conclusion": _format_conclusion("token2", best_t2, worst_t2) if by_token2 else "Нет разбивки по creative.",
+        "conclusion": _format_conclusion("token2", best_t2, worst_t2, name_key="name") if by_token2 else "Нет разбивки по creative.",
     }
     for i in range(3, 11):
-        conclusions[f"token{i}"] = {"metrics": {}, "conclusion": "Нет разбивки в отчёте."}
+        by_t = breakdown.get(f"by_token{i}") or []
+        best_t, worst_t = _best_worst(by_t)
+        conclusions[f"token{i}"] = {
+            "metrics": {"count": len(by_t)},
+            "conclusion": _format_conclusion(f"token{i}", best_t, worst_t, name_key=f"token{i}") if by_t else f"Нет разбивки по Token {i}.",
+        }
 
     return conclusions
+
+
+def get_bot_actions(
+    analysis: Dict[str, Any],
+    path_offer_lander: List[Dict[str, Any]],
+    breakdown: Dict[str, Any],
+    brain: Optional[KnowledgeBase] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Генерирует рекомендации бота (Logic Blocks): kill, isolate, optimize.
+    Порядок: kill → isolate → optimize.
+    """
+    brain = brain or KnowledgeBase()
+    zacep_rules = brain.get_zacep_rules()
+    min_conv_zacep = zacep_rules.get("min_conversions", 3)
+    roi_isolate_threshold = 15
+
+    actions: List[Dict[str, Any]] = []
+    killers = analysis.get("profit_killers") or []
+    strengths = analysis.get("strengths") or []
+    conversions = analysis.get("conversions") or 0
+
+    has_zacep = any(
+        s.get("conversions", 0) >= min_conv_zacep and (s.get("profit") or 0) > 0
+        for s in strengths
+    ) or conversions >= min_conv_zacep
+
+    for k in killers:
+        actions.append({
+            "type": "kill",
+            "param": k.get("type"),
+            "value": str(k.get("value", "")),
+            "text": f"Отключить {k.get('type', '')} {k.get('value', '')}",
+            "reason": f"0 conv, spend ${k.get('spend', 0)} > 2× payout",
+        })
+
+    if has_zacep and path_offer_lander:
+        for c in path_offer_lander:
+            roi = c.get("roi") or 0
+            profit = c.get("profit") or 0
+            if 0 < roi < roi_isolate_threshold and profit > 0:
+                actions.append({
+                    "type": "isolate",
+                    "path": c.get("path"),
+                    "offer_id": c.get("offer_id"),
+                    "lander_id": c.get("lander_id"),
+                    "text": f"Вынести Offer {c.get('offer_id', '')} / Lander {c.get('lander_id', '')} в отдельный path",
+                    "reason": f"ROI {roi}% при слабом трафике — изолировать по zacep",
+                })
+                break
+
+    for c in path_offer_lander:
+        profit = c.get("profit") or 0
+        if profit < 0:
+            actions.append({
+                "type": "optimize",
+                "path": c.get("path"),
+                "lander_id": c.get("lander_id"),
+                "text": f"Path {c.get('path', '')} + Lander {c.get('lander_id', '')}: отключить или снизить бид",
+                "reason": f"Profit ${profit}, стабильный минус",
+            })
+
+    return actions

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.brain import KnowledgeBase
 from backend.services.top5_service import Top5Service
-from backend.services.campaign_analysis_service import get_parameter_conclusions
+from backend.services.campaign_analysis_service import get_parameter_conclusions, get_bot_actions
 from backend.routers.metrics import get_campaign_breakdown_data, get_campaign_daily_days
 
 router = APIRouter()
@@ -77,12 +77,22 @@ async def get_company_analysis(
     killer_patterns = brain.get_killer_patterns()
     segment_columns = brain.get_segment_columns(analysis.get("source"))
 
+    path_offer_lander = breakdown.get("path_offer_lander", [])
+    bot_actions = get_bot_actions(
+        analysis=analysis,
+        path_offer_lander=path_offer_lander,
+        breakdown=breakdown,
+        brain=brain,
+    )
+
     return {
         "success": True,
         "campaign_id": campaign_id,
         "analysis": analysis,
         "parameter_conclusions": parameter_conclusions,
         "breakdown": breakdown,
+        "path_offer_lander": path_offer_lander,
+        "bot_actions": bot_actions,
         "days": daily_days,
         "brain": {
             "core_rules": core_rules,

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<!--
+  Визуал Campaign Analysis — компактный вариант.
+  Key Drivers из Без названия.html. Всё компактно, без потери глубины.
+-->
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaign Analysis — Визуал</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #09090b; color: #e4e4e7; font-family: ui-sans-serif, system-ui, sans-serif; }
+        .card { background: #18181b; border: 1px solid #27272a; border-radius: 0.75rem; }
+        .driver-card { padding: 0.875rem 1rem; border-left-width: 4px; }
+        .driver-negative { border-left-color: #ef4444; background: linear-gradient(90deg, rgba(239,68,68,0.05) 0%, transparent 100%); }
+        .driver-positive { border-left-color: #22c55e; background: linear-gradient(90deg, rgba(34,197,94,0.05) 0%, transparent 100%); }
+        .badge { padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.7rem; }
+        .badge-red { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+        .badge-green { background: #052e16; color: #86efac; border: 1px solid #14532d; }
+        .metrics-hero { font-size: 1.1rem; font-weight: 600; }
+        .metrics-hero .profit { font-size: 1.35rem; }
+        .dyn-table { min-width: max-content; font-size: 0.7rem; }
+        .dyn-table th, .dyn-table td { padding: 4px 6px; min-width: 2rem; text-align: center; }
+        .verdict-SCALE { color: #22c55e; }
+        .verdict-STOP { color: #ef4444; }
+        .verdict-OPTIMIZE { color: #3b82f6; }
+        .verdict-HOLD { color: #eab308; }
+        .flow-row { background: #12121a; border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+    </style>
+</head>
+<body class="p-4 md:p-6 max-w-5xl mx-auto">
+    <div id="root"></div>
+
+    <script>
+        const PREVIEW_DATA = {
+            success: true,
+            campaign_id: "1567_med_affmy_geo_us",
+            analysis: {
+                campaign_id: "1567_med_affmy_geo_us",
+                campaign: "Mediabuys - Affmy Offer 4421 • US",
+                source: "PropellerAds",
+                spend: 2847,
+                revenue: 3189,
+                profit: 342,
+                roi: 12,
+                conversions: 8,
+                clicks: 12453,
+                volatility: 18.4,
+                add_mon_pct: 2.8,
+                add_mon: 89,
+                days_with_data: 12,
+                total_days: 14,
+                verdict: "OPTIMIZE",
+                strengths: [
+                    { type: "path", value: "default", profit: 212, roi: 23, traffic_pct: 45, profit_pct: 62, spend: 920 },
+                    { type: "country", value: "US", profit: 301, roi: 15, traffic_pct: 78, profit_pct: 88, spend: 2200 },
+                    { type: "device_type", value: "mobile", profit: 298, roi: 18, traffic_pct: 62, profit_pct: 87, spend: 1650 }
+                ],
+                weaknesses: [
+                    { type: "token2", value: "34134", spend: 124, profit: -124, traffic_pct: 22, conversions: 0, threshold: 199.3 },
+                    { type: "os", value: "Android", spend: 567, profit: -89, traffic_pct: 41, conversions: 1 },
+                    { type: "token3", value: "9981", spend: 89, profit: -56, traffic_pct: 15, conversions: 0 }
+                ],
+                profit_killers: [
+                    { type: "token2", value: "34134", spend: 124, threshold: 199.3, payout_per_conv: 99.65 }
+                ]
+            },
+            path_offer_lander: [
+                { path: "default", rule: "rule_a", offer_id: "4421", lander_id: "101", profit: 267, roi: 24, spend: 1112, clicks: 4200 },
+                { path: "default", rule: "rule_a", offer_id: "4421", lander_id: "102", profit: 45, roi: 8, spend: 563, clicks: 2100 },
+                { path: "lp2", rule: "rule_b", offer_id: "4421", lander_id: "334", profit: -34, roi: -12, spend: 289, clicks: 980 }
+            ],
+            bot_actions: [
+                { type: "kill", param: "token2", value: "34134", text: "Отключить token2 34134", reason: "0 conv, spend $124 > 2× payout" },
+                { type: "isolate", path: "default", offer_id: "4421", lander_id: "102", text: "Вынести Offer 4421 / Lander 102 в отдельный path", reason: "ROI 8% при 21% трафика — изолировать по zacep" },
+                { type: "optimize", path: "lp2", lander_id: "334", text: "Path lp2 + Lander 334: отключить или снизить бид", reason: "Profit -$34, стабильный минус" }
+            ],
+            days: {
+                "01-28": { profit: 34, color: "green" },
+                "01-29": { profit: -12, color: "red" },
+                "01-30": { profit: 56, color: "green" },
+                "01-31": { profit: 21, color: "green" },
+                "02-01": { profit: -45, color: "red" },
+                "02-02": { profit: 78, color: "green" },
+                "02-03": { profit: 42, color: "green" },
+                "02-04": { profit: -8, color: "none" },
+                "02-05": { profit: 56, color: "green" },
+                "02-06": { profit: 31, color: "green" },
+                "02-07": { profit: 19, color: "green" },
+                "02-08": { profit: -23, color: "red" },
+                "02-09": { profit: 45, color: "green" },
+                "02-10": { profit: 38, color: "green" }
+            },
+            decisions: [
+                { decision_date: "2025-02-08", bot_proposal: "OPTIMIZE", user_choice: "OPTIMIZE", user_comment: "Выключил token2 34134" },
+                { decision_date: "2025-02-01", bot_proposal: "HOLD", user_choice: "HOLD", user_comment: null }
+            ]
+        };
+
+        function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        function render() {
+            const d = PREVIEW_DATA;
+            const a = d.analysis;
+            if (!d.success || !a) return;
+
+            const dates = Object.keys(d.days || {}).sort();
+            const botProposal = a.verdict || "HOLD";
+            const decisions = d.decisions || [];
+            const pathOfferLander = d.path_offer_lander || [];
+
+            const killers = a.profit_killers || [];
+            const strengths = (a.strengths || []).filter(s => Math.abs(s.profit) >= 10);
+            const weaknesses = (a.weaknesses || []).filter(w => Math.abs(w.profit) >= 10);
+
+            const keyDriversItems = [];
+            killers.forEach(k => {
+                const w = weaknesses.find(x => x.type === k.type && String(x.value) === String(k.value));
+                keyDriversItems.push({
+                    negative: true,
+                    label: `${k.type} ${k.value}`,
+                    profit: w ? w.profit : -k.spend,
+                    text: `<strong class="text-red-400">Killer.</strong> 0 конверсий, spend $${k.spend} &gt; порог $${k.threshold} (2× payout/conv). Отключить.`,
+                    meta: `Spend: $${k.spend}`
+                });
+            });
+            weaknesses.filter(w => !killers.some(k => k.type === w.type && String(k.value) === String(w.value))).forEach(w => {
+                if (Math.abs(w.profit) < 10) return;
+                keyDriversItems.push({
+                    negative: true,
+                    label: `${w.type} ${w.value}`,
+                    profit: w.profit,
+                    text: `Слив бюджета. ROI низкий, ${w.traffic_pct}% трафика.`,
+                    meta: `Spend: $${w.spend} • ROI: ${w.profit && w.spend ? Math.round(w.profit/w.spend*100) : 0}%`
+                });
+            });
+            strengths.forEach(s => {
+                keyDriversItems.push({
+                    negative: false,
+                    label: `${s.type} ${s.value}`,
+                    profit: s.profit,
+                    text: `<strong class="text-green-400">Top Performer.</strong> ${s.profit_pct}% профита при ${s.traffic_pct}% трафика.`,
+                    meta: `Spend: $${s.spend} • ROI: +${s.roi}%`
+                });
+            });
+            keyDriversItems.sort((a, b) => Math.abs(b.profit) - Math.abs(a.profit));
+
+            const keyDriversCards = keyDriversItems.map(item => `
+                <div class="card driver-card ${item.negative ? 'driver-negative' : 'driver-positive'}">
+                    <div class="flex justify-between items-start mb-1.5">
+                        <div class="font-bold text-white text-sm">${escapeHtml(item.label)}</div>
+                        <span class="badge ${item.negative ? 'badge-red' : 'badge-green'}">${item.profit >= 0 ? '+' : ''}$${item.profit}</span>
+                    </div>
+                    <p class="text-xs text-zinc-300 leading-relaxed">${item.text}</p>
+                    <div class="mt-2 pt-2 border-t border-dashed ${item.negative ? 'border-red-900/30' : 'border-green-900/30'} text-[10px] text-zinc-500">${escapeHtml(item.meta)}</div>
+                </div>
+            `).join('');
+
+            const dateLabels = dates.map(dt => { const [mm, dd] = dt.split('-'); return dd + '.' + mm; });
+            const dateCells = dates.map(dt => {
+                const day = d.days[dt];
+                if (!day) return '<td class="text-zinc-600">—</td>';
+                const bg = day.color === 'red' ? 'bg-red-900/30' : (day.color === 'green' ? 'bg-green-900/30' : '');
+                return '<td class="' + bg + '">' + day.profit + '</td>';
+            }).join('');
+            const botActions = d.bot_actions || [];
+
+            document.getElementById('root').innerHTML = `
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+                    <div>
+                        <h1 class="text-lg font-bold text-white mb-3">${escapeHtml(a.campaign)}</h1>
+                        <div class="flex flex-wrap gap-x-6 gap-y-1 metrics-hero text-white/90">
+                            <span>Profit <span class="profit ${a.profit >= 0 ? 'text-green-400' : 'text-red-400'}">$${a.profit}</span></span>
+                            <span>ROI ${a.roi}%</span>
+                            <span>Spend $${a.spend}</span>
+                            <span>Conv ${a.conversions}</span>
+                            <span>Vol ${a.volatility}%</span>
+                        </div>
+                        <div class="text-sm text-zinc-400 mt-2 font-medium">Trend ↗ • Add.mon ${a.add_mon_pct || 0}% (+$${a.add_mon || 0}) • ${a.days_with_data || 14}/${a.total_days || 14} дней</div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] text-zinc-500 uppercase tracking-wider">Bot</span>
+                        <div class="text-base font-bold verdict-${botProposal}">${botProposal}</div>
+                    </div>
+                </div>
+
+                <div class="card p-3 mb-4 overflow-x-auto">
+                    <table class="dyn-table w-full text-zinc-400 border-collapse">
+                        <thead><tr class="border-b border-zinc-700">${dateLabels.map((l,i) => '<th class="py-2 font-normal">'+l+'</th>').join('')}</tr></thead>
+                        <tbody><tr class="border-b border-zinc-800">${dateCells}</tr></tbody>
+                    </table>
+                </div>
+
+                <section class="mb-4">
+                    <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                        🔥 Key Drivers
+                        <span class="text-[10px] font-normal text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">Влияние на профит &gt; $10</span>
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">${keyDriversCards}</div>
+                </section>
+
+                <div class="card p-4 mb-4">
+                    <h3 class="text-sm font-bold text-white mb-3">Действия</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1">🤖 Бот рекомендует (Logic Blocks)</h4>
+                            <ul class="space-y-2">
+                                ${botActions.map((act, i) => `
+                                <li class="flow-row flex flex-col gap-0.5 py-2 ${act.type === 'kill' ? 'border-l-4 border-red-500' : act.type === 'isolate' ? 'border-l-4 border-blue-500' : 'border-l-4 border-yellow-500/70'} pl-3">
+                                    <span class="text-sm font-medium text-white">${escapeHtml(act.text)}</span>
+                                    <span class="text-xs text-zinc-500">${escapeHtml(act.reason)}</span>
+                                </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Path → Offer → Lander</h4>
+                            <div class="space-y-1.5">
+                                ${pathOfferLander.map(c => `
+                                <div class="flow-row flex justify-between items-center">
+                                    <span>${escapeHtml(c.path)}/${escapeHtml(c.rule)} → ${escapeHtml(c.offer_id)}/${escapeHtml(c.lander_id)}</span>
+                                    <span class="${c.profit >= 0 ? 'text-green-400' : 'text-red-400'} font-mono">$${c.profit}</span>
+                                </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-3 mb-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex gap-1 p-0.5 bg-zinc-900 rounded border border-zinc-800">
+                            <label class="cursor-pointer px-2 py-1 text-xs hover:bg-zinc-800 rounded"><input type="checkbox" class="sr-only" name="v"><span class="verdict-SCALE">SCALE</span></label>
+                            <label class="cursor-pointer px-2 py-1 text-xs hover:bg-zinc-800 rounded"><span class="verdict-HOLD">HOLD</span></label>
+                            <label class="cursor-pointer px-2 py-1 text-xs rounded border border-blue-900/30 bg-blue-900/10"><span class="font-bold verdict-OPTIMIZE">OPTIMIZE</span></label>
+                            <label class="cursor-pointer px-2 py-1 text-xs hover:bg-zinc-800 rounded"><span class="verdict-STOP">STOP</span></label>
+                        </div>
+                        <select class="text-xs bg-black border border-zinc-700 rounded px-2 py-1.5">
+                            <option value="0">Recheck: нет</option>
+                            <option value="1">1 day</option>
+                            <option value="3" selected>3 days</option>
+                            <option value="5">5 days</option>
+                            <option value="7">7 days</option>
+                        </select>
+                        <input type="text" placeholder="Комментарий" class="flex-1 min-w-[120px] text-xs bg-black border border-zinc-700 rounded px-2 py-1.5">
+                        <button type="button" class="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded">Apply</button>
+                    </div>
+                </div>
+
+                <details class="card overflow-hidden">
+                    <summary class="list-none cursor-pointer p-3 text-xs text-zinc-500 hover:text-zinc-300">История решений (${decisions.length})</summary>
+                    <div class="px-3 pb-3 space-y-1.5">
+                        ${decisions.map(dec => `
+                        <div class="text-xs py-1.5 border-b border-zinc-800 last:border-0">
+                            ${escapeHtml(dec.decision_date)} — <span class="verdict-${dec.bot_proposal}">${dec.bot_proposal}</span> → <span class="verdict-${dec.user_choice}">${dec.user_choice}</span>
+                            ${dec.user_comment ? '<span class="text-zinc-500 block">'+escapeHtml(dec.user_comment)+'</span>' : ''}
+                        </div>
+                        `).join('')}
+                    </div>
+                </details>
+            `;
+        }
+
+        render();
+    </script>
+</body>
+</html>
