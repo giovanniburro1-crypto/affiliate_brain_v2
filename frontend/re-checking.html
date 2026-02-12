@@ -61,7 +61,7 @@
 
             <div id="recheckEmpty" class="hidden py-12 text-center text-zinc-500">
                 <p class="mb-2">Очередь речека пуста.</p>
-                <p class="text-sm">Добавьте кампании с TOP-5: выберите период речека (1/2/3/5/7 days) и нажмите Apply.</p>
+                <p class="text-sm">Добавьте кампании с Campaign Analysis или TOP-5: нажмите Apply — кампания появится здесь.</p>
             </div>
 
             <div id="recheckCards" class="flex-1 overflow-y-auto space-y-4"></div>
@@ -129,6 +129,12 @@
                         const safeId = escapeHtml(String(item.id));
                         const safeCid = escapeHtml(item.campaign_id || '');
                         const copyAttr = (item.campaign_id || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+                        const attrCid = (item.campaign_id || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                        // STOP — удалить везде; остальные — только из очереди
+                        const isStop = (item.verdict || '').toUpperCase().includes('STOP');
+                        const deleteBtn = isStop
+                            ? `<button type="button" onclick="deleteCampaignEverywhere(this.dataset.cid)" data-cid="${attrCid}" class="btn-danger px-3 py-1.5 rounded text-sm">Удалить</button>`
+                            : `<button type="button" onclick="removeFromQueue(${safeId})" class="text-zinc-500 hover:text-red-400 text-sm">Удалить из очереди</button>`;
                         return `
                         <div class="card p-4" data-queue-id="${safeId}" data-campaign-id="${safeCid}">
                             <div class="flex justify-between items-start gap-4 flex-wrap">
@@ -138,7 +144,7 @@
                                     </h3>
                                     <span class="px-2 py-0.5 rounded text-xs ${verdictClass}">${escapeHtml(item.verdict || 'HOLD')} · ${daysAgoText(item.days_ago)}</span>
                                 </div>
-                                <button type="button" onclick="removeFromQueue(${safeId})" class="text-zinc-500 hover:text-red-400 text-sm">Удалить из очереди</button>
+                                ${deleteBtn}
                             </div>
                             <div class="mt-4 flex flex-wrap items-center gap-3">
                                 <span class="text-zinc-500 text-sm">Период:</span>
@@ -219,6 +225,18 @@
             if (!confirm('Удалить из очереди речека?')) return;
             try {
                 const res = await fetch('/api/bot-agent/recheck-queue/' + itemId, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) loadQueue();
+                else alert(data.error || 'Ошибка');
+            } catch (e) {
+                alert('Ошибка сети');
+            }
+        }
+
+        async function deleteCampaignEverywhere(campaignId) {
+            if (!confirm('Удалить кампанию везде? Она исчезнет из Re-check и из истории решений.')) return;
+            try {
+                const res = await fetch('/api/bot-agent/campaign/' + encodeURIComponent(campaignId), { method: 'DELETE' });
                 const data = await res.json();
                 if (data.success) loadQueue();
                 else alert(data.error || 'Ошибка');

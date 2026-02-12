@@ -434,7 +434,7 @@
             const data = await res.json();
             if (data.success) {
                 alert(data.message || 'Применено');
-                loadAnalysis();
+                window.location.href = '/re-checking';  // Переход на Re-check — видишь все отменеженные кампании
             } else {
                 alert(data.error || 'Ошибка');
             }

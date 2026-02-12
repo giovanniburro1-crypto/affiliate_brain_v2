@@ -54,6 +54,42 @@ CREATE TABLE IF NOT EXISTS recheck_queue (
 )
 """
 
+AI_MEMORY_CREATE_SQL = """
+CREATE TABLE IF NOT EXISTS ai_memory (
+    id SERIAL PRIMARY KEY,
+    campaign_id VARCHAR(100),
+    decision_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    bot_verdict VARCHAR(50),
+    bot_score FLOAT,
+    bot_confidence FLOAT,
+    bot_reasoning TEXT,
+    ai_verdict VARCHAR(50),
+    ai_confidence FLOAT,
+    user_choice VARCHAR(50),
+    user_comment TEXT,
+    context_snapshot TEXT,
+    outcome VARCHAR(50),
+    roi_after_7days FLOAT,
+    roi_after_14days FLOAT
+)
+"""
+
+
+def _ensure_ai_memory_table(db: Session) -> None:
+    """Создать таблицу ai_memory при первом обращении, если её нет. Добавить колонки user_comment, context_snapshot если отсутствуют."""
+    try:
+        engine = db.get_bind()
+        with engine.connect() as conn:
+            conn.execute(text(AI_MEMORY_CREATE_SQL))
+            for col, col_type in [("user_comment", "TEXT"), ("context_snapshot", "TEXT")]:
+                try:
+                    conn.execute(text(f"ALTER TABLE ai_memory ADD COLUMN IF NOT EXISTS {col} {col_type}"))
+                except Exception:
+                    pass
+            conn.commit()
+    except Exception as e:
+        raise
+
 
 def _ensure_recheck_queue_table(db: Session) -> None:
     """Создать таблицу recheck_queue при первом обращении, если её нет. DDL выполняется на отдельном соединении движка и коммитится там, чтобы таблица была видна сессии и пулу."""
@@ -280,6 +316,19 @@ async def delete_recheck_queue_item(item_id: int, db: Session = Depends(get_db))
     return {"success": True}
 
 
+@router.delete("/campaign/{campaign_id}")
+async def delete_campaign_everywhere(campaign_id: str, db: Session = Depends(get_db)):
+    """Удалить кампанию везде: из очереди речека и из ai_memory (история решений)."""
+    try:
+        _ensure_recheck_queue_table(db)
+    except Exception:
+        return {"success": False, "error": "Ошибка создания таблицы очереди"}
+    db.execute(text("DELETE FROM recheck_queue WHERE campaign_id = :c"), {"c": campaign_id})
+    db.execute(text("DELETE FROM ai_memory WHERE campaign_id = :c"), {"c": campaign_id})
+    db.commit()
+    return {"success": True}
+
+
 @router.post("/apply")
 async def apply(body: ApplyBody, db: Session = Depends(get_db)):
     """Применить вердикт пользователя: всегда пишем в AIMemory и при выборе речека — в очередь. Уверенность бота не ограничивает действие."""
@@ -330,6 +379,11 @@ async def apply(body: ApplyBody, db: Session = Depends(get_db)):
             context_json = str(body.context_snapshot)
 
     try:
+        _ensure_ai_memory_table(db)
+    except Exception as e:
+        return {"success": False, "error": f"Ошибка создания таблицы ai_memory: {e}"}
+
+    try:
         db.add(
             AIMemory(
                 campaign_id=body.campaign_id,
@@ -344,55 +398,46 @@ async def apply(body: ApplyBody, db: Session = Depends(get_db)):
             )
         )
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
-        return {"success": False, "error": "Ошибка записи в БД"}
+        return {"success": False, "error": f"Ошибка записи в БД: {str(e)}"}
 
-    if recheck_days in (1, 2, 3, 5, 7):
-        # #region agent log
-        _debug_log("bot_agent:apply:recheck_branch", "entering recheck branch", {"recheck_days": recheck_days, "campaign_id": body.campaign_id}, "H1")
-        # #endregion
-        try:
-            _ensure_recheck_queue_table(db)
-            # #region agent log
-            _debug_log("bot_agent:apply:after_ensure", "ensure returned without exception", {}, "H1")
-            # #endregion
-        except Exception as e:
-            return {"success": False, "error": f"Ошибка создания таблицы очереди: {e}"}
-        campaign_name = row[0] or body.campaign_id
-        # #region agent log
-        _debug_log("bot_agent:apply:before_select", "about to SELECT from recheck_queue", {"campaign_id": body.campaign_id}, "H5")
-        # #endregion
-        existing = db.execute(
-            text("SELECT id FROM recheck_queue WHERE campaign_id = :c"),
-            {"c": body.campaign_id},
-        ).fetchone()
-        if existing:
-            db.execute(
-                text("""
-                    UPDATE recheck_queue
-                    SET campaign = :campaign, verdict = :verdict, recheck_after_days = :days, applied_at = :now
-                    WHERE campaign_id = :c
-                """),
-                {
-                    "campaign": campaign_name,
-                    "verdict": verdict,
-                    "days": recheck_days,
-                    "now": datetime.now(),
-                    "c": body.campaign_id,
-                },
+    # Всегда добавляем в очередь речека — чтобы видеть, какую кампанию уже отработал (даже при STOP)
+    try:
+        _ensure_recheck_queue_table(db)
+    except Exception as e:
+        return {"success": False, "error": f"Ошибка создания таблицы очереди: {e}"}
+    campaign_name = row[0] or body.campaign_id
+    existing = db.execute(
+        text("SELECT id FROM recheck_queue WHERE campaign_id = :c"),
+        {"c": body.campaign_id},
+    ).fetchone()
+    if existing:
+        db.execute(
+            text("""
+                UPDATE recheck_queue
+                SET campaign = :campaign, verdict = :verdict, recheck_after_days = :days, applied_at = :now
+                WHERE campaign_id = :c
+            """),
+            {
+                "campaign": campaign_name,
+                "verdict": verdict,
+                "days": recheck_days,
+                "now": datetime.now(),
+                "c": body.campaign_id,
+            },
+        )
+        db.commit()
+    else:
+        db.add(
+            RecheckQueue(
+                campaign_id=body.campaign_id,
+                campaign=campaign_name,
+                verdict=verdict,
+                recheck_after_days=recheck_days,
             )
-            db.commit()
-        else:
-            db.add(
-                RecheckQueue(
-                    campaign_id=body.campaign_id,
-                    campaign=campaign_name,
-                    verdict=verdict,
-                    recheck_after_days=recheck_days,
-                )
-            )
-            db.commit()
+        )
+        db.commit()
 
     message = "Добавлено в очередь речека." if recheck_days in (1, 2, 3, 5, 7) else "Применено."
     return {"success": True, "message": message}

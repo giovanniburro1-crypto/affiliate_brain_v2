@@ -26,3 +26,6 @@
 {"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770816582921}
 {"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"январь_апроуч_1-13.xlsx"},"timestamp":1770816806123}
 {"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":true},"timestamp":1770816821047}
+{"location": "bot_agent:_ensure_recheck_queue_table:entry", "message": "ensure table entry", "data": {}, "timestamp": "2026-02-12T09:34:19.962937Z", "hypothesisId": "H1"}
+{"location": "bot_agent:_ensure_recheck_queue_table:before_execute", "message": "executing CREATE TABLE on engine connection", "data": {"sql_preview": "\nCREATE TABLE IF NOT EXISTS recheck_queue (\n    id SERIAL PRIMARY KEY,\n    campa"}, "timestamp": "2026-02-12T09:34:19.964756Z", "hypothesisId": "H2"}
+{"location": "bot_agent:_ensure_recheck_queue_table:after_commit", "message": "commit done on engine connection", "data": {}, "timestamp": "2026-02-12T09:34:20.446840Z", "hypothesisId": "H2"}

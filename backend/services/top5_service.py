@@ -16,7 +16,7 @@ MIN_CLICKS = 100
 MIN_DAYS_WITH_DATA = 3
 MIN_SPEND = 15
 CONFIDENCE_THRESHOLD = 95
-SEGMENT_MIN_CLICKS = 5
+SEGMENT_MIN_CLICKS = 1  # Было 5 — при разрозненном трафике Key Drivers пустые при $100+
 
 # Разрешённые колонки для сегментации (защита от SQL injection)
 _ALLOWED_SEGMENT_COLS = frozenset(
@@ -175,11 +175,13 @@ class Top5Service:
         traffic_source: Optional[str],
         date_from: date,
         date_to: date,
+        min_clicks: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """Сегменты по колонкам из segment_config. Минимум 15-20 кликов на сегмент."""
+        """Сегменты по колонкам из segment_config. min_clicks: если None — SEGMENT_MIN_CLICKS."""
         cols = self.brain.get_segment_columns(traffic_source)
         segments = []
         params = {"cid": campaign_id, "d": date_from, "d_to": date_to}
+        mc = min_clicks if min_clicks is not None else SEGMENT_MIN_CLICKS
 
         for col in cols:
             if col not in _ALLOWED_SEGMENT_COLS:
@@ -196,7 +198,7 @@ class Top5Service:
                         HAVING COUNT(*) >= :min_clicks
                         ORDER BY SUM(revenue) - SUM(cost) DESC
                     """),
-                    {**params, "min_clicks": SEGMENT_MIN_CLICKS},
+                    {**params, "min_clicks": mc},
                 ).fetchall()
             except Exception:
                 continue
@@ -262,13 +264,18 @@ class Top5Service:
         AND |segment_impact| / total_profit ≥ 10% (если total_profit > 0).
         При total_profit ≤ 0 — только условие по cost.
         Исключить очевидные: traffic_share >= 90%.
+        Для сливающих кампаний (profit < 0): если нет сегментов по 10%, берём топ по spend (порог 5%).
         """
         if total_cost <= 0 or total_clicks <= 0:
             return []
+        cost_share_min = 10
+        if total_profit < 0 and total_cost >= 20:
+            # При сливе и значительном spend — снижаем порог, чтобы показать сегменты
+            cost_share_min = 5
         bad = []
         for s in segments:
             cost_share = (s["spend"] / total_cost) * 100
-            if cost_share < 10:
+            if cost_share < cost_share_min:
                 continue
             traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
             if traffic_share >= 90:
@@ -284,6 +291,20 @@ class Top5Service:
                 "traffic_pct": round(traffic_share, 0),
                 "profit_pct": int(profit_pct),
             })
+        # Если всё ещё пусто при сливе — берём топ по |profit| среди минусовых
+        if not bad and total_profit < 0 and total_cost >= 20:
+            losing = [s for s in segments if s["profit"] < 0]
+            losing.sort(key=lambda x: (-x["spend"], x["profit"]))
+            for s in losing[:limit]:
+                traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
+                if traffic_share >= 90:
+                    continue
+                profit_pct = round((s["profit"] / total_profit) * 100, 0) if total_profit != 0 else 0
+                bad.append({
+                    **s,
+                    "traffic_pct": round(traffic_share, 0),
+                    "profit_pct": int(profit_pct),
+                })
         bad.sort(key=lambda x: (x["profit"], -x["spend"]))
         return bad[:limit]
 
@@ -307,12 +328,25 @@ class Top5Service:
         Киллеры: сегмент с 0 конверсий и spend > 2× (revenue/conversions).
         Payout = revenue. cost_per_conv = revenue/conversions.
         Рекомендуем отключать только если есть зацепы.
+        Если 0 конверсий по кампании и слив — киллеры: сегменты с 0 conv и spend >= $15 (или 10% от spend).
         """
+        killers = []
         if campaign_conversions <= 0:
-            return []
+            # Кампания без конверсий и со сливом — показываем сегменты с 0 conv и значительным spend
+            if campaign_spend < 20:
+                return []
+            threshold = max(15, campaign_spend * 0.1)
+            for s in segments:
+                if s["conversions"] == 0 and s["spend"] >= threshold:
+                    killers.append({
+                        "type": s["type"],
+                        "value": s["value"],
+                        "spend": s["spend"],
+                        "threshold": round(threshold, 2),
+                    })
+            return killers[:5]  # топ 5 киллеров
         cost_per_conv = campaign_revenue / campaign_conversions
         threshold = cost_per_conv * KILLER_SPEND_MULTIPLIER
-        killers = []
         for s in segments:
             if s["conversions"] == 0 and s["spend"] >= threshold:
                 killers.append(
@@ -499,12 +533,13 @@ class Top5Service:
             # Не показывать один и тот же сегмент и как силу, и как слабость
             power_keys = {(s["type"], str(s["value"])) for s in power_segments}
             weakness_segments = [w for w in weakness_segments if (w["type"], str(w["value"])) not in power_keys]
-            has_zacepy = self._check_zacepy(segments)
-            killers = self._find_profit_killers(
-                segments, revenue, conversions, spend
-            )
-            if killers and not has_zacepy:
-                killers = []
+        has_zacepy = self._check_zacepy(segments)
+        killers = self._find_profit_killers(
+            segments, revenue, conversions, spend
+        )
+        # Очищаем killers только если нет зацепов И при этом есть конверсии (чтобы не убить всё)
+        if killers and not has_zacepy and conversions > 0:
+            killers = []
 
             trend_str = _calc_trend_last_n_days(daily_impact)
             summary_lines = self._build_summary_lines(
@@ -638,7 +673,7 @@ class Top5Service:
         weakness_segments = [w for w in weakness_segments if (w["type"], str(w["value"])) not in power_keys]
         has_zacepy = self._check_zacepy(segments)
         killers = self._find_profit_killers(segments, revenue, conversions, spend)
-        if killers and not has_zacepy:
+        if killers and not has_zacepy and conversions > 0:
             killers = []
         trend_str = _calc_trend_last_n_days(daily_impact)
         summary_lines = self._build_summary_lines(
