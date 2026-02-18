@@ -154,3 +154,153 @@ INFO:     127.0.0.1:57842 - "GET /api/bot-agent/top5?period=14 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:57934 - "POST /api/bot-agent/apply HTTP/1.1" 200 OK
 INFO:     127.0.0.1:57936 - "POST /api/bot-agent/apply HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58332 - "GET /settings HTTP/1.1" 200 OK
+[main c0914c7] переделал бота
+ Committer: Ivan <andreylp@MacBook-Air-Andrey.local>
+Your name and email address were configured automatically based
+on your username and hostname. Please check that they are accurate.
+You can suppress this message by setting them explicitly. Run the
+following command and follow the instructions in your editor to edit
+your configuration file:
+
+    git config --global --edit
+
+After doing this, you may fix the identity used for this commit with:
+
+    git commit --amend --reset-author
+
+ 112 files changed, 19888 insertions(+), 50 deletions(-)
+ create mode 100644 V2_SYSTEM_GUIDE.md
+ create mode 100644 backend/brain/knowledge_base_v2.py
+ create mode 100644 backend/brain/knowledge_base_v2_complete.py
+ create mode 100644 backend/migrate_to_v2.py
+ create mode 100644 backend/migrate_v2_postgres.py
+ create mode 100644 backend/migrate_v2_simple.py
+ create mode 100644 backend/models_v2.py
+ create mode 100644 backend/services/action_plan_generator.py
+ create mode 100644 backend/services/learning_service.py
+ create mode 100644 backend/services/top5_service_v1_backup.py
+ create mode 100644 backend/services/top5_service_v2.py
+ create mode 100644 backend/services/top5_service_v2_complete.py
+ create mode 100644 backend/services/top5_service_v2_complete.py.backup
+ create mode 100644 backend_backup_20260217_165454/.DS_Store
+ create mode 100644 backend_backup_20260217_165454/__init__.py
+ create mode 100644 backend_backup_20260217_165454/brain/__init__.py
+ create mode 100644 backend_backup_20260217_165454/brain/knowledge_base.py
+ create mode 100644 backend_backup_20260217_165454/config.py
+ create mode 100644 backend_backup_20260217_165454/database.py
+ create mode 100644 backend_backup_20260217_165454/main.py
+ create mode 100644 backend_backup_20260217_165454/models.py
+ create mode 100644 backend_backup_20260217_165454/routers/__init__.py
+ create mode 100644 backend_backup_20260217_165454/routers/ai_agents.py
+ create mode 100644 backend_backup_20260217_165454/routers/ai_settings.py
+ create mode 100644 backend_backup_20260217_165454/routers/bot_agent.py
+ create mode 100644 backend_backup_20260217_165454/routers/company_analytics.py
+ create mode 100644 backend_backup_20260217_165454/routers/metrics.py
+ create mode 100644 backend_backup_20260217_165454/routers/metrics.py.old
+ create mode 100644 backend_backup_20260217_165454/routers/metrics_backup.py
+ create mode 100644 backend_backup_20260217_165454/routers/providers.py
+ create mode 100644 backend_backup_20260217_165454/routers/upload.py
+ create mode 100644 backend_backup_20260217_165454/services/__init__.py
+ create mode 100644 backend_backup_20260217_165454/services/action_plan_generator.py
+ create mode 100644 backend_backup_20260217_165454/services/campaign_analysis_service.py
+ create mode 100644 backend_backup_20260217_165454/services/top5_service.py
+ create mode 100644 create_new_service.py
+ create mode 100644 database.db
+ create mode 100644 integrate_my_knowledge.py
+ create mode 100644 logic_blocks/.DS_Store
+ create mode 100644 logic_blocks/blocks_registry.json
+ create mode 100644 logic_blocks/migrated_blocks/__init__.py
+ create mode 100644 logic_blocks/migrated_blocks/core_rules.py
+ create mode 100644 logic_blocks/migrated_blocks/killer_patterns.py
+ create mode 100644 logic_blocks/migrated_blocks/model_weights.py
+ create mode 100644 logic_blocks/migrated_blocks/trend_analysis.py
+ create mode 100644 logic_blocks/migrated_blocks/winning_combos.py
+ create mode 100644 logic_blocks/my_knowledge/block_1_base.py
+ create mode 100644 logic_blocks/my_knowledge/block_2_optimize.py
+ create mode 100644 logic_blocks/my_knowledge/block_3_crisis.py
+ create mode 100644 logic_blocks/my_knowledge/block_4_volatility.py
+ create mode 100644 logic_blocks/my_knowledge/block_5_scale.py
+ create mode 100644 logic_blocks/my_knowledge/block_6_payouts.py
+ create mode 100644 logic_blocks_backup_20260217_165454/.DS_Store
+ create mode 100644 logic_blocks_backup_20260217_165454/01_Rules/core_rules.json
+ create mode 100644 logic_blocks_backup_20260217_165454/02_Patterns/killer_patterns.json
+ create mode 100644 logic_blocks_backup_20260217_165454/02_Patterns/trend_analysis.json
+ create mode 100644 logic_blocks_backup_20260217_165454/02_Patterns/winning_combos.json
+ create mode 100644 logic_blocks_backup_20260217_165454/05_Learning/model_weights.json
+ create mode 100644 logic_blocks_backup_20260217_165454/README.md
+ create mode 100644 logic_blocks_backup_20260217_165454/my_knowledge/block_1_base.py
+ create mode 100644 logic_blocks_backup_20260217_165454/my_knowledge/block_2_optimize.py
+ create mode 100644 logic_blocks_backup_20260217_165454/my_knowledge/block_3_crisis.py
+ create mode 100644 logic_blocks_backup_20260217_165454/my_knowledge/block_4_volatility.py
+ create mode 100644 logic_blocks_backup_20260217_165454/my_knowledge/block_5_scale.py
+ create mode 100644 logic_blocks_backup_20260217_165454/my_knowledge/block_6_payouts.py
+ create mode 100644 logic_blocks_backup_20260217_165454/segment_config.json
+ create mode 100644 old/.DS_Store
+ create mode 100644 old/README.md
+ create mode 100644 old/backend/.DS_Store
+ create mode 100644 old/backend/routers/metrics.py.old
+ create mode 100644 old/backend/routers/metrics_backup.py
+ create mode 100644 old/backend/services/action_plan_generator.py
+ create mode 100644 old/backend/services/campaign_analysis_service.py.backup
+ create mode 100644 old/backend/services/campaign_analysis_service.py.backup2
+ create mode 100644 old/fix_winning_combos.py
+ create mode 100644 old/frontend/campaign-analysis-preview.html
+ create mode 100644 old/frontend/index.html.backup
+ create mode 100644 old/logic_blocks/01_Rules/core_rules.json
+ create mode 100644 old/logic_blocks/02_Patterns/killer_patterns.json
+ create mode 100644 old/logic_blocks/02_Patterns/trend_analysis.json
+ create mode 100644 old/logic_blocks/02_Patterns/winning_combos.json
+ create mode 100644 old/logic_blocks/05_Learning/model_weights.json
+ create mode 100644 old/scripts/export_campaign_preview_data.py
+ create mode 100644 old/top5-bot-extracted/top5-bot/.env.example
+ create mode 100644 old/top5-bot-extracted/top5-bot/QUICKSTART.md
+ create mode 100644 old/top5-bot-extracted/top5-bot/README.md
+ create mode 100644 old/top5-bot-extracted/top5-bot/backend/package.json
+ create mode 100644 old/top5-bot-extracted/top5-bot/backend/server.js
+ create mode 100644 old/top5-bot-extracted/top5-bot/database/schema.sql
+ create mode 100644 old/top5-bot-extracted/top5-bot/docs/ARCHITECTURE.md
+ create mode 100644 old/top5-bot-extracted/top5-bot/frontend/package.json
+ create mode 100644 old/top5-bot-extracted/top5-bot/frontend/src/App.css
+ create mode 100644 old/top5-bot-extracted/top5-bot/frontend/src/App.jsx
+ create mode 100644 old/top5-bot-extracted/top5-bot/frontend/src/components/Top5Display.css
+ create mode 100644 old/top5-bot-extracted/top5-bot/frontend/src/components/Top5Display.jsx
+ create mode 100644 old/top5-bot-extracted/top5-bot/scripts/analyze_tokens.py
+ create mode 100644 old/top5-bot-extracted/top5-bot/scripts/requirements.txt
+ create mode 100644 old/update_action_plan.py
+ create mode 100644 scripts/migrate_json_simple.py
+ create mode 100644 scripts/migrate_json_to_python.py
+ create mode 100644 server.log
+ create mode 100644 test_archive/final_check_v2.py
+ create mode 100644 test_archive/test_integration.py
+ create mode 100644 test_archive/test_integration_v2.py
+ create mode 100644 test_archive/test_v2_complete.py
+ create mode 100644 test_archive/test_v2_demo.py
+ create mode 100644 test_archive/test_v2_system.py
+INFO:     127.0.0.1:58334 - "POST /api/ai-settings/git/commit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58347 - "GET /bot-top5 HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:58371 - "GET /api/bot-agent/top5?period=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58582 - "GET /bot-top5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58582 - "GET /favicon.ico HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:58582 - "GET /api/bot-agent/top5?period=30 HTTP/1.1" 200 OK

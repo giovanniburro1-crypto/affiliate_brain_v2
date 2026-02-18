@@ -82,6 +82,76 @@ def _calc_trend(daily_impact: List[float]) -> str:
     return "STABLE"
 
 
+def _calc_instability_index(daily_data: List[Dict[str, float]]) -> float:
+    """
+    Рассчитывает волатильность (0-100) по формуле "Index of Instability".
+    Принимает массив объектов за последние 3-5 дней с полями:
+    - roi: ROI в процентах
+    - impact: прибыль (profit) в долларах
+    - conversions: количество лидов (leads)
+    
+    Формула:
+    1. Delta ROI (Вес 70%): среднее abs(ROI_сегодня - ROI_вчера) / (ROI_средний + 5)
+    2. Delta Profit (Вес 30%): среднее abs(Profit_сегодня - Profit_вчера) / (Profit_средний + 1)
+    3. Volume Penalty: (1 + 5 / (Leads_сегодня + 1))
+    4. Нормализация: результат * 100, ограничение до 100
+    
+    Возвращает значение от 0 до 100.
+    """
+    if not daily_data or len(daily_data) < 2:
+        return 100.0  # Максимальный риск при нехватке данных
+    
+    # Работаем с последними 5 точками
+    recent_data = daily_data[-5:]
+    
+    # 1. Считаем средние показатели за период
+    avg_roi = sum(d['roi'] for d in recent_data) / len(recent_data)
+    avg_impact = sum(d['impact'] for d in recent_data) / len(recent_data)
+    
+    # 2. Считаем средние дельты (разница между соседними днями)
+    roi_deltas = []
+    impact_deltas = []
+    
+    for i in range(1, len(recent_data)):
+        roi_deltas.append(abs(recent_data[i]['roi'] - recent_data[i-1]['roi']))
+        impact_deltas.append(abs(recent_data[i]['impact'] - recent_data[i-1]['impact']))
+    
+    if not roi_deltas:  # на случай если всего 1 день
+        return 100.0
+    
+    mean_roi_delta = sum(roi_deltas) / len(roi_deltas)
+    mean_impact_delta = sum(impact_deltas) / len(impact_deltas) if impact_deltas else 0
+    
+    # 3. Основные компоненты (взвешенные)
+    # Добавляем небольшие константы к знаменателям чтобы избежать деления на ноль
+    roi_component = (mean_roi_delta / (abs(avg_roi) + 5)) * 0.7
+    impact_component = (mean_impact_delta / (abs(avg_impact) + 1)) * 0.3
+    
+    # 4. Штраф за малый объем конверсий (берем последний день)
+    last_conv = recent_data[-1].get('conversions', 0)
+    volume_penalty = 1 + (5 / (last_conv + 1))
+    
+    # 5. Итоговый расчет
+    instability = (roi_component + impact_component) * volume_penalty * 100
+    
+    # Ограничиваем сверху 100 и снизу 0
+    result = max(0, min(100, instability))
+    
+    return round(result, 2)
+
+
+def _instability_interpretation(instability: float) -> Dict[str, str]:
+    """
+    Возвращает интерпретацию значения волатильности.
+    """
+    if instability < 15:
+        return {"level": "low", "color": "green", "label": "Стабильно", "description": "Кампания идет ровно. Идеальный момент для масштабирования бюджета."}
+    elif instability <= 40:
+        return {"level": "medium", "color": "yellow", "label": "Умеренно", "description": "Есть дневные колебания. Повышай бюджет осторожно, небольшими шагами."}
+    else:
+        return {"level": "high", "color": "red", "label": "Шторм", "description": "Высокий риск или мало лидов. Не рекомендуется менять бюджет прямо сейчас."}
+
+
 def _calc_trend_last_n_days(daily_impact: List[float]) -> str:
     """
     ↑ last N days или ↓ last N days.
@@ -143,7 +213,7 @@ class Top5ServiceV2:
     def _get_daily_metrics(
         self, campaign_id: str, date_from: date, date_to: date
     ) -> List[Dict[str, Any]]:
-        """Дневные метрики: roi, cr, impact. 1 row = 1 click, SUM по дням."""
+        """Дневные метрики: roi, cr, impact, conversions. 1 row = 1 click, SUM по дням."""
         rows = self.db.execute(
             text("""
                 SELECT date,
@@ -168,7 +238,7 @@ class Top5ServiceV2:
             impact = rev - cost
             roi = ((rev - cost) / cost * 100) if cost > 0 else 0.0
             cr = (conv / clk * 100) if clk > 0 else 0.0
-            result.append({"roi": roi, "cr": cr, "impact": impact})
+            result.append({"roi": roi, "cr": cr, "impact": impact, "conversions": conv})
         return result
 
     def _get_campaign_segments(
@@ -375,62 +445,157 @@ class Top5ServiceV2:
         block_votes: Optional[List[Dict]] = None,
     ) -> List[str]:
         """
-        Порядок: metrics → trend+volatility → add.monetization → proposition → POWER → WEAKNESS.
-        Добавлена информация о голосах блоков.
+        Компактный формат: 1-2 строки с ключевой информацией.
+        1. Метрики + вердикт
+        2. Ключевые сегменты (POWER/WEAKNESS)
+        Блок BLOCKS не включается, так как отображается в таблице ниже.
         """
         lines = []
         c = campaign
-        # 1. Metrics
-        lines.append(
-            f"ROI {c.get('roi', 0)}% • Profit ${c.get('profit', 0)} • Spend ${c.get('spend', 0)} • "
-            f"Clicks {c.get('clicks', 0)} • Conv {c.get('conversions', 0)}"
-        )
-        # 2. Trend + Volatility
-        trend_vol = trend_str
-        if trend_vol:
-            trend_vol += f"  Volatility {volatility:.1f}% • {days_with_data}/{total_days} дней"
+        
+        # 1. Первая строка: ключевые метрики и вердикт в компактном виде
+        verdict_text = ""
+        if c.get("verdict") == "SCALE":
+            verdict_text = "• SCALE (low volatility, high ROI)"
+        elif c.get("verdict") == "STOP":
+            verdict_text = "• STOP (negative ROI)"
+        elif c.get("verdict") == "OPTIMIZE":
+            verdict_text = "• OPTIMIZE"
         else:
-            trend_vol = f"Volatility {volatility:.1f}% • {days_with_data}/{total_days} дней"
-        lines.append(trend_vol)
-        # 3. Add monetization
+            verdict_text = "• HOLD"
+            
+        # Компактный формат метрик
+        metrics_line = f"ROI {c.get('roi', 0)}% • ${c.get('profit', 0)} profit • ${c.get('spend', 0)} spend • {c.get('clicks', 0)} clicks • {c.get('conversions', 0)} conv"
+        
+        # Добавляем вердикт к метрикам
+        first_line = f"{metrics_line} {verdict_text}"
+        lines.append(first_line)
+        
+        # 2. Вторая строка: POWER и WEAKNESS сегменты (кратко)
+        segments_line = ""
+        
+        # POWER сегменты (максимум 2 самых важных)
+        if power_segments:
+            top_power = power_segments[:2]
+            power_parts = []
+            for s in top_power:
+                power_parts.append(f"{s['type']}={s['value']} ({s['profit_pct']}% profit)")
+            segments_line += "POWER: " + " • ".join(power_parts)
+            
+        # WEAKNESS сегменты (максимум 2 самых проблемных)  
+        if weakness_segments:
+            top_weakness = weakness_segments[:2]
+            if segments_line:
+                segments_line += " • "
+            weakness_parts = []
+            for s in top_weakness:
+                weakness_parts.append(f"{s['type']}={s['value']} ({s['profit_pct']}% profit)")
+            segments_line += "WEAKNESS: " + " • ".join(weakness_parts)
+            
+        if segments_line:
+            lines.append(segments_line)
+            
+        # 3. Дополнительная информация только если есть адд.монетизация
         if add_mon > 0:
             lines.append(f"Add.monetization ${add_mon} ({add_mon_pct}% of revenue)")
-        # 4. Proposition
-        if c.get("verdict") == "SCALE":
-            lines.append("PROPOSITION: SCALE (low volatility, high ROI)")
-        elif c.get("verdict") == "STOP":
-            lines.append("PROPOSITION: STOP (negative ROI, no conversions)")
-        elif c.get("verdict") == "OPTIMIZE":
-            lines.append("PROPOSITION: OPTIMIZE (positive ROI, moderate volatility)")
-        else:
-            lines.append("PROPOSITION: HOLD (insufficient data)")
-        # 5. POWER segments
-        if power_segments:
-            power_line = "POWER: "
-            for i, s in enumerate(power_segments):
-                if i > 0:
-                    power_line += " • "
-                power_line += f"{s['type']}={s['value']} ({s['traffic_pct']}% traffic, {s['profit_pct']}% profit)"
-            lines.append(power_line)
-        # 6. WEAKNESS segments
-        if weakness_segments:
-            weakness_line = "WEAKNESS: "
-            for i, s in enumerate(weakness_segments):
-                if i > 0:
-                    weakness_line += " • "
-                weakness_line += f"{s['type']}={s['value']} ({s['traffic_pct']}% traffic, {s['profit_pct']}% profit)"
-            lines.append(weakness_line)
-        # 7. Block votes (если есть)
-        if block_votes:
-            votes_line = "BLOCKS: "
-            for vote in block_votes:
-                block_name = vote.get('block_name', 'unknown')
-                verdict = vote.get('verdict', 'UNKNOWN')
-                confidence = vote.get('confidence', 0)
-                # Display format: block_name+VERDICT(confidence%)
-                votes_line += f"{block_name}+{verdict}({confidence:.1f}) "
-            lines.append(votes_line.strip())
+            
+        # 4. Волатильность и тренд добавляем только если есть место (максимум 2 строки)
+        # Но по требованию пользователя - только 1-2 строки, так что не добавляем
+        
+        # Блок BLOCKS не включаем - отображается в таблице ниже
+        
         return lines
+    
+    def _generate_selection_reason(
+        self,
+        roi: float,
+        profit: float,
+        spend: float,
+        clicks: int,
+        conversions: int,
+        volatility: float,
+        verdict: str,
+        opportunity_score: float,
+        power_segments: List[Dict],
+        weakness_segments: List[Dict],
+        days_with_data: int,
+    ) -> str:
+        """
+        Генерирует объяснение на русском языке, почему бот отобрал эту кампанию в топ-5.
+        """
+        reasons = []
+        
+        # 1. Основные метрики
+        if roi > 30:
+            reasons.append(f"высокий ROI ({roi}%)")
+        elif roi > 15:
+            reasons.append(f"хороший ROI ({roi}%)")
+        elif roi > 0:
+            reasons.append(f"положительный ROI ({roi}%)")
+        elif roi <= -20:
+            reasons.append(f"критически низкий ROI ({roi}%) - требуется остановка")
+        else:
+            reasons.append(f"ROI {roi}%")
+            
+        if profit > 0:
+            reasons.append(f"прибыль ${profit}")
+        else:
+            reasons.append(f"убыток ${abs(profit)}")
+            
+        if clicks >= 1000:
+            reasons.append(f"большой объём кликов ({clicks})")
+        elif clicks >= 100:
+            reasons.append(f"достаточный объём кликов ({clicks})")
+            
+        if conversions >= 3:
+            reasons.append(f"конверсии ({conversions})")
+            
+        # 2. Волатильность и стабильность
+        if volatility < 10:
+            reasons.append(f"очень низкая волатильность ({volatility}%)")
+        elif volatility < 20:
+            reasons.append(f"низкая волатильность ({volatility}%)")
+        elif volatility > 50:
+            reasons.append(f"высокая волатильность ({volatility}%)")
+            
+        # 3. Вердикт
+        verdict_explanation = {
+            "SCALE": "рекомендуется масштабирование из-за высокой прибыльности и стабильности",
+            "OPTIMIZE": "требуется оптимизация для улучшения показателей",
+            "HOLD": "рекомендуется удержание текущих позиций",
+            "STOP": "требуется остановка из-за негативных показателей"
+        }
+        if verdict in verdict_explanation:
+            reasons.append(verdict_explanation[verdict])
+            
+        # 4. Сегменты
+        if power_segments:
+            top_power = power_segments[0]
+            reasons.append(f"сильные сегменты ({top_power['type']}={top_power['value']} даёт {top_power['profit_pct']}% прибыли)")
+            
+        if weakness_segments:
+            top_weakness = weakness_segments[0]
+            reasons.append(f"слабые сегменты ({top_weakness['type']}={top_weakness['value']} теряет {abs(top_weakness['profit_pct'])}% прибыли)")
+            
+        # 5. Opportunity Score
+        if opportunity_score > 100:
+            reasons.append(f"высокий потенциал для масштабирования (скор: {opportunity_score:.1f})")
+        elif opportunity_score > 50:
+            reasons.append(f"хороший потенциал для масштабирования (скор: {opportunity_score:.1f})")
+            
+        # 6. Данные за дни
+        if days_with_data >= 7:
+            reasons.append(f"стабильные данные за {days_with_data} дней")
+        elif days_with_data >= 3:
+            reasons.append(f"данные за {days_with_data} дня")
+            
+        # Формируем итоговое объяснение
+        if reasons:
+            explanation = "Бот отобрал кампанию в топ-5 потому что: " + ", ".join(reasons) + "."
+        else:
+            explanation = "Кампания отобрана на основе комплексного анализа метрик."
+            
+        return explanation
 
     def get_top5(
         self,
@@ -479,7 +644,7 @@ class Top5ServiceV2:
             daily_roi = [d["roi"] for d in daily]
             daily_cr = [d["cr"] for d in daily]
             daily_impact = [d["impact"] for d in daily]
-            volatility = _calc_volatility(daily_roi, daily_cr, daily_impact)
+            volatility = _calc_instability_index(daily)
             trend = _calc_trend(daily_impact)
             opp_score = _opportunity_score(roi, clicks, volatility)
             stability_factor = _stability_factor(volatility)
@@ -537,6 +702,19 @@ class Top5ServiceV2:
                 {"roi": roi, "profit": profit, "spend": spend, "clicks": clicks, "conversions": conversions, "verdict": verdict},
                 power_segments, weakness_segments, add_mon, add_mon_pct, days_with_data, total_days, volatility, trend_str, block_votes,
             )
+            explanation = self._generate_selection_reason(
+                roi=roi,
+                profit=profit,
+                spend=spend,
+                clicks=clicks,
+                conversions=conversions,
+                volatility=volatility,
+                verdict=verdict,
+                opportunity_score=round(opp_score, 2),
+                power_segments=power_segments,
+                weakness_segments=weakness_segments,
+                days_with_data=days_with_data,
+            )
             campaigns.append(
                 {
                     "campaign_id": cid,
@@ -559,6 +737,7 @@ class Top5ServiceV2:
                     "bot_score": round(opp_score / 5, 1),
                     "summary_lines": summary_lines,
                     "reasoning": "; ".join(summary_lines),
+                    "explanation": explanation,
                     "strengths": power_segments,
                     "weaknesses": weakness_segments,
                     "profit_killers": killers,
