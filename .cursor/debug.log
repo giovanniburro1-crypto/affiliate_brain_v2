@@ -61,3 +61,6 @@
 {"location": "bot_agent:_ensure_recheck_queue_table:entry", "message": "ensure table entry", "data": {}, "timestamp": "2026-02-18T16:47:58.566450Z", "hypothesisId": "H1"}
 {"location": "bot_agent:_ensure_recheck_queue_table:before_execute", "message": "executing CREATE TABLE on engine connection", "data": {"sql_preview": "\nCREATE TABLE IF NOT EXISTS recheck_queue (\n    id SERIAL PRIMARY KEY,\n    campa"}, "timestamp": "2026-02-18T16:47:58.567617Z", "hypothesisId": "H2"}
 {"location": "bot_agent:_ensure_recheck_queue_table:after_commit", "message": "commit done on engine connection", "data": {}, "timestamp": "2026-02-18T16:47:58.804670Z", "hypothesisId": "H2"}
+{"location": "bot_agent:_ensure_recheck_queue_table:entry", "message": "ensure table entry", "data": {}, "timestamp": "2026-02-18T17:22:47.495705Z", "hypothesisId": "H1"}
+{"location": "bot_agent:_ensure_recheck_queue_table:before_execute", "message": "executing CREATE TABLE on engine connection", "data": {"sql_preview": "\nCREATE TABLE IF NOT EXISTS recheck_queue (\n    id SERIAL PRIMARY KEY,\n    campa"}, "timestamp": "2026-02-18T17:22:47.497306Z", "hypothesisId": "H2"}
+{"location": "bot_agent:_ensure_recheck_queue_table:after_commit", "message": "commit done on engine connection", "data": {}, "timestamp": "2026-02-18T17:22:47.893121Z", "hypothesisId": "H2"}

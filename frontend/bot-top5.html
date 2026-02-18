@@ -549,6 +549,9 @@
             const recheckEl = document.getElementById(`recheckDays-${campaignId}`);
             const recheckAfterDays = recheckEl ? parseInt(recheckEl.value, 10) : 0;
 
+            // Находим карточку кампании для удаления
+            const campaignCard = document.querySelector(`[data-campaign-id="${campaignId}"]`);
+            
             fetch('/api/bot-agent/apply', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -556,10 +559,41 @@
             })
             .then(r => r.json())
             .then(data => {
-                if (data.success) alert(data.message || 'Готово.');
-                else alert(data.error || 'Ошибка');
+                if (data.success) {
+                    // Если есть карточка кампании - удаляем её с анимацией
+                    if (campaignCard) {
+                        campaignCard.style.opacity = '0.7';
+                        campaignCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                        campaignCard.style.transform = 'scale(0.95)';
+                        
+                        setTimeout(() => {
+                            campaignCard.style.opacity = '0';
+                            campaignCard.style.transform = 'scale(0.9)';
+                            
+                            setTimeout(() => {
+                                campaignCard.remove();
+                                // Обновляем порядковый номер оставшихся карточек если нужно
+                                const remainingCards = document.querySelectorAll('#top5Cards > .card');
+                                if (remainingCards.length === 0) {
+                                    document.getElementById('top5Cards').innerHTML = '<p class="text-zinc-500 py-8 text-center">Кампания перемещена в очередь речека. Нажмите <strong>Play</strong> для загрузки новых кампаний.</p>';
+                                }
+                            }, 200);
+                        }, 300);
+                    }
+                    // Показываем уведомление
+                    alert(data.message || 'Кампания перемещена в очередь речека.');
+                } else {
+                    alert(data.error || 'Ошибка');
+                }
             })
-            .catch(() => alert('Ошибка сети'));
+            .catch(() => {
+                alert('Ошибка сети');
+                // Восстанавливаем карточку если была скрыта
+                if (campaignCard && campaignCard.style.opacity !== '1') {
+                    campaignCard.style.opacity = '1';
+                    campaignCard.style.transform = 'scale(1)';
+                }
+            });
         }
 
         async function callAiCouncil(campaignId, campaignName, periodParams) {

@@ -578,17 +578,43 @@ class Top5ServiceV2:
         """Топ-5 кампаний для масштабирования."""
         date_from, date_to = self._period_or_range(period, date_from_str, date_to_str)
         total_days = (date_to - date_from).days + 1
-        rows = self.db.execute(
-            text("""
-                SELECT campaign_id, campaign, traffic_source,
-                       SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
-                FROM traffic_stats
-                WHERE date >= :d AND date <= :d_to
-                GROUP BY campaign_id, campaign, traffic_source
-                HAVING SUM(cost) >= :min_spend AND COUNT(*) >= :min_clicks
-            """),
-            {"d": date_from, "d_to": date_to, "min_spend": MIN_SPEND, "min_clicks": MIN_CLICKS},
-        ).fetchall()
+        
+        # Получаем campaign_id, которые находятся в recheck_queue и срок еще не истек
+        excluded_campaigns = []
+        try:
+            excluded_rows = self.db.execute(
+                text("""
+                    SELECT campaign_id 
+                    FROM recheck_queue 
+                    WHERE recheck_after_days = 0 
+                       OR (applied_at + INTERVAL '1 day' * recheck_after_days > CURRENT_DATE)
+                """)
+            ).fetchall()
+            excluded_campaigns = [row[0] for row in excluded_rows]
+        except Exception:
+            # Таблицы может не существовать, игнорируем
+            pass
+        
+        # Базовый SQL запрос
+        sql = """
+            SELECT campaign_id, campaign, traffic_source,
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE date >= :d AND date <= :d_to
+        """
+        
+        # Добавляем условие исключения, если есть исключаемые кампании
+        params = {"d": date_from, "d_to": date_to, "min_spend": MIN_SPEND, "min_clicks": MIN_CLICKS}
+        if excluded_campaigns:
+            sql += " AND campaign_id NOT IN :excluded"
+            params["excluded"] = tuple(excluded_campaigns)
+        
+        sql += """
+            GROUP BY campaign_id, campaign, traffic_source
+            HAVING SUM(cost) >= :min_spend AND COUNT(*) >= :min_clicks
+        """
+        
+        rows = self.db.execute(text(sql), params).fetchall()
         campaigns = []
         for row in rows:
             cid = row[0]
