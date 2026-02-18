@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliate Brain v2.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
+        .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
+        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
+        .btn-primary { background: #8b5cf6; }
+        .btn-primary:hover { background: #7c3aed; }
+        .btn-secondary { background: #3f3f46; }
+        .nav-item { border-radius: 8px; transition: all 0.2s; }
+        .nav-item:hover { background: rgba(139,92,246,0.1); }
+        .nav-item.active { background: #8b5cf6; }
+        select { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
+        .profit-green { color: #22c55e; }
+        .profit-red { color: #ef4444; }
+        .cell-green { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .cell-red { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .cell-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
+        th { background: #12121a; font-size: 11px; text-transform: uppercase; }
+        .modal { backdrop-filter: blur(4px); }
+        .progress-bar { height: 8px; border-radius: 4px; background: #2a2a3a; }
+        .progress-fill { height: 100%; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="flex">
+        <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
+            <div class="flex items-center gap-2 mb-8">
+                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <i data-lucide="brain" class="w-5 h-5"></i>
+                </div>
+                <span class="font-bold">AFFILIATE BRAIN</span>
+            </div>
+            <nav class="flex-1 space-y-1">
+                <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
+                <a href="/" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
+                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
+                <a href="/top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
+                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
+                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
+            </nav>
+            <div class="space-y-2">
+                <button onclick="openUpload()" class="btn-primary w-full py-2 rounded-lg flex items-center justify-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i>Upload
+                </button>
+                <button onclick="openOrphans()" class="btn-secondary w-full py-2 rounded-lg flex items-center justify-center gap-2">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>Orphans <span id="orphanCount" class="text-xs bg-red-500 px-1.5 rounded">0</span>
+                </button>
+            </div>
+        </aside>
+        <main class="ml-56 flex-1 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h1 class="text-2xl font-bold">Dashboard</h1>
+                <div class="flex items-center gap-3">
+                    <select id="sourceSelect" class="px-3 py-2 rounded-lg text-sm"><option value="all">All Sources</option></select>
+                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm">
+                        <option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option>
+                    </select>
+                    <button onclick="loadAll()" class="btn-primary px-4 py-2 rounded-lg text-sm">Apply</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">Spend</div><div id="statSpend" class="text-2xl font-bold">$0</div></div>
+                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">Revenue</div><div id="statRevenue" class="text-2xl font-bold">$0</div></div>
+                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">Profit</div><div id="statProfit" class="text-2xl font-bold">$0</div></div>
+                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">ROI</div><div id="statRoi" class="text-2xl font-bold">0%</div></div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="card p-4">
+                    <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4"></i>OS Split</h3>
+                    <div id="osSplit" class="space-y-3"></div>
+                </div>
+                <div class="card p-4">
+                    <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="monitor" class="w-4 h-4"></i>Device Split</h3>
+                    <div id="deviceSplit" class="space-y-3"></div>
+                </div>
+            </div>
+            <div class="card p-4 mb-6"><div style="height:200px"><canvas id="chart"></canvas></div></div>
+            <div class="card p-4 mb-6">
+                <h3 class="font-semibold mb-4">ОБЩИЙ АНАЛИЗ ПО ИСТОЧНИКАМ</h3>
+                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="px-3 py-2">Source</th><th class="px-3 py-2 text-right">Spend</th><th class="px-3 py-2 text-right">Revenue</th><th class="px-3 py-2 text-right">Profit</th><th class="px-3 py-2 text-right">ROI</th><th class="px-2 py-2 text-center" colspan="14">Daily</th></tr></thead><tbody id="sourcesTable"></tbody></table></div>
+            </div>
+            <div class="card p-4">
+                <h3 class="font-semibold mb-4">Campaigns</h3>
+                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="px-3 py-2">Campaign</th><th class="px-3 py-2">Source</th><th class="px-3 py-2 text-right">Spend</th><th class="px-3 py-2 text-right">Revenue</th><th class="px-3 py-2 text-right">Profit</th><th class="px-3 py-2 text-right">ROI</th></tr></thead><tbody id="campaignsTable"></tbody></table></div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="card p-6 w-96">
+            <h3 class="font-semibold mb-4">Upload File</h3>
+            <input type="file" id="fileInput" accept=".xlsx,.csv" class="mb-4" onchange="uploadFile(this)">
+            <div id="uploadStatus" class="text-sm"></div>
+            <button onclick="closeUpload()" class="mt-4 text-zinc-400">Close</button>
+        </div>
+    </div>
+    
+    <!-- Orphans Modal -->
+    <div id="orphansModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="card p-6 w-[600px] max-h-[80vh] overflow-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold">Orphans - Unmatched Records</h3>
+                <button onclick="closeOrphans()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="orphansSummary" class="text-sm text-zinc-400 mb-4"></div>
+            <table class="w-full text-left text-sm">
+                <thead><tr><th class="px-2 py-2">Token1</th><th class="px-2 py-2">Date</th><th class="px-2 py-2 text-right">Revenue</th><th class="px-2 py-2">Source</th></tr></thead>
+                <tbody id="orphansTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let chart;
+        const colors = ['#8b5cf6', '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#ec4899'];
+        
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadSources(); loadAll(); loadOrphansCount(); });
+        
+        async function loadSources() {
+            const res = await fetch('/api/metrics/sources');
+            const data = await res.json();
+            document.getElementById('sourceSelect').innerHTML = '<option value="all">All Sources</option>' + data.sources.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+        
+        async function loadOrphansCount() {
+            const res = await fetch('/api/orphans');
+            const data = await res.json();
+            document.getElementById('orphanCount').textContent = data.total_count;
+        }
+        
+        async function loadAll() {
+            const period = document.getElementById('periodSelect').value;
+            const source = document.getElementById('sourceSelect').value;
+            await Promise.all([loadSummary(period, source), loadSplits(period), loadChart(period), loadSourcesTable(period), loadCampaigns(period, source)]);
+        }
+        
+        async function loadSummary(period, source) {
+            const url = `/api/metrics/summary?period=${period}` + (source !== 'all' ? `&source=${source}` : '');
+            const res = await fetch(url);
+            const d = await res.json();
+            document.getElementById('statSpend').textContent = '$' + d.spend.toLocaleString();
+            document.getElementById('statRevenue').textContent = '$' + d.revenue.toLocaleString();
+            document.getElementById('statProfit').textContent = '$' + d.profit.toLocaleString();
+            document.getElementById('statProfit').className = 'text-2xl font-bold ' + (d.profit >= 0 ? 'profit-green' : 'profit-red');
+            document.getElementById('statRoi').textContent = d.roi + '%';
+            document.getElementById('statRoi').className = 'text-2xl font-bold ' + (d.roi >= 0 ? 'profit-green' : 'profit-red');
+        }
+        
+        async function loadSplits(period) {
+            const res = await fetch(`/api/metrics/splits?period=${period}`);
+            const data = await res.json();
+            const totalOsClicks = data.os.reduce((sum, o) => sum + o.clicks, 0);
+            document.getElementById('osSplit').innerHTML = data.os.map((o, i) => {
+                const pct = totalOsClicks > 0 ? Math.round(o.clicks / totalOsClicks * 100) : 0;
+                return `<div><div class="flex justify-between text-sm mb-1"><span>${o.name}</span><span class="${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()} (${pct}%)</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${colors[i % colors.length]}"></div></div></div>`;
+            }).join('');
+            const totalDevClicks = data.device.reduce((sum, d) => sum + d.clicks, 0);
+            document.getElementById('deviceSplit').innerHTML = data.device.map((d, i) => {
+                const pct = totalDevClicks > 0 ? Math.round(d.clicks / totalDevClicks * 100) : 0;
+                return `<div><div class="flex justify-between text-sm mb-1"><span>${d.name}</span><span class="${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()} (${pct}%)</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${colors[i % colors.length]}"></div></div></div>`;
+            }).join('');
+        }
+        
+        async function loadChart(period) {
+            const res = await fetch(`/api/metrics/daily?period=${period}`);
+            const data = await res.json();
+            if (chart) chart.destroy();
+            chart = new Chart(document.getElementById('chart'), {
+                type: 'line',
+                data: { labels: data.daily.map(d => d.date.slice(5)), datasets: [
+                    { label: 'Revenue', data: data.daily.map(d => d.revenue), borderColor: '#22c55e', tension: 0.4 },
+                    { label: 'Spend', data: data.daily.map(d => d.cost), borderColor: '#ef4444', tension: 0.4 }
+                ]},
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { ticks: { color: '#9ca3af' } }, y: { ticks: { color: '#9ca3af' } } } }
+            });
+        }
+        
+        async function loadSourcesTable(period) {
+            const res = await fetch(`/api/metrics/sources-table?period=${period}`);
+            const data = await res.json();
+            document.getElementById('sourcesTable').innerHTML = data.sources.map(s => {
+                const dates = Object.keys(s.days).sort();
+                const cells = dates.map(d => `<td class="px-1 py-1 text-center text-xs cell-${s.days[d].color}">${s.days[d].profit}</td>`).join('');
+                return `<tr class="border-b border-zinc-800"><td class="px-3 py-2">${s.source}</td><td class="px-3 py-2 text-right">$${s.total_cost.toLocaleString()}</td><td class="px-3 py-2 text-right">$${s.total_revenue.toLocaleString()}</td><td class="px-3 py-2 text-right ${s.total_profit >= 0 ? 'profit-green' : 'profit-red'}">$${s.total_profit.toLocaleString()}</td><td class="px-3 py-2 text-right ${s.roi >= 0 ? 'profit-green' : 'profit-red'}">${s.roi}%</td>${cells}</tr>`;
+            }).join('');
+        }
+        
+        async function loadCampaigns(period, source) {
+            const url = `/api/metrics/campaigns?period=${period}` + (source !== 'all' ? `&source=${source}` : '');
+            const res = await fetch(url);
+            const data = await res.json();
+            document.getElementById('campaignsTable').innerHTML = data.campaigns.map(c => `<tr class="border-b border-zinc-800"><td class="px-3 py-2">${c.campaign}</td><td class="px-3 py-2 text-zinc-400">${c.source}</td><td class="px-3 py-2 text-right">$${c.spend.toLocaleString()}</td><td class="px-3 py-2 text-right">$${c.revenue.toLocaleString()}</td><td class="px-3 py-2 text-right ${c.profit >= 0 ? 'profit-green' : 'profit-red'}">$${c.profit.toLocaleString()}</td><td class="px-3 py-2 text-right ${c.roi >= 0 ? 'profit-green' : 'profit-red'}">${c.roi}%</td></tr>`).join('');
+        }
+        
+        function openUpload() { document.getElementById('uploadModal').classList.remove('hidden'); document.getElementById('uploadModal').classList.add('flex'); }
+        function closeUpload() { document.getElementById('uploadModal').classList.add('hidden'); }
+        
+        async function openOrphans() {
+            document.getElementById('orphansModal').classList.remove('hidden');
+            document.getElementById('orphansModal').classList.add('flex');
+            const res = await fetch('/api/orphans');
+            const data = await res.json();
+            document.getElementById('orphansSummary').textContent = `Total: ${data.total_count} orphans, $${data.total_revenue.toFixed(2)} revenue`;
+            document.getElementById('orphansTable').innerHTML = data.orphans.map(o => `<tr class="border-b border-zinc-800"><td class="px-2 py-2 font-mono text-xs">${o.token1}</td><td class="px-2 py-2">${o.date || '-'}</td><td class="px-2 py-2 text-right profit-green">$${o.revenue.toFixed(2)}</td><td class="px-2 py-2">${o.source}</td></tr>`).join('');
+            lucide.createIcons();
+        }
+        function closeOrphans() { document.getElementById('orphansModal').classList.add('hidden'); }
+        
+        async function uploadFile(input) {
+            const file = input.files[0]; if (!file) return;
+            document.getElementById('uploadStatus').textContent = 'Uploading...';
+            const form = new FormData(); form.append('file', file);
+            const res = await fetch('/api/upload', { method: 'POST', body: form });
+            const data = await res.json();
+            document.getElementById('uploadStatus').innerHTML = data.success ? `<span class="text-green-400">Done! ${data.stats.inserted} rows (${data.stats.time}s)</span>` : `<span class="text-red-400">Error</span>`;
+            if (data.success) setTimeout(() => { closeUpload(); loadAll(); loadOrphansCount(); }, 1500);
+        }
+    </script>
+</body>
+</html>

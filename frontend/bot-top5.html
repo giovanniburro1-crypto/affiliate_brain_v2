@@ -238,11 +238,32 @@
                 <div class="card p-4" data-campaign-id="${escapeHtml(c.campaign_id)}">
                     <div class="flex justify-between items-start gap-4">
                         <div>
-                            <h3 class="font-semibold text-lg">${escapeHtml(shortName)} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(c.campaign_id||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${escapeHtml(c.campaign_id || '')})</span></h3>
+                            <h3 class="font-semibold text-lg">${escapeHtml(shortName)} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${(c.campaign_id||'').replace(/&/g,'&').replace(/"/g,'"')}" onclick="copyId(this)" title="Нажми, чтобы скопировать">(${escapeHtml(c.campaign_id || '')})</span></h3>
                         </div>
                         <div class="text-3xl font-bold ${confClass}">${Math.round(c.confidence || 0)}%</div>
                     </div>
                     <div class="mt-2 space-y-1">${linesHtml}</div>
+                    
+                    <!-- Behind the scenes: Block votes -->
+                    ${c.block_votes && c.block_votes.length > 0 ? `
+                    <div class="mt-3 p-3 rounded bg-zinc-900/50 border border-zinc-700">
+                        <div class="text-xs text-zinc-400 mb-2 flex items-center gap-1">
+                            <i data-lucide="eye" class="w-3 h-3"></i> Behind the scenes (Knowledge Blocks)
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            ${c.block_votes.map(vote => `
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-zinc-300 truncate">${escapeHtml(vote.block_name || '')}</span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="${vote.verdict === 'SCALE' ? 'text-green-400' : vote.verdict === 'STOP' ? 'text-red-400' : vote.verdict === 'OPTIMIZE' ? 'text-blue-400' : 'text-yellow-400'} font-medium">${vote.verdict || 'HOLD'}</span>
+                                        <span class="text-zinc-500">${Math.round(vote.confidence || 0)}%</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
                     <div class="mt-4 flex flex-wrap items-center gap-3">
                         <div class="flex gap-2">
                             <label class="flex items-center gap-1"><input type="radio" name="verdict-${c.campaign_id}" value="SCALE" ${c.verdict === 'SCALE' ? 'checked' : ''}> <span class="verdict-SCALE">SCALE</span></label>

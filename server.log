@@ -1,0 +1,156 @@
+INFO:     Started server process [21385]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:55556 - "GET /health HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:55570 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55560 - "GET /api/bot-agent/top5?period=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55570 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55577 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55571 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55580 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55579 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55582 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55570 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55593 - "GET /bot-top5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55597 - "GET /ai-company-analysis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55599 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55597 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55597 - "GET /top5 HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:55597 - "GET /api/bot-agent/top5?period=7 HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:55597 - "GET /top5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55602 - "GET /api/bot-agent/top5?period=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55618 - "GET /bot-top5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55618 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55725 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55725 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55731 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55727 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55733 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55734 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55735 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55731 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55997 - "GET /bot-top5 HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:56011 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55999 - "GET /api/bot-agent/top5?date_from=2026-01-01&date_to=2026-02-18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56117 - "GET /ai-company-analysis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56117 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56119 - "GET /api/metrics/campaigns?source=Approach%20X&min_cost=20&period=90 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56126 - "GET /api/company-analytics/analysis?campaign_id=1678&period=30&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56128 - "GET /api/bot-agent/campaign-decisions?campaign_id=1678 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56127 - "GET /api/metrics/campaign-daily-row?campaign_id=1678&period=30&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57700 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57700 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57702 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57707 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57709 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57711 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57710 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57702 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57713 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57713 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57718 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57720 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57725 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57724 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57722 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57728 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57728 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57732 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57734 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57737 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57738 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57735 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57751 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57751 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57758 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57760 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57764 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57763 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57761 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57767 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57767 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57771 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57772 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57774 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57777 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57776 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57789 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57789 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57794 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57796 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57799 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57797 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57800 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57815 - "GET /api/metrics/summary?period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57817 - "GET /api/metrics/splits?period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57821 - "GET /api/metrics/campaigns-table?period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57820 - "GET /api/metrics/traffic-sources-summary?period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57818 - "GET /api/metrics/daily?period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57828 - "GET /api/metrics/summary?period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57832 - "GET /api/metrics/splits?period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57836 - "GET /api/metrics/campaigns-table?period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57835 - "GET /api/metrics/traffic-sources-summary?period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57833 - "GET /api/metrics/daily?period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57842 - "GET /bot-top5 HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:57842 - "GET /api/bot-agent/top5?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57934 - "POST /api/bot-agent/apply HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57936 - "POST /api/bot-agent/apply HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58332 - "GET /settings HTTP/1.1" 200 OK

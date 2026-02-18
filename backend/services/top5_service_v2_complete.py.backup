@@ -1,0 +1,395 @@
+"""
+TOP-5 Bot Service V2 — отбор кампаний для масштабирования с использованием KnowledgeBaseV2.
+Низкая волатильность = выше шанс на SCALE. Формат 4-6 строк (сила + слабость).
+Использует KnowledgeBaseV2 для голосования блоков и обучения.
+"""
+from datetime import date, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+import math
+import json
+
+from backend.brain.knowledge_base_v2_complete import KnowledgeBaseV2
+
+# Пороги из спецификации
+MIN_CLICKS = 100
+MIN_DAYS_WITH_DATA = 3
+MIN_SPEND = 15
+CONFIDENCE_THRESHOLD = 95
+SEGMENT_MIN_CLICKS = 1  # Было 5 — при разрозненном трафике Key Drivers пустые при $100+
+
+# Разрешённые колонки для сегментации (защита от SQL injection)
+_ALLOWED_SEGMENT_COLS = frozenset(
+    ["os", "device_type", "token2", "offer", "lander_id", "country", "traffic_source"]
+)
+KILLER_SPEND_MULTIPLIER = 2.0
+ZACEP_MIN_CONVERSIONS = 3
+ZACEP_MIN_STABILITY_DAYS = 2
+
+
+def _calc_volatility(
+    daily_roi: List[float],
+    daily_cr: List[float],
+    daily_impact: List[float],
+) -> float:
+    """
+    Волатильность по спецификации:
+    Volatility_Score = (CV_ROI × 0.4) + (CV_CR × 0.3) + (RR_Impact × 0.3)
+    RR_Impact использует AVG(impact) по требованию пользователя.
+    """
+    if len(daily_roi) < 3:
+        return 0.0
+
+    def cv(values: List[float]) -> float:
+        if not values:
+            return 0.0
+        mean = sum(values) / len(values)
+        if mean == 0:
+            return 0.0
+        variance = sum((x - mean) ** 2 for x in values) / len(values)
+        std = math.sqrt(variance) if variance > 0 else 0
+        return (std / abs(mean)) * 100
+
+    cv_roi = cv(daily_roi)
+    cv_cr = cv(daily_cr) if daily_cr else 0.0
+
+    # RR_Impact = (Max - Min) / AVG(impact). По требованию — среднее.
+    if not daily_impact:
+        rr_impact = 0.0
+    else:
+        avg_impact = sum(daily_impact) / len(daily_impact)
+        if avg_impact == 0:
+            rr_impact = 0.0
+        else:
+            rr_impact = (max(daily_impact) - min(daily_impact)) / abs(avg_impact)
+
+    volatility = (cv_roi * 0.4) + (cv_cr * 0.3) + (rr_impact * 0.3)
+    return round(volatility, 2)
+
+
+def _calc_trend(daily_impact: List[float]) -> str:
+    """IMPROVING / DECLINING / STABLE по последним дням (legacy)."""
+    if len(daily_impact) < 4:
+        return "UNKNOWN"
+    mid = len(daily_impact) // 2
+    first = sum(daily_impact[:mid]) / mid
+    second = sum(daily_impact[mid:]) / (len(daily_impact) - mid)
+    if second > first * 1.1:
+        return "IMPROVING"
+    if second < first * 0.9:
+        return "DECLINING"
+    return "STABLE"
+
+
+def _calc_trend_last_n_days(daily_impact: List[float]) -> str:
+    """
+    ↑ last N days или ↓ last N days.
+    N = длина последней подряд идущей серии положительного или отрицательного impact (min 2 дня).
+    Если серия < 2 дней — возвращаем пустую строку или "—".
+    """
+    if not daily_impact or len(daily_impact) < 2:
+        return ""
+    count = 0
+    first_sign = daily_impact[-1] >= 0
+    for d in reversed(daily_impact):
+        sign = d >= 0
+        if sign == first_sign:
+            count += 1
+        else:
+            break
+    if count < 2:
+        return ""
+    if first_sign:
+        return f"↑ last {count} days"
+    return f"↓ last {count} days"
+
+
+def _stability_factor(volatility: float) -> float:
+    """Низкая волатильность = выше фактор. 1/(1+volatility/30)"""
+    return 1.0 / (1.0 + volatility / 30.0)
+
+
+def _opportunity_score(roi: float, clicks: int, volatility: float) -> float:
+    """Opportunity_Score = ROI × Log10(Clicks+1) × Stability_Factor"""
+    sf = _stability_factor(volatility)
+    log_clicks = math.log10(clicks + 1) if clicks >= 0 else 0
+    return roi * log_clicks * sf
+
+
+class Top5ServiceV2:
+    def __init__(self, db: Session, brain: Optional[KnowledgeBaseV2] = None):
+        self.db = db
+        self.brain = brain or KnowledgeBaseV2()
+        self.block_votes = {}  # Кэш голосов блоков для текущего анализа
+
+    def _period_or_range(
+        self,
+        period: int,
+        date_from_str: Optional[str],
+        date_to_str: Optional[str],
+    ) -> Tuple[date, date]:
+        today = date.today()
+        if date_from_str and date_to_str:
+            try:
+                d_from = date.fromisoformat(date_from_str.strip()[:10])
+                d_to = date.fromisoformat(date_to_str.strip()[:10])
+                if d_from <= d_to:
+                    return (d_from, d_to)
+            except (ValueError, TypeError):
+                pass
+        return (today - timedelta(days=period), today)
+
+    def _get_daily_metrics(
+        self, campaign_id: str, date_from: date, date_to: date
+    ) -> List[Dict[str, Any]]:
+        """Дневные метрики: roi, cr, impact. 1 row = 1 click, SUM по дням."""
+        rows = self.db.execute(
+            text("""
+                SELECT date,
+                       SUM(cost) as cost,
+                       SUM(revenue) as revenue,
+                       SUM(conversions) as conv,
+                       COUNT(*) as clicks
+                FROM traffic_stats
+                WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+                GROUP BY date
+                ORDER BY date
+            """),
+            {"cid": campaign_id, "d": date_from, "d_to": date_to},
+        ).fetchall()
+
+        result = []
+        for r in rows:
+            cost = float(r[1] or 0)
+            rev = float(r[2] or 0)
+            conv = int(r[3] or 0)
+            clk = int(r[4] or 0)
+            impact = rev - cost
+            roi = ((rev - cost) / cost * 100) if cost > 0 else 0.0
+            cr = (conv / clk * 100) if clk > 0 else 0.0
+            result.append({"roi": roi, "cr": cr, "impact": impact})
+        return result
+
+    def _get_campaign_segments(
+        self,
+        campaign_id: str,
+        traffic_source: Optional[str],
+        date_from: date,
+        date_to: date,
+        min_clicks: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Сегменты по колонкам из segment_config. min_clicks: если None — SEGMENT_MIN_CLICKS."""
+        cols = self.brain.get_segment_columns(traffic_source)
+        segments = []
+        params = {"cid": campaign_id, "d": date_from, "d_to": date_to}
+        mc = min_clicks if min_clicks is not None else SEGMENT_MIN_CLICKS
+
+        for col in cols:
+            if col not in _ALLOWED_SEGMENT_COLS:
+                continue
+            try:
+                # Используем только whitelist колонок
+                rows = self.db.execute(
+                    text(f"""
+                        SELECT COALESCE({col}::text, '(empty)'),
+                               SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+                        FROM traffic_stats
+                        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
+                        GROUP BY {col}
+                        HAVING COUNT(*) >= :min_clicks
+                        ORDER BY SUM(revenue) - SUM(cost) DESC
+                    """),
+                    {**params, "min_clicks": mc},
+                ).fetchall()
+            except Exception:
+                continue
+            for r in rows:
+                spend = int(r[1] or 0)
+                rev = int(r[2] or 0)
+                conv = int(r[3] or 0)
+                clk = int(r[4] or 0)
+                profit = rev - spend
+                roi = round((profit / spend * 100) if spend > 0 else 0)
+                segments.append(
+                    {
+                        "type": col,
+                        "value": r[0] or "(empty)",
+                        "spend": spend,
+                        "revenue": rev,
+                        "conversions": conv,
+                        "clicks": clk,
+                        "profit": profit,
+                        "roi": roi,
+                    }
+                )
+        return segments
+
+    def _find_power_segments(
+        self,
+        segments: List[Dict],
+        total_profit: float,
+        total_clicks: int,
+        limit: int = 3,
+    ) -> List[Dict]:
+        """
+        POWER: segment_profit / total_profit ≥ 10%.
+        Исключить очевидные: segment_clicks / total_clicks >= 90%.
+        Max 3. X% traffic volume, Y% profit traffic.
+        """
+        if total_profit <= 0 or total_clicks <= 0:
+            return []
+        good = []
+        for s in segments:
+            if s["profit"] <= 0:
+                continue
+            profit_share = (s["profit"] / total_profit) * 100
+            if profit_share < 10:
+                continue
+            traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
+            if traffic_share >= 90:
+                continue
+            good.append({**s, "traffic_pct": round(traffic_share, 0), "profit_pct": round(profit_share, 0)})
+        good.sort(key=lambda x: (x["profit"], x["roi"]), reverse=True)
+        return good[:limit]
+
+    def _find_weakness_segments(
+        self,
+        segments: List[Dict],
+        total_cost: float,
+        total_profit: float,
+        total_clicks: int,
+        limit: int = 5,
+    ) -> List[Dict]:
+        """
+        WEAKNESS: segment_cost / total_cost ≥ 10%,
+        AND |segment_impact| / total_profit ≥ 10% (если total_profit > 0).
+        При total_profit ≤ 0 — только условие по cost.
+        Исключить очевидные: traffic_share >= 90%.
+        Для сливающих кампаний (profit < 0): если нет сегментов по 10%, берём топ по spend (порог 5%).
+        """
+        if total_cost <= 0 or total_clicks <= 0:
+            return []
+        cost_share_min = 10
+        if total_profit < 0 and total_cost >= 20:
+            # При сливе и значительном spend — снижаем порог, чтобы показать сегменты
+            cost_share_min = 5
+        bad = []
+        for s in segments:
+            cost_share = (s["spend"] / total_cost) * 100
+            if cost_share < cost_share_min:
+                continue
+            traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
+            if traffic_share >= 90:
+                continue
+            if total_profit > 0:
+                impact = s["revenue"] - s["spend"]
+                impact_share = (abs(impact) / abs(total_profit)) * 100
+                if impact_share < 10:
+                    continue
+            profit_pct = round((s["profit"] / total_profit) * 100, 0) if total_profit != 0 else 0
+            bad.append({
+                **s,
+                "traffic_pct": round(traffic_share, 0),
+                "profit_pct": int(profit_pct),
+            })
+        # Если всё ещё пусто при сливе — берём топ по |profit| среди минусовых
+        if not bad and total_profit < 0 and total_cost >= 20:
+            losing = [s for s in segments if s["profit"] < 0]
+            losing.sort(key=lambda x: (-x["spend"], x["profit"]))
+            for s in losing[:limit]:
+                traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
+                if traffic_share >= 90:
+                    continue
+                profit_pct = round((s["profit"] / total_profit) * 100, 0) if total_profit != 0 else 0
+                bad.append({
+                    **s,
+                    "traffic_pct": round(traffic_share, 0),
+                    "profit_pct": int(profit_pct),
+                })
+        bad.sort(key=lambda x: (x["profit"], -x["spend"]))
+        return bad[:limit]
+
+    def _check_zacepy(self, segments: List[Dict]) -> bool:
+        """Есть ли зацепы: сегмент с min_conversions и profit > 0."""
+        rules = self.brain.get_zacep_rules()
+        min_conv = rules.get("min_conversions", ZACEP_MIN_CONVERSIONS)
+        for s in segments:
+            if s["conversions"] >= min_conv and s["profit"] > 0:
+                return True
+        return False
+
+    def _find_profit_killers(
+        self,
+        segments: List[Dict],
+        campaign_revenue: float,
+        campaign_conversions: int,
+        campaign_spend: float,
+    ) -> List[Dict]:
+        """
+        Киллеры: сегмент с 0 конверсий и spend > 2× (revenue/conversions).
+        Payout = revenue. cost_per_conv = revenue/conversions.
+        Рекомендуем отключать только если есть зацепы.
+        Если 0 конверсий по кампании и слив — киллеры: сегменты с 0 conv и spend >= $15 (или 10% от spend).
+        """
+        killers = []
+        if campaign_conversions <= 0:
+            # Кампания без конверсий и со сливом — показываем сегменты с 0 conv и значительным spend
+            if campaign_spend < 20:
+                return []
+            threshold = max(15, campaign_spend * 0.1)
+            for s in segments:
+                if s["conversions"] == 0 and s["spend"] >= threshold:
+                    killers.append({
+                        "type": s["type"],
+                        "value": s["value"],
+                        "spend": s["spend"],
+                        "threshold": round(threshold, 2),
+                    })
+            return killers[:5]  # топ 5 киллеров
+        cost_per_conv = campaign_revenue / campaign_conversions
+        threshold = cost_per_conv * KILLER_SPEND_MULTIPLIER
+        for s in segments:
+            if s["conversions"] == 0 and s["spend"] >= threshold:
+                killers.append(
+                    {
+                        "type": s["type"],
+                        "value": s["value"],
+                        "spend": s["spend"],
+                        "threshold": round(threshold, 2),
+                    }
+                )
+        return killers
+
+    def _build_summary_lines(
+        self,
+        campaign: Dict,
+        power_segments: List[Dict],
+        weakness_segments: List[Dict],
+        add_mon: float,
+        add_mon_pct: float,
+        days_with_data: int,
+        total_days: int,
+        volatility: float,
+        trend_str: str,
+        block_votes: Optional[Dict] = None,
+    ) -> List[str]:
+        """
+        Порядок: metrics → trend+volatility → add.monetization → proposition → POWER → WEAKNESS.
+        Добавлена информация о голосах блоков.
+        """
+        lines = []
+        c = campaign
+        # 1. Metrics
+        lines.append(
+            f"ROI {c.get('roi', 0)}% • Profit ${c.get('profit', 0)} • Spend ${c.get('spend', 0)} • "
+            f"Clicks {c.get('clicks', 0)} • Conv {c.get('conversions', 0)}"
+        )
+        # 2. Trend + Volatility
+        trend_vol = trend_str
+        if trend_vol:
+            trend_vol += f"  Volatility {volatility:.1f}% • {days_with_data}/{total_days} дней"
+        else:
+            trend_vol = f"Volatility {volatility:.1f}% • {days_with_data}/{total_days} дней"
+        lines.append(trend_vol)
+        # 3. Add

@@ -1,0 +1,253 @@
+{
+  "block_4_volatility": {
+    "block_id": "block_4_volatility",
+    "class_name": "AffiliateVolatilityPhase4",
+    "file_path": "",
+    "description": "Блок знаний из block_4_volatility.py",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.8,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:36:40.643776",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      },
+      {
+        "timestamp": "2026-02-17T17:37:53.426182",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425634"
+  },
+  "block_6_payouts": {
+    "block_id": "block_6_payouts",
+    "class_name": "AffiliatePayoutEnginePhase6",
+    "file_path": "",
+    "description": "Блок знаний из block_6_payouts.py",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.8,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:36:40.643779",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      },
+      {
+        "timestamp": "2026-02-17T17:37:53.426184",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425706"
+  },
+  "block_2_optimize": {
+    "block_id": "block_2_optimize",
+    "class_name": "AffiliateOptimizationEngine",
+    "file_path": "",
+    "description": "Блок знаний из block_2_optimize.py",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.8,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:36:40.643781",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "OPTIMIZE",
+        "user_verdict": "SCALE"
+      },
+      {
+        "timestamp": "2026-02-17T17:37:53.426185",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "OPTIMIZE",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425720"
+  },
+  "block_3_crisis": {
+    "block_id": "block_3_crisis",
+    "class_name": "AffiliateBlacklistEngine",
+    "file_path": "",
+    "description": "Блок знаний из block_3_crisis.py",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.8,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:36:40.643783",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      },
+      {
+        "timestamp": "2026-02-17T17:37:53.426187",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425727"
+  },
+  "block_1_base": {
+    "block_id": "block_1_base",
+    "class_name": "AffiliateKnowledgeBase",
+    "file_path": "",
+    "description": "Блок знаний из block_1_base.py",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.8,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:36:40.643784",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      },
+      {
+        "timestamp": "2026-02-17T17:37:53.426189",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425731"
+  },
+  "block_5_scale": {
+    "block_id": "block_5_scale",
+    "class_name": "AffiliateExperimentsPhase5",
+    "file_path": "",
+    "description": "Блок знаний из block_5_scale.py",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.8,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:36:40.643786",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      },
+      {
+        "timestamp": "2026-02-17T17:37:53.426190",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425743"
+  },
+  "model_weights": {
+    "block_id": "model_weights",
+    "class_name": "ModelWeightsBlock",
+    "file_path": "migrated_blocks/model_weights.py",
+    "description": "Блок знаний из model_weights.json",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.9,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:37:53.426192",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425798"
+  },
+  "core_rules": {
+    "block_id": "core_rules",
+    "class_name": "CoreRulesBlock",
+    "file_path": "migrated_blocks/core_rules.py",
+    "description": "Блок знаний из core_rules.json",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.9,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:37:53.426197",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "OPTIMIZE",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.425949"
+  },
+  "killer_patterns": {
+    "block_id": "killer_patterns",
+    "class_name": "KillerPatternsBlock",
+    "file_path": "migrated_blocks/killer_patterns.py",
+    "description": "Блок знаний из killer_patterns.json",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.9,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:37:53.426198",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.426029"
+  },
+  "trend_analysis": {
+    "block_id": "trend_analysis",
+    "class_name": "TrendAnalysisBlock",
+    "file_path": "migrated_blocks/trend_analysis.py",
+    "description": "Блок знаний из trend_analysis.json",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.9,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:37:53.426200",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.426102"
+  },
+  "winning_combos": {
+    "block_id": "winning_combos",
+    "class_name": "WinningCombosBlock",
+    "file_path": "migrated_blocks/winning_combos.py",
+    "description": "Блок знаний из winning_combos.json",
+    "priority": 5,
+    "enabled": true,
+    "weight": 0.9,
+    "accuracy_history": [
+      {
+        "timestamp": "2026-02-17T17:37:53.426201",
+        "campaign_id": "test_1",
+        "was_correct": false,
+        "block_verdict": "HOLD",
+        "user_verdict": "SCALE"
+      }
+    ],
+    "last_used": "2026-02-17T17:37:53.426132"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "default": [
+    "os",
+    "device_type",
+    "token2",
+    "offer",
+    "lander_id",
+    "country"
+  ],
+  "Approach X": ["os", "device_type", "token2", "offer", "lander_id", "country"],
+  "Affmy": ["os", "device_type", "token2", "offer", "lander_id", "country"],
+  "Traffichunt": ["os", "device_type", "token2", "offer", "lander_id", "country"]
+}

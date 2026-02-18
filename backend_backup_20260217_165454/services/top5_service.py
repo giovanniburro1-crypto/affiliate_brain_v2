@@ -1,16 +1,15 @@
 """
-TOP-5 Bot Service V2 — отбор кампаний для масштабирования с использованием KnowledgeBaseV2.
+TOP-5 Bot Service — отбор кампаний для масштабирования.
 Низкая волатильность = выше шанс на SCALE. Формат 4-6 строк (сила + слабость).
-Использует KnowledgeBaseV2 для голосования блоков и обучения.
+Использует KnowledgeBase для правил, но логика отбора — отдельный блок.
 """
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import math
-import json
 
-from backend.brain.knowledge_base_v2_complete import KnowledgeBaseV2
+from backend.brain import KnowledgeBase
 
 # Пороги из спецификации
 MIN_CLICKS = 100
@@ -118,10 +117,9 @@ def _opportunity_score(roi: float, clicks: int, volatility: float) -> float:
 
 
 class Top5Service:
-    def __init__(self, db: Session, brain: Optional[KnowledgeBaseV2] = None):
+    def __init__(self, db: Session, brain: Optional[KnowledgeBase] = None):
         self.db = db
-        self.brain = brain or KnowledgeBaseV2()
-        self.block_votes = {}  # Кэш голосов блоков для текущего анализа
+        self.brain = brain or KnowledgeBase()
 
     def _period_or_range(
         self,
@@ -372,11 +370,10 @@ class Top5Service:
         total_days: int,
         volatility: float,
         trend_str: str,
-        block_votes: Optional[List[Dict]] = None,
     ) -> List[str]:
         """
         Порядок: metrics → trend+volatility → add.monetization → proposition → POWER → WEAKNESS.
-        Добавлена информация о голосах блоков.
+        Без дублирования первой строки.
         """
         lines = []
         c = campaign
@@ -409,11 +406,6 @@ class Top5Service:
                 f"[WEAKNESS] {w['type']} {w['value']}: {w.get('traffic_pct', 0)}% of traffic volume "
                 f"{w.get('profit_pct', 0)}% of profit traffic • {w['conversions']} Conv • Profit ${w['profit']}"
             )
-        # 7. Block votes (если есть)
-        if block_votes:
-            lines.append("[Behind the scenes]")
-            for vote in block_votes:
-                lines.append(f"  {vote['block_name']}: {vote['verdict']} ({vote['confidence']:.0f}%)")
         return lines
 
     def get_top5(
@@ -492,26 +484,6 @@ class Top5Service:
             opp_score = _opportunity_score(roi, clicks, volatility)
             stability_factor = _stability_factor(volatility)
 
-            # Получаем голоса блоков
-            block_votes = []
-            try:
-                # Анализируем кампанию через KnowledgeBaseV2
-                analysis_result = self.brain.analyze_campaign(
-                    campaign_id=cid,
-                    roi=roi,
-                    profit=profit,
-                    spend=spend,
-                    clicks=clicks,
-                    conversions=conversions,
-                    volatility=volatility,
-                    daily_impact=daily_impact
-                )
-                if analysis_result and "block_votes" in analysis_result:
-                    block_votes = analysis_result["block_votes"]
-            except Exception as e:
-                # Если ошибка, продолжаем без голосов блоков
-                pass
-
             # Вердикт (упрощённо; полная логика может использовать Brain)
             verdict = "HOLD"
             killer_rules = self.brain.get_killer_rules()
@@ -561,13 +533,13 @@ class Top5Service:
             # Не показывать один и тот же сегмент и как силу, и как слабость
             power_keys = {(s["type"], str(s["value"])) for s in power_segments}
             weakness_segments = [w for w in weakness_segments if (w["type"], str(w["value"])) not in power_keys]
-            has_zacepy = self._check_zacepy(segments)
-            killers = self._find_profit_killers(
-                segments, revenue, conversions, spend
-            )
-            # Очищаем killers только если нет зацепов И при этом есть конверсии (чтобы не убить всё)
-            if killers and not has_zacepy and conversions > 0:
-                killers = []
+        has_zacepy = self._check_zacepy(segments)
+        killers = self._find_profit_killers(
+            segments, revenue, conversions, spend
+        )
+        # Очищаем killers только если нет зацепов И при этом есть конверсии (чтобы не убить всё)
+        if killers and not has_zacepy and conversions > 0:
+            killers = []
 
             trend_str = _calc_trend_last_n_days(daily_impact)
             summary_lines = self._build_summary_lines(
@@ -587,7 +559,6 @@ class Top5Service:
                 total_days,
                 volatility,
                 trend_str,
-                block_votes,
             )
 
             campaigns.append(
@@ -616,7 +587,6 @@ class Top5Service:
                     "weaknesses": weakness_segments,
                     "profit_killers": killers,
                     "trend": trend,
-                    "block_votes": block_votes,
                 }
             )
 
@@ -695,25 +665,6 @@ class Top5Service:
             verdict = "STOP"
         confidence = min(100, max(10, (days_with_data / 14) * 50 + (clicks / 1000) * 30 - (volatility / 100) * 20 + stability_factor * 15))
         confidence = round(confidence, 1)
-        
-        # Получаем голоса блоков
-        block_votes = []
-        try:
-            analysis_result = self.brain.analyze_campaign(
-                campaign_id=campaign_id,
-                roi=roi,
-                profit=profit,
-                spend=spend,
-                clicks=clicks,
-                conversions=conversions,
-                volatility=volatility,
-                daily_impact=daily_impact
-            )
-            if analysis_result and "block_votes" in analysis_result:
-                block_votes = analysis_result["block_votes"]
-        except Exception as e:
-            pass
-        
         segments = self._get_campaign_segments(campaign_id, row[2], date_from, date_to)
         power_segments = self._find_power_segments(segments, profit, clicks, limit=3)
         weakness_segments = self._find_weakness_segments(segments, spend, profit, clicks, limit=5)
@@ -727,7 +678,7 @@ class Top5Service:
         trend_str = _calc_trend_last_n_days(daily_impact)
         summary_lines = self._build_summary_lines(
             {"roi": roi, "profit": profit, "spend": spend, "clicks": clicks, "conversions": conversions, "verdict": verdict},
-            power_segments, weakness_segments, add_mon, add_mon_pct, days_with_data, total_days, volatility, trend_str, block_votes,
+            power_segments, weakness_segments, add_mon, add_mon_pct, days_with_data, total_days, volatility, trend_str,
         )
         return {
             "campaign_id": campaign_id,
@@ -754,7 +705,6 @@ class Top5Service:
             "weaknesses": weakness_segments,
             "profit_killers": killers,
             "trend": trend,
-            "block_votes": block_votes,
         }
 
     def _format_result(

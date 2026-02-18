@@ -26,7 +26,7 @@ def _debug_log(location: str, message: str, data: dict, hypothesis_id: str = "")
 
 from backend.database import get_db
 from backend.models import AIMemory, RecheckQueue
-from backend.services.top5_service_v2_complete import Top5ServiceV2
+from backend.services.top5_service import Top5Service
 
 router = APIRouter()
 CONFIDENCE_THRESHOLD = 95
@@ -139,7 +139,7 @@ async def get_top5(
     db: Session = Depends(get_db),
 ):
     """TOP-5 кампаний с полным форматом 4-6 строк (сила + слабость)."""
-    service = Top5ServiceV2(db)
+    service = Top5Service(db)
     result = service.get_top5(
         period=period,
         date_from_str=date_from_param,
@@ -156,7 +156,7 @@ async def analyze(
     db: Session = Depends(get_db),
 ):
     """Анализ одной кампании."""
-    service = Top5ServiceV2(db)
+    service = Top5Service(db)
     c = service.get_campaign_analysis(
         campaign_id=campaign_id,
         period=period,
@@ -241,7 +241,7 @@ async def get_campaign_analysis(
     db: Session = Depends(get_db),
 ):
     """Read-only анализ кампании за период (без записи в AIMemory)."""
-    service = Top5ServiceV2(db)
+    service = Top5Service(db)
     c = service.get_campaign_analysis(
         campaign_id=campaign_id,
         period=period,

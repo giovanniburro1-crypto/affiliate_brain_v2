@@ -1,0 +1,8 @@
+{
+  "last_updated": null,
+  "training_iterations": 0,
+  "rule_weights": {},
+  "agent_weights": {},
+  "pattern_confidence": {},
+  "ai_accuracy": {"current": 0, "previous": 0, "improvement": 0, "trend": "NEW"}
+}

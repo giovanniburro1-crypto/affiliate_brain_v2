@@ -1,0 +1,9 @@
+{
+  "weekly_trends": {},
+  "monthly_seasonality": {},
+  "hourly_patterns": {
+    "peak_hours": [],
+    "worst_hours": [],
+    "best_cpc": []
+  }
+}

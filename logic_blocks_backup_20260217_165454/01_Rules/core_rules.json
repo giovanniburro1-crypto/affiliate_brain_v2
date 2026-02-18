@@ -1,0 +1,25 @@
+{
+  "killer_rules": {
+    "min_spend_multiplier": 2.0,
+    "zero_conversions": true,
+    "roi_threshold": -20,
+    "description": "Убиваем кампанию если потратили 2x payout без конверсий или ROI < -20%"
+  },
+  "scaler_rules": {
+    "min_roi": 30,
+    "min_conversions": 3,
+    "stable_days": 3,
+    "description": "Скейлим если ROI > 30%, conversions >= 3, и 3+ дня стабильно"
+  },
+  "optimizer_rules": {
+    "epc_threshold": 0.15,
+    "cpa_max": 5.0,
+    "cr_min": 1.5,
+    "description": "Оптимизируем если EPC низкий или CPA высокий"
+  },
+  "zacep_rules": {
+    "min_conversions": 3,
+    "min_stability_days": 2,
+    "description": "Зацеп найден - изолируем в отдельный путь"
+  }
+}
