@@ -84,60 +84,31 @@ def _calc_trend(daily_impact: List[float]) -> str:
 
 def _calc_instability_index(daily_data: List[Dict[str, float]]) -> float:
     """
-    Рассчитывает волатильность (0-100) по формуле "Index of Instability".
-    Принимает массив объектов за последние 3-5 дней с полями:
-    - roi: ROI в процентах
-    - impact: прибыль (profit) в долларах
-    - conversions: количество лидов (leads)
-    
-    Формула:
-    1. Delta ROI (Вес 70%): среднее abs(ROI_сегодня - ROI_вчера) / (ROI_средний + 5)
-    2. Delta Profit (Вес 30%): среднее abs(Profit_сегодня - Profit_вчера) / (Profit_средний + 1)
-    3. Volume Penalty: (1 + 5 / (Leads_сегодня + 1))
-    4. Нормализация: результат * 100, ограничение до 100
-    
-    Возвращает значение от 0 до 100.
+    Рассчитывает волатильность (0-100) по простым правилам:
+    1. День в минусе (impact < 0) = волатильный
+    2. Скачок ROI > 20% между соседними днями = волатильный
+    3. Волатильность = (волатильные_дни / общее_дни) * 100
     """
-    if not daily_data or len(daily_data) < 2:
-        return 100.0  # Максимальный риск при нехватке данных
+    if len(daily_data) < 2:
+        return 0.0
     
-    # Работаем с последними 5 точками
-    recent_data = daily_data[-5:]
+    volatile_days = 0
+    total_days = len(daily_data)
     
-    # 1. Считаем средние показатели за период
-    avg_roi = sum(d['roi'] for d in recent_data) / len(recent_data)
-    avg_impact = sum(d['impact'] for d in recent_data) / len(recent_data)
+    for i, day in enumerate(daily_data):
+        # Правило 1: день в минусе
+        if day.get('impact', 0) < 0:
+            volatile_days += 1
+            continue
+            
+        # Правило 2: скачок ROI > 20% между соседними днями
+        if i > 0:
+            prev_roi = daily_data[i-1].get('roi', 0)
+            curr_roi = day.get('roi', 0)
+            if abs(curr_roi - prev_roi) > 20:  # скачок > 20%
+                volatile_days += 1
     
-    # 2. Считаем средние дельты (разница между соседними днями)
-    roi_deltas = []
-    impact_deltas = []
-    
-    for i in range(1, len(recent_data)):
-        roi_deltas.append(abs(recent_data[i]['roi'] - recent_data[i-1]['roi']))
-        impact_deltas.append(abs(recent_data[i]['impact'] - recent_data[i-1]['impact']))
-    
-    if not roi_deltas:  # на случай если всего 1 день
-        return 100.0
-    
-    mean_roi_delta = sum(roi_deltas) / len(roi_deltas)
-    mean_impact_delta = sum(impact_deltas) / len(impact_deltas) if impact_deltas else 0
-    
-    # 3. Основные компоненты (взвешенные)
-    # Добавляем небольшие константы к знаменателям чтобы избежать деления на ноль
-    roi_component = (mean_roi_delta / (abs(avg_roi) + 5)) * 0.7
-    impact_component = (mean_impact_delta / (abs(avg_impact) + 1)) * 0.3
-    
-    # 4. Штраф за малый объем конверсий (берем последний день)
-    last_conv = recent_data[-1].get('conversions', 0)
-    volume_penalty = 1 + (5 / (last_conv + 1))
-    
-    # 5. Итоговый расчет
-    instability = (roi_component + impact_component) * volume_penalty * 100
-    
-    # Ограничиваем сверху 100 и снизу 0
-    result = max(0, min(100, instability))
-    
-    return round(result, 2)
+    return (volatile_days / total_days) * 100
 
 
 def _instability_interpretation(instability: float) -> Dict[str, str]:

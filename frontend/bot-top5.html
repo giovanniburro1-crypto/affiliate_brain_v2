@@ -430,37 +430,46 @@
                 
                 // Generate compact metrics display - single row table
                 const renderCompactMetrics = (c) => {
+                    // Round all numbers to integers
+                    const roiInt = Math.round(c.roi || 0);
+                    const profitInt = Math.round(c.profit || 0);
+                    const spendInt = Math.round(c.spend || 0);
+                    const clicksInt = Math.round(c.clicks || 0);
+                    const conversionsInt = Math.round(c.conversions || 0);
+                    const volatilityInt = Math.round(c.volatility || 0);
+                    const oppScoreInt = Math.round(c.opportunity_score || 0);
+                    
                     return `
                     <div class="mt-2">
                         <!-- Single row table with all metrics -->
                         <div class="grid grid-cols-7 gap-1">
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">ROI</div>
-                                <div class="text-lg font-bold ${c.roi >= 0 ? 'text-green-400' : 'text-red-400'}">${c.roi}%</div>
+                                <div class="text-lg font-bold ${roiInt >= 0 ? 'text-green-400' : 'text-red-400'}">${roiInt}%</div>
                             </div>
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">Profit</div>
-                                <div class="text-lg font-bold ${c.profit >= 0 ? 'text-green-400' : 'text-red-400'}">$${c.profit}</div>
+                                <div class="text-lg font-bold ${profitInt >= 0 ? 'text-green-400' : 'text-red-400'}">$${profitInt}</div>
                             </div>
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">Clicks</div>
-                                <div class="text-lg font-bold">${c.clicks}</div>
+                                <div class="text-lg font-bold">${clicksInt}</div>
                             </div>
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">Conv.</div>
-                                <div class="text-lg font-bold">${c.conversions}</div>
+                                <div class="text-lg font-bold">${conversionsInt}</div>
                             </div>
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">Spend</div>
-                                <div class="text-sm font-medium">$${c.spend}</div>
+                                <div class="text-sm font-medium">$${spendInt}</div>
                             </div>
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">Volatility</div>
-                                <div class="text-sm font-medium ${c.volatility < 15 ? 'text-green-400' : c.volatility < 40 ? 'text-yellow-400' : 'text-red-400'}">${c.volatility}%</div>
+                                <div class="text-sm font-medium ${volatilityInt < 15 ? 'text-green-400' : volatilityInt < 40 ? 'text-yellow-400' : 'text-red-400'}">${volatilityInt}%</div>
                             </div>
                             <div class="bg-zinc-900/50 p-2 rounded text-center">
                                 <div class="text-xs text-zinc-400">Opp. Score</div>
-                                <div class="text-sm font-medium ${c.opportunity_score > 50 ? 'text-green-400' : 'text-yellow-400'}">${c.opportunity_score}</div>
+                                <div class="text-sm font-medium ${oppScoreInt > 50 ? 'text-green-400' : 'text-yellow-400'}">${oppScoreInt}</div>
                             </div>
                         </div>
                     </div>
@@ -491,6 +500,16 @@
                     
                     <!-- WEAKNESS segments -->
                     ${renderSegments(c.weaknesses, 'WEAKNESS', 'red')}
+                    
+                    <!-- Explanation why bot selected this campaign (with blue border, placed before BLOCKS) -->
+                    ${c.explanation ? `
+                    <div class="mt-3 p-3 border border-blue-500/30 rounded-lg bg-blue-900/10">
+                        <div class="text-xs text-blue-400 mb-1 flex items-center gap-1">
+                            <i data-lucide="info" class="w-3 h-3"></i> Бот отобрал кампанию в топ-5 потому что:
+                        </div>
+                        <div class="text-sm text-zinc-300">${escapeHtml(c.explanation.replace(/^Бот отобрал кампанию в топ-5 потому что:\s*/, ''))}</div>
+                    </div>
+                    ` : ''}
                     
                     <!-- BLOCKS: Knowledge Base Votes -->
                     ${c.block_votes && c.block_votes.length > 0 ? renderBlocks(c.block_votes) : ''}
