@@ -1,0 +1,356 @@
+INFO:     Will watch for changes in these directories: ['/Users/andreylp/Desktop/affiliate_brain_v2']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [14636] using WatchFiles
+INFO:     Started server process [14691]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:53041 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53048 - "GET / HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:53053 - "GET /api/bot-agent/top5?period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53080 - "GET /api/metrics/summary?period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53086 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53086 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53088 - "GET /api/metrics/summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53095 - "GET /api/metrics/daily?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53097 - "GET /api/metrics/campaigns-table?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53093 - "GET /api/metrics/splits?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53096 - "GET /api/metrics/traffic-sources-summary?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53086 - "GET /api/orphans HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53136 - "GET /bot-top5 HTTP/1.1" 200 OK
+Loaded block: block_4_volatility -> AffiliateVolatilityPhase4
+Loaded block: block_6_payouts -> AffiliatePayoutEnginePhase6
+Loaded block: block_2_optimize -> AffiliateOptimizationEngine
+Loaded block: block_3_crisis -> AffiliateBlacklistEngine
+Loaded block: block_1_base -> AffiliateKnowledgeBase
+Loaded block: block_5_scale -> AffiliateExperimentsPhase5
+Loaded migrated block: model_weights
+Loaded migrated block: core_rules
+Loaded migrated block: killer_patterns
+Loaded migrated block: trend_analysis
+Loaded migrated block: winning_combos
+INFO:     127.0.0.1:53138 - "GET /api/bot-agent/top5?period=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53870 - "POST /api/bot-agent/apply HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53880 - "POST /api/bot-agent/apply HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53930 - "GET /ai-company-analysis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53930 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53932 - "GET /api/metrics/campaigns?source=Affmy%20(Adness%204%20%20Ivan)&min_cost=20&period=90 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53977 - "GET /api/company-analytics/analysis?campaign_id=1567&period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53978 - "GET /api/metrics/campaign-daily-row?campaign_id=1567&period=14&source=Affmy%20(Adness%204%20%20Ivan) HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53979 - "GET /api/bot-agent/campaign-decisions?campaign_id=1567 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'backend/services/deep_analysis_extensions.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [14691]
+👋 Bye!
+INFO:     Started server process [16444]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'backend/services/deep_analysis_extensions.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16444]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [16499]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'backend/routers/company_analytics.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16499]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [16595]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:58245 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58281 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58612 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59128 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60638 - "GET /ai-company-analysis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60638 - "GET /api/metrics/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60640 - "GET /api/metrics/campaigns?source=Approach%20X&min_cost=20&period=90 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60640 - "GET /api/company-analytics/analysis?campaign_id=1678&period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61732 - "GET /api/bot-agent/campaign-decisions?campaign_id=1678 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61730 - "GET /api/metrics/campaign-daily-row?campaign_id=1678&period=14&source=Approach%20X HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64966 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64992 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51002 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'test_param_grouping.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16595]
+👋 Bye!
+INFO:     Started server process [21192]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_param_grouping.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21192]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [21213]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:51031 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'backend/services/deep_analysis_extensions.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21213]
+👋 Bye!
+INFO:     Started server process [21326]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'backend/routers/company_analytics.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21326]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [21356]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'backend/routers/company_analytics.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21356]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [21387]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'backend/routers/company_analytics.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21387]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [21424]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:51100 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/uvicorn/protocols/http/httptools_impl.py", line 419, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/uvicorn/middleware/proxy_headers.py", line 84, in __call__
+    return await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/cors.py", line 83, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 762, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 782, in app
+    await route.handle(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 72, in app
+    response = await func(request)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 299, in app
+    raise e
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 294, in app
+    raw_response = await run_endpoint_function(
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+  File "/Users/andreylp/Desktop/affiliate_brain_v2/backend/routers/company_analytics.py", line 113, in get_company_analysis
+    parameter_category_summary = get_parameter_category_summary(
+  File "/Users/andreylp/Desktop/affiliate_brain_v2/backend/services/deep_analysis_extensions.py", line 396, in get_parameter_category_summary
+    'roi': round(item['roi']) if isinstance(item['roi'], (int, float)) else item['roi'],
+OverflowError: cannot convert float infinity to integer
+INFO:     127.0.0.1:51108 - "GET /health HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'test_new_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21424]
+👋 Bye!
+INFO:     Started server process [22360]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_new_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [22360]
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+👋 Bye!
+INFO:     Started server process [22374]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:51130 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/uvicorn/protocols/http/httptools_impl.py", line 419, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/uvicorn/middleware/proxy_headers.py", line 84, in __call__
+    return await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/cors.py", line 83, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 762, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 782, in app
+    await route.handle(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 72, in app
+    response = await func(request)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 299, in app
+    raise e
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 294, in app
+    raw_response = await run_endpoint_function(
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+  File "/Users/andreylp/Desktop/affiliate_brain_v2/backend/routers/company_analytics.py", line 113, in get_company_analysis
+    parameter_category_summary = get_parameter_category_summary(
+  File "/Users/andreylp/Desktop/affiliate_brain_v2/backend/services/deep_analysis_extensions.py", line 396, in get_parameter_category_summary
+    'roi': round(item['roi']) if isinstance(item['roi'], (int, float)) else item['roi'],
+OverflowError: cannot convert float infinity to integer
+WARNING:  WatchFiles detected changes in 'backend/services/deep_analysis_extensions.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [22374]
+👋 Bye!
+INFO:     Started server process [22651]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:51164 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/uvicorn/protocols/http/httptools_impl.py", line 419, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/uvicorn/middleware/proxy_headers.py", line 84, in __call__
+    return await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/cors.py", line 83, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 762, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 782, in app
+    await route.handle(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/starlette/routing.py", line 72, in app
+    response = await func(request)
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 299, in app
+    raise e
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 294, in app
+    raw_response = await run_endpoint_function(
+  File "/Users/andreylp/Library/Python/3.9/lib/python/site-packages/fastapi/routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+  File "/Users/andreylp/Desktop/affiliate_brain_v2/backend/routers/company_analytics.py", line 113, in get_company_analysis
+    parameter_category_summary = get_parameter_category_summary(
+  File "/Users/andreylp/Desktop/affiliate_brain_v2/backend/services/deep_analysis_extensions.py", line 425, in get_parameter_category_summary
+    'icon': category_icon.get(category, '⚫'),
+AttributeError: 'str' object has no attribute 'get'
+WARNING:  WatchFiles detected changes in 'backend/services/deep_analysis_extensions.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [22651]
+👋 Bye!
+INFO:     Started server process [22857]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Starting Affiliate Brain v2.0...
+✅ DB: OK
+INFO:     127.0.0.1:51188 - "GET /api/company-analytics/analysis?campaign_id=1205&period=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51414 - "GET /health HTTP/1.1" 200 OK

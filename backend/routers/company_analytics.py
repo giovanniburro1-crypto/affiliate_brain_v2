@@ -11,6 +11,12 @@ from backend.database import get_db
 from backend.brain import KnowledgeBase
 from backend.services.top5_service import Top5Service
 from backend.services.campaign_analysis_service import get_parameter_conclusions, get_bot_actions
+from backend.services.deep_analysis_extensions import (
+    analyze_parameter_interconnections,
+    generate_prioritized_recommendations,
+    get_deep_key_drivers,
+    get_parameter_category_summary
+)
 from backend.routers.metrics import get_campaign_breakdown_data, get_campaign_daily_days
 
 router = APIRouter()
@@ -85,6 +91,32 @@ async def get_company_analysis(
         brain=brain,
     )
 
+    # Глубокий анализ для расширенных блоков
+    deep_analysis = analyze_parameter_interconnections(
+        breakdown=breakdown,
+        campaign_summary=breakdown.get("summary", {})
+    )
+    
+    deep_key_drivers = get_deep_key_drivers(
+        breakdown=breakdown,
+        campaign_summary=breakdown.get("summary", {}),
+        analysis=analysis
+    )
+    
+    prioritized_recommendations = generate_prioritized_recommendations(
+        analysis=analysis,
+        deep_analysis=deep_analysis,
+        brain=brain
+    )
+    
+    # Компактная группировка параметров по категориям
+    parameter_category_summary = get_parameter_category_summary(
+        strengths=analysis.get("strengths", []),
+        weaknesses=analysis.get("weaknesses", []),
+        breakdown=breakdown,
+        campaign_summary=breakdown.get("summary", {})
+    )
+
     return {
         "success": True,
         "campaign_id": campaign_id,
@@ -102,6 +134,21 @@ async def get_company_analysis(
             "killer_patterns_count": len(killer_patterns),
             "segment_columns": segment_columns,
         },
+        # Новые поля для глубокого анализа (опционально, обратная совместимость)
+        "deep_analysis": {
+            "parameter_interconnections": deep_analysis,
+            "key_drivers_extended": deep_key_drivers,
+            "prioritized_recommendations": prioritized_recommendations,
+            "parameter_category_summary": parameter_category_summary,
+            "summary": {
+                "killer_patterns_count": len(deep_analysis.get("killer_patterns", [])),
+                "winning_combos_count": len(deep_analysis.get("winning_combos", [])),
+                "high_impact_params": sum(
+                    1 for impact in deep_analysis.get("parameter_impact", {}).values()
+                    if abs(impact.get("impact_score", 0)) > 15
+                )
+            }
+        }
     }
 
 
