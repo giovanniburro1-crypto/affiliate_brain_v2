@@ -304,57 +304,57 @@
                         const borderClass = isPositive ? 'border-l-4 border-green-500' : 'border-l-4 border-red-500';
                         const bgClass = isPositive ? 'bg-gradient-to-r from-green-900/10 to-transparent' : 'bg-gradient-to-r from-red-900/10 to-transparent';
 
-                        // Форматируем топ значения (топ-3)
-                        let topValuesHtml = '';
+                        // Форматируем строки значений с индивидуальными метриками
                         const topValues = paramData.top_values || [];
-                        if (topValues.length > 0) {
-                            const limitedValues = topValues.slice(0, 3); // Только топ-3
-                            topValuesHtml = limitedValues.map(val => {
-                                const valIsPositive = val.profit >= 0;
-                                return `
-                                    <div class="flex justify-between items-center text-xs py-0.5 border-b border-dashed border-gray-800 last:border-0">
-                                        <span class="truncate ${valIsPositive ? 'text-green-300' : 'text-red-300'}" title="${escapeHtml(val.value)}">
-                                            ${escapeHtml(val.value.length > 20 ? val.value.substring(0, 20) + '...' : val.value)}
-                                        </span>
-                                        <span class="font-mono ${valIsPositive ? 'text-green-300' : 'text-red-300'}">${valIsPositive ? '+' : ''}$${val.profit}</span>
-                                    </div>
-                                `;
-                            }).join('');
-                        }
+                        const valuesRowsHtml = topValues.slice(0, 5).map(val => {
+                            const valIsPositive = val.profit >= 0;
+                            const valColor = valIsPositive ? 'text-green-300' : 'text-red-300';
+                            const valBg = valIsPositive ? 'hover:bg-green-900/10' : 'hover:bg-red-900/10';
+                            const profitStr = (valIsPositive ? '+' : '') + '$' + Math.abs(val.profit).toFixed(0);
+                            const shortVal = val.value && val.value.length > 18 ? val.value.substring(0, 18) + '…' : (val.value || '(empty)');
+                            const recColor = {
+                                'SCALE': 'text-green-400', 'OPTIMIZE': 'text-blue-400',
+                                'FIX': 'text-red-400', 'TEST': 'text-yellow-400', 'HOLD': 'text-gray-400'
+                            }[val.recommendation] || 'text-gray-400';
+                            return `
+                                <div class="grid py-1 px-2 rounded ${valBg} border-b border-zinc-800/50 last:border-0 items-center" style="grid-template-columns: 130px 52px 48px 40px 48px 46px 36px">
+                                    <span class="font-mono text-[11px] ${valColor} truncate" title="${escapeHtml(val.value)}">${escapeHtml(shortVal)}</span>
+                                    <span class="font-bold text-[12px] ${valColor} text-right">${profitStr}</span>
+                                    <span class="text-[11px] text-zinc-300 text-right">${val.roi}%</span>
+                                    <span class="text-[11px] text-zinc-300 text-right">${val.conversions}</span>
+                                    <span class="text-[11px] text-zinc-300 text-right">${val.traffic_pct}%</span>
+                                    <span class="text-[11px] text-zinc-300 text-right">${val.profit_pct}%</span>
+                                    <span class="text-[10px] ${recColor} font-bold text-right">${val.recommendation || ''}</span>
+                                </div>
+                            `;
+                        }).join('');
 
                         return `
                             <div class="card driver-card ${borderClass} ${bgClass} p-0 overflow-hidden" data-category="${paramData.category || 'other'}">
-                                <div class="p-3">
-                                    <div class="flex justify-between items-start mb-2">
+                                <div class="p-3 pb-1">
+                                    <div class="flex justify-between items-center mb-2">
                                         <div class="flex items-center gap-2">
-                                            <span class="text-lg">${paramData.icon || '⚫'}</span>
+                                            <span class="text-base">${paramData.icon || '⚫'}</span>
                                             <div>
-                                                <div class="font-bold text-white text-sm uppercase">${escapeHtml(paramName)}</div>
-                                                <div class="text-[10px] text-zinc-400">${paramData.category || 'other'} • ${paramData.total_values || 0} значений</div>
+                                                <div class="font-bold text-white text-sm uppercase tracking-wide">${escapeHtml(paramName)}</div>
+                                                <div class="text-[10px] text-zinc-500">${paramData.category || 'other'} • ${paramData.total_values || 0} значений • влияние <strong class="text-zinc-300">${paramData.impact_score || 0}%</strong></div>
                                             </div>
                                         </div>
-                                        <div class="text-right">
-                                            <div class="text-xs font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}">${isPositive ? '+' : ''}$${Math.abs(paramData.total_profit || 0).toFixed(0)}</div>
-                                            <div class="text-[10px] px-2 py-0.5 mt-1 rounded ${recBadgeColor} border">${rec}</div>
-                                        </div>
+                                        <div class="text-[10px] px-2 py-0.5 rounded ${recBadgeColor} border font-bold">${rec}</div>
                                     </div>
-
-                                    <div class="mb-3">
-                                        <div class="text-xs text-zinc-300 leading-relaxed">${paramData.compact_metrics || ''}</div>
-                                    </div>
-
-                                    ${topValuesHtml ? `
-                                    <div class="mt-2 pt-2 border-t border-gray-800">
-                                        <div class="text-[10px] text-zinc-500 mb-1">Топ значения:</div>
-                                        ${topValuesHtml}
-                                    </div>
-                                    ` : ''}
                                 </div>
-                                
-                                <div class="mt-0 pt-2 border-t border-gray-800 text-[10px] text-zinc-500 flex justify-between px-3 pb-2">
-                                    <span>Влияние: <strong>${paramData.impact_score || 0}%</strong></span>
-                                    <span>Конверсии: <strong>${paramData.total_conversions || 0}</strong></span>
-                                    <span>Трафик: <strong>${paramData.traffic_pct || 0}%</strong></span>
+
+                                <div class="px-1 pb-2">
+                                    <div class="grid text-[9px] text-zinc-500 px-2 py-0.5 mb-0.5 uppercase tracking-wider" style="grid-template-columns: 130px 52px 48px 40px 48px 46px 36px">
+                                        <span>Значение</span>
+                                        <span class="text-right">Профит</span>
+                                        <span class="text-right">ROI</span>
+                                        <span class="text-right">Конв</span>
+                                        <span class="text-right">Трафик</span>
+                                        <span class="text-right">Проф%</span>
+                                        <span class="text-right">Экшн</span>
+                                    </div>
+                                    ${valuesRowsHtml || '<div class="text-[10px] text-zinc-600 px-2 py-1">Нет данных</div>'}
                                 </div>
                             </div>
                         `;
