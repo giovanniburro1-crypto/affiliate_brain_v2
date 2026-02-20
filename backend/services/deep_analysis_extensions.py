@@ -172,6 +172,7 @@ def get_parameter_category_summary(
         'language': 'demographics',
         'path': 'traffic',
         'rule': 'traffic',
+        'offer': 'content',
         'offer_id': 'content',
         'lander_id': 'content'
     }
@@ -365,7 +366,7 @@ def get_parameter_category_summary(
             avg_roi = 0
         
         # Влияние - используем profit_pct или traffic_pct
-        impact_score = total_profit_pct if abs(total_profit_pct) > 1 else total_traffic_pct
+        impact_score = min(abs(total_profit_pct), 100) * (1 if total_profit_pct >= 0 else -1) if abs(total_profit_pct) > 1 else min(total_traffic_pct, 100)
         
         # Количество положительных/отрицательных элементов
         positive_count = sum(1 for item in items if item['is_positive'])
@@ -445,7 +446,7 @@ def get_parameter_category_summary(
             'recommendation': overall_recommendation,
             'display_style': display_style,
             'compact_label': f"{category_icon} {param_type.upper()}",
-            'compact_metrics': f"ROI {avg_roi}% • {total_conversions} конв • {total_traffic_pct:.1f}% траф • {total_profit_pct:.1f}% проф • {impact_score:.1f}% влияние",
+            'compact_metrics': (lambda roi_str: f"ROI {roi_str} • {total_conversions} конв • {total_traffic_pct:.1f}% траф • {total_profit_pct:.1f}% проф • {impact_score:.1f}% влияние")("∞" if avg_roi >= 999 else ("-∞" if avg_roi <= -999 else f"{avg_roi}%")),
             'is_informative': True  # Все параметры считаем информативными, фильтрация на фронтенде
         }
     
@@ -481,6 +482,7 @@ def _find_killer_patterns(
     Выявляет паттерны-убийцы - комбинации параметров, которые гарантированно сливают бюджет.
     """
     killer_patterns = []
+    seen_killer_keys = set()
     total_spend = campaign_summary.get("spend", 0) or 0
     
     # Анализируем каждый параметр на наличие критических потерь
@@ -495,43 +497,50 @@ def _find_killer_patterns(
             # 2. Spend > $20 и ROI < -50%
             # 3. Более 10% общего бюджета потрачено впустую
             
+            _killer_key = (param_name, value_data["value"])
             if conversions == 0 and profit < -10:
-                killer_patterns.append({
-                    "pattern_type": "zero_conversions",
-                    "parameter": param_name,
-                    "value": value_data["value"],
-                    "profit": round(profit, 2),
-                    "spend": round(spend, 2),
-                    "reason": f"0 конверсий при потере ${abs(profit):.2f}",
-                    "severity": "high" if spend > 20 else "medium"
-                })
+                if _killer_key not in seen_killer_keys:
+                    killer_patterns.append({
+                        "pattern_type": "zero_conversions",
+                        "parameter": param_name,
+                        "value": value_data["value"],
+                        "profit": round(profit, 2),
+                        "spend": round(spend, 2),
+                        "reason": f"0 конверсий при потере ${abs(profit):.2f}",
+                        "severity": "high" if spend > 20 else "medium"
+                    })
+                    seen_killer_keys.add(_killer_key)
             
             elif spend > 0:
                 roi = (profit / spend) * 100
                 spend_pct = (spend / total_spend * 100) if total_spend > 0 else 0
                 
                 if roi < -50 and spend > 15:
-                    killer_patterns.append({
-                        "pattern_type": "critical_roi",
-                        "parameter": param_name,
-                        "value": value_data["value"],
-                        "roi": round(roi, 1),
-                        "spend": round(spend, 2),
-                        "spend_percentage": round(spend_pct, 1),
-                        "reason": f"ROI {roi:.1f}% при spend ${spend:.2f}",
-                        "severity": "critical" if spend_pct > 15 else "high"
-                    })
+                    if _killer_key not in seen_killer_keys:
+                        killer_patterns.append({
+                            "pattern_type": "critical_roi",
+                            "parameter": param_name,
+                            "value": value_data["value"],
+                            "roi": round(roi, 1),
+                            "spend": round(spend, 2),
+                            "spend_percentage": round(spend_pct, 1),
+                            "reason": f"ROI {roi:.1f}% при spend ${spend:.2f}",
+                            "severity": "critical" if spend_pct > 15 else "high"
+                        })
+                        seen_killer_keys.add(_killer_key)
                 
                 if spend_pct > 10 and profit < -5:
-                    killer_patterns.append({
-                        "pattern_type": "budget_drain",
-                        "parameter": param_name,
-                        "value": value_data["value"],
-                        "spend_percentage": round(spend_pct, 1),
-                        "profit": round(profit, 2),
-                        "reason": f"{spend_pct:.1f}% бюджета слито (потеря ${abs(profit):.2f})",
-                        "severity": "high" if spend_pct > 15 else "medium"
-                    })
+                    if _killer_key not in seen_killer_keys:
+                        killer_patterns.append({
+                            "pattern_type": "budget_drain",
+                            "parameter": param_name,
+                            "value": value_data["value"],
+                            "spend_percentage": round(spend_pct, 1),
+                            "profit": round(profit, 2),
+                            "reason": f"{spend_pct:.1f}% бюджета слито (потеря ${abs(profit):.2f})",
+                            "severity": "high" if spend_pct > 15 else "medium"
+                        })
+                        seen_killer_keys.add(_killer_key)
     
     # Сортируем по severity и размеру потерь
     severity_order = {"critical": 1, "high": 2, "medium": 3, "low": 4}

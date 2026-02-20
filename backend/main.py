@@ -59,6 +59,11 @@ async def ai_search_gold():
 async def ai_company_analysis():
     with open("frontend/ai-company-analysis.html") as f: return f.read()
 
+# Redirect для обратной совместимости с расширением .html
+@app.get("/ai-company-analysis.html", response_class=HTMLResponse)
+async def ai_company_analysis_html():
+    with open("frontend/ai-company-analysis.html") as f: return f.read()
+
 @app.get("/ai-connect-models", response_class=HTMLResponse)
 async def ai_connect_models():
     with open("frontend/ai-connect-models.html") as f: return f.read()

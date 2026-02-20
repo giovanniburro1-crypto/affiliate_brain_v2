@@ -243,67 +243,57 @@
                     const paramCategories = analysisData.deep_analysis.parameter_category_summary;
                     
                     // Преобразуем объект в массив для сортировки
-                    // Фильтруем параметры: исключаем неинформативные
-                    const filteredParams = Object.entries(paramCategories)
+                    // ИНТЕЛЛЕКТУАЛЬНАЯ ФИЛЬТРАЦИЯ ПАРАМЕТРОВ согласно спецификации
+                    let filteredParams = Object.entries(paramCategories)
                         .filter(([paramName, paramData]) => {
-                            // Исключаем параметры, которые не несут информации:
-                            // 1. Слишком низкий impact_score (меньше 5%)
+                            // 1. Параметры с impact_score < 5% должны скрываться
                             if (Math.abs(paramData.impact_score || 0) < 5) return false;
                             
-                            // 2. Параметры, где все значения "(empty)" и трафик 100% (возможно нет данных)
-                            // Проверяем top_values - если все значения "(empty)", это может быть неинформативно
-                            const hasNonEmptyValues = paramData.top_values && paramData.top_values.some(val => 
-                                val.value && val.value !== "(empty)" && val.value !== "empty"
+                            // 2. Параметры, где все значения "(empty)" и трафик 100% - скрывать
+                            const topValues = paramData.top_values || [];
+                            const allEmpty = topValues.length > 0 && topValues.every(val => 
+                                !val.value || val.value === "(empty)" || val.value === "empty"
                             );
+                            if (allEmpty && (paramData.traffic_pct || 0) > 95) return false;
                             
-                            // 3. Параметры без конверсий и трафика
+                            // 3. Параметры без конверсий и с трафиком < 5% - скрывать
                             if ((paramData.total_conversions || 0) === 0 && (paramData.traffic_pct || 0) < 5) return false;
                             
-                            // 4. Параметры с одним значением и отрицательным profit (возможно общий слив)
-                            if (paramData.total_values === 1 && (paramData.total_profit || 0) < 0 && paramData.impact_score < -100) {
-                                // Это может быть общий слив кампании, показываем только самые критические
+                            // 4. Параметры с одним значением и отрицательным profit показывать только при impact_score > 50%
+                            if (paramData.total_values === 1 && (paramData.total_profit || 0) < 0) {
                                 return Math.abs(paramData.impact_score) > 50;
                             }
                             
-                            // Если есть непустые значения или параметр имеет значительное влияние, оставляем
-                            return hasNonEmptyValues || Math.abs(paramData.impact_score) > 15;
+                            // Параметр прошел все фильтры
+                            return true;
                         })
                         .sort(([, a], [, b]) => Math.abs(b.impact_score || 0) - Math.abs(a.impact_score || 0))
-                        .slice(0, 9); // Ограничиваем 9 карточками для лучшего отображения
-                    
-                    // Если после фильтрации мало параметров, добавляем наиболее влиятельные
-                    if (filteredParams.length < 4) {
-                        // Берем топ-6 по impact_score без фильтрации
-                        const topParams = Object.entries(paramCategories)
-                            .sort(([, a], [, b]) => Math.abs(b.impact_score || 0) - Math.abs(a.impact_score || 0))
-                            .slice(0, 6);
-                        
-                        // Объединяем, исключая дубликаты
-                        const paramMap = new Map([...filteredParams, ...topParams]);
-                        filteredParams = Array.from(paramMap);
-                    }
+                        .slice(0, 9); // Максимальное количество карточек: 9
                     
                     const sortedParams = filteredParams;
-                    
+
                     keyDriversCards = sortedParams.map(([paramName, paramData]) => {
                         const displayStyle = paramData.display_style || { color: 'gray', icon: '⏸️' };
                         const rec = paramData.recommendation || 'HOLD';
-                        const recColorClass = {
-                            'SCALE': 'text-green-400 border-green-500 bg-green-900/20',
-                            'OPTIMIZE': 'text-blue-400 border-blue-500 bg-blue-900/20',
-                            'FIX': 'text-red-400 border-red-500 bg-red-900/20',
-                            'TEST': 'text-yellow-400 border-yellow-500 bg-yellow-900/20',
-                            'HOLD': 'text-gray-400 border-gray-500 bg-gray-900/20'
-                        }[rec] || 'text-gray-400 border-gray-500 bg-gray-900/20';
-                        
+                        // Цветные бейджи для рекомендаций
+                        const recBadgeColor = {
+                            'SCALE': 'bg-green-900 text-green-300 border-green-700',
+                            'OPTIMIZE': 'bg-blue-900 text-blue-300 border-blue-700',
+                            'FIX': 'bg-red-900 text-red-300 border-red-700',
+                            'TEST': 'bg-yellow-900 text-yellow-300 border-yellow-700',
+                            'HOLD': 'bg-gray-900 text-gray-300 border-gray-700'
+                        }[rec] || 'bg-gray-900 text-gray-300 border-gray-700';
+
                         const isPositive = paramData.total_profit >= 0;
                         const borderClass = isPositive ? 'border-l-4 border-green-500' : 'border-l-4 border-red-500';
                         const bgClass = isPositive ? 'bg-gradient-to-r from-green-900/10 to-transparent' : 'bg-gradient-to-r from-red-900/10 to-transparent';
-                        
-                        // Форматируем топ значения
+
+                        // Форматируем топ значения (топ-3)
                         let topValuesHtml = '';
-                        if (paramData.top_values && paramData.top_values.length > 0) {
-                            topValuesHtml = paramData.top_values.map(val => {
+                        const topValues = paramData.top_values || [];
+                        if (topValues.length > 0) {
+                            const limitedValues = topValues.slice(0, 3); // Только топ-3
+                            topValuesHtml = limitedValues.map(val => {
                                 const valIsPositive = val.profit >= 0;
                                 return `
                                     <div class="flex justify-between items-center text-xs py-0.5 border-b border-dashed border-gray-800 last:border-0">
@@ -315,38 +305,40 @@
                                 `;
                             }).join('');
                         }
-                        
+
                         return `
-                            <div class="card driver-card ${borderClass} ${bgClass}">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-lg">${paramData.icon || '⚫'}</span>
-                                        <div>
-                                            <div class="font-bold text-white text-sm">${escapeHtml(paramName.toUpperCase())}</div>
-                                            <div class="text-[10px] text-zinc-400">${paramData.category || 'other'} • ${paramData.total_values || 0} значений</div>
+                            <div class="card driver-card ${borderClass} ${bgClass} p-0 overflow-hidden">
+                                <div class="p-3">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg">${paramData.icon || '⚫'}</span>
+                                            <div>
+                                                <div class="font-bold text-white text-sm uppercase">${escapeHtml(paramName)}</div>
+                                                <div class="text-[10px] text-zinc-400">${paramData.category || 'other'} • ${paramData.total_values || 0} значений</div>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-xs font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}">${isPositive ? '+' : ''}$${Math.abs(paramData.total_profit || 0).toFixed(0)}</div>
+                                            <div class="text-[10px] px-2 py-0.5 mt-1 rounded ${recBadgeColor} border">${rec}</div>
                                         </div>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-xs font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}">${isPositive ? '+' : ''}$${paramData.total_profit}</div>
-                                        <div class="text-[10px] px-1.5 py-0.5 mt-1 rounded ${recColorClass}">${displayStyle.icon || ''} ${rec}</div>
+
+                                    <div class="mb-3">
+                                        <div class="text-xs text-zinc-300 leading-relaxed">${paramData.compact_metrics || ''}</div>
                                     </div>
+
+                                    ${topValuesHtml ? `
+                                    <div class="mt-2 pt-2 border-t border-gray-800">
+                                        <div class="text-[10px] text-zinc-500 mb-1">Топ значения:</div>
+                                        ${topValuesHtml}
+                                    </div>
+                                    ` : ''}
                                 </div>
                                 
-                                <div class="mb-3">
-                                    <div class="text-xs text-zinc-300 leading-relaxed">${paramData.compact_metrics || ''}</div>
-                                </div>
-                                
-                                ${topValuesHtml ? `
-                                <div class="mt-2 pt-2 border-t border-gray-800">
-                                    <div class="text-[10px] text-zinc-500 mb-1">Топ значения:</div>
-                                    ${topValuesHtml}
-                                </div>
-                                ` : ''}
-                                
-                                <div class="mt-2 pt-2 border-t border-gray-800 text-[10px] text-zinc-500 flex justify-between">
-                                    <span>Влияние: <strong>${paramData.impact_score}%</strong></span>
-                                    <span>Конверсии: <strong>${paramData.total_conversions}</strong></span>
-                                    <span>Трафик: <strong>${paramData.traffic_pct}%</strong></span>
+                                <div class="mt-0 pt-2 border-t border-gray-800 text-[10px] text-zinc-500 flex justify-between px-3 pb-2">
+                                    <span>Влияние: <strong>${paramData.impact_score || 0}%</strong></span>
+                                    <span>Конверсии: <strong>${paramData.total_conversions || 0}</strong></span>
+                                    <span>Трафик: <strong>${paramData.traffic_pct || 0}%</strong></span>
                                 </div>
                             </div>
                         `;
@@ -518,6 +510,45 @@
                     '<span class="text-[10px] font-normal text-zinc-500 bg-purple-900 px-2 py-0.5 rounded border border-purple-800">Анализ 26 параметров + паттерны</span>' :
                     '<span class="text-[10px] font-normal text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">Влияние на профит > $10</span>';
 
+                // Получаем сводку глубокого анализа если она есть
+                const deepAnalysisSummary = analysisData.deep_analysis?.summary || {};
+                
+                // Создаем фильтры по категориям для Key Drivers (только если есть параметры по категориям)
+                let categoryFiltersHtml = '';
+                if (hasParameterCategories) {
+                    const categories = {};
+                    Object.entries(paramCategories).forEach(([paramName, paramData]) => {
+                        const cat = paramData.category || 'other';
+                        categories[cat] = (categories[cat] || 0) + 1;
+                    });
+                    
+                    const categoryList = Object.entries(categories).map(([cat, count]) => ({
+                        cat,
+                        count,
+                        icon: {
+                            'traffic': '🔵',
+                            'device': '🟢',
+                            'demographics': '🟣',
+                            'content': '🟠',
+                            'technical': '⚙️',
+                            'other': '⚫'
+                        }[cat] || '⚫'
+                    }));
+                    
+                    categoryFiltersHtml = `
+                        <div class="flex flex-wrap gap-2 mb-4" id="categoryFilters">
+                            <button class="category-filter active px-3 py-1.5 text-xs rounded-lg bg-purple-700 text-white" data-category="all">
+                                Все (${Object.keys(paramCategories).length})
+                            </button>
+                            ${categoryList.map(({cat, count, icon}) => `
+                                <button class="category-filter px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700" data-category="${cat}">
+                                    ${icon} ${cat} (${count})
+                                </button>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
                 div.innerHTML = `
                     <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
                         <div>
@@ -546,18 +577,59 @@
                     </div>
 
                     <section class="mb-4">
-                        <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                            ${keyDriversTitle}
-                            ${keyDriversSubtitle}
-                        </h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                    ${keyDriversTitle}
+                                    ${keyDriversSubtitle}
+                                </h3>
+                            </div>
+                            ${hasParameterCategories ? `
+                            <div class="text-xs text-zinc-500">
+                                <span class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-green-500"></div> Положительные</span>
+                                <span class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-red-500"></div> Отрицательные</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        ${categoryFiltersHtml}
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" id="keyDriversContainer">
                             ${keyDriversCards || '<p class="text-zinc-500 text-sm col-span-full">Мало данных для Key Drivers. Выберите кампанию с трафиком ≥5 кликов на сегмент.</p>'}
                         </div>
+                        
                         ${hasDeepAnalysis ? `
-                        <div class="mt-3 text-xs text-zinc-500 flex items-center gap-2">
+                        <div class="mt-4 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-xs font-semibold text-zinc-400">📊 Сводка анализа:</span>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                <div class="p-2 rounded bg-zinc-800/50">
+                                    <div class="text-zinc-500">Всего параметров</div>
+                                    <div class="font-bold text-white">${deepAnalysisSummary.total_parameters || Object.keys(paramCategories || {}).length || 0}</div>
+                                </div>
+                                <div class="p-2 rounded ${(deepAnalysisSummary.killer_patterns_count || 0) > 0 ? 'bg-red-900/30' : 'bg-zinc-800/50'}">
+                                    <div class="text-zinc-500">Паттерны-убийцы</div>
+                                    <div class="font-bold ${(deepAnalysisSummary.killer_patterns_count || 0) > 0 ? 'text-red-400' : 'text-white'}">${deepAnalysisSummary.killer_patterns_count || 0}</div>
+                                </div>
+                                <div class="p-2 rounded ${(deepAnalysisSummary.winning_combos_count || 0) > 0 ? 'bg-green-900/30' : 'bg-zinc-800/50'}">
+                                    <div class="text-zinc-500">Winning combos</div>
+                                    <div class="font-bold ${(deepAnalysisSummary.winning_combos_count || 0) > 0 ? 'text-green-400' : 'text-white'}">${deepAnalysisSummary.winning_combos_count || 0}</div>
+                                </div>
+                                <div class="p-2 rounded ${(deepAnalysisSummary.high_impact_params || 0) > 0 ? 'bg-blue-900/30' : 'bg-zinc-800/50'}">
+                                    <div class="text-zinc-500">Влиятельные параметры</div>
+                                    <div class="font-bold ${(deepAnalysisSummary.high_impact_params || 0) > 0 ? 'text-blue-400' : 'text-white'}">${deepAnalysisSummary.high_impact_params || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${hasDeepAnalysis ? `
+                        <div class="mt-3 text-xs text-zinc-500 flex flex-wrap items-center gap-2">
                             <span class="flex items-center gap-1"><div class="w-2 h-2 bg-red-500 rounded"></div> Паттерны-убийцы</span>
                             <span class="flex items-center gap-1"><div class="w-2 h-2 bg-green-500 rounded"></div> Winning combos</span>
                             <span class="flex items-center gap-1"><div class="w-2 h-2 bg-blue-500 rounded"></div> Влиятельные параметры</span>
+                            ${hasParameterCategories ? '<span class="flex items-center gap-1"><div class="w-2 h-2 bg-purple-500 rounded"></div> Категории параметров</span>' : ''}
                         </div>
                         ` : ''}
                     </section>
@@ -623,6 +695,11 @@
                     </details>
                 `;
                 lucide.createIcons();
+                
+                // Добавляем обработчики для фильтров категорий
+                if (hasParameterCategories) {
+                    setupCategoryFilters();
+                }
             } finally {
                 document.getElementById('loadBtn').disabled = false;
                 document.getElementById('loadBtn').textContent = 'Analyze';
@@ -713,6 +790,56 @@
             } else {
                 alert(data.error || 'Ошибка');
             }
+        }
+
+        function setupCategoryFilters() {
+            const container = document.getElementById('keyDriversContainer');
+            const filterButtons = document.querySelectorAll('.category-filter');
+            const allCards = container.querySelectorAll('.driver-card');
+            
+            // Сохраняем исходное состояние карточек в data-атрибутах
+            allCards.forEach(card => {
+                const paramName = card.querySelector('.font-bold.text-white.text-sm')?.textContent?.toLowerCase() || '';
+                const paramData = currentAnalysisData?.deep_analysis?.parameter_category_summary?.[paramName];
+                if (paramData) {
+                    card.dataset.category = paramData.category || 'other';
+                }
+            });
+
+            filterButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Сбрасываем активное состояние у всех кнопок
+                    filterButtons.forEach(btn => {
+                        btn.classList.remove('active', 'bg-purple-700', 'text-white');
+                        btn.classList.add('bg-zinc-800', 'text-zinc-300');
+                    });
+                    
+                    // Устанавливаем активное состояние для текущей кнопки
+                    this.classList.remove('bg-zinc-800', 'text-zinc-300');
+                    this.classList.add('active', 'bg-purple-700', 'text-white');
+                    
+                    const selectedCategory = this.dataset.category;
+                    
+                    // Фильтруем карточки
+                    allCards.forEach(card => {
+                        if (selectedCategory === 'all' || card.dataset.category === selectedCategory) {
+                            card.style.display = 'block';
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    });
+                    
+                    // Показываем сообщение если нет карточек
+                    const visibleCards = Array.from(allCards).filter(card => card.style.display !== 'none');
+                    const noDataMessage = container.querySelector('.text-zinc-500.text-sm.col-span-full');
+                    
+                    if (visibleCards.length === 0 && !noDataMessage) {
+                        container.innerHTML = '<p class="text-zinc-500 text-sm col-span-full">Нет параметров в этой категории</p>';
+                    } else if (visibleCards.length > 0 && noDataMessage) {
+                        noDataMessage.remove();
+                    }
+                });
+            });
         }
 
         setDefaultCustomDates();

@@ -294,7 +294,7 @@ def get_campaign_breakdown_data(
             "conversions": int(r[6] or 0),
             "clicks": int(r[7] or 0),
             "profit": int(r[5] or 0) - int(r[4] or 0),
-            "roi": round((int(r[5] or 0) - int(r[4] or 0)) / int(r[4] or 1) * 100) if r[4] else 0,
+            "roi": round((int(r[5] or 0) - int(r[4] or 0)) / int(r[4] or 1) * 100) if int(r[4] or 0) != 0 else 0,
         }
         for r in path_offer_combo
     ]
