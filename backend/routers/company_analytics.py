@@ -141,12 +141,19 @@ async def get_company_analysis(
             "prioritized_recommendations": prioritized_recommendations,
             "parameter_category_summary": parameter_category_summary,
             "summary": {
+                "total_parameters": deep_analysis.get("total_parameters_analyzed", 0),
                 "killer_patterns_count": len(deep_analysis.get("killer_patterns", [])),
                 "winning_combos_count": len(deep_analysis.get("winning_combos", [])),
                 "high_impact_params": sum(
                     1 for impact in deep_analysis.get("parameter_impact", {}).values()
                     if abs(impact.get("impact_score", 0)) > 15
-                )
+                ),
+                "winning_combos_profit": round(sum(
+                    c.get("profit", 0) for c in deep_analysis.get("winning_combos", [])
+                ), 2),
+                "killer_patterns_loss": round(sum(
+                    abs(p.get("profit", 0)) for p in deep_analysis.get("killer_patterns", [])
+                ), 2)
             }
         }
     }

@@ -616,26 +616,40 @@
                         
                         ${hasDeepAnalysis ? `
                         <div class="mt-4 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
-                            <div class="flex items-center gap-2 mb-2">
-                                <span class="text-xs font-semibold text-zinc-400">📊 Сводка анализа:</span>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold text-zinc-400">📊 Сводка анализа</span>
+                                <span class="text-[10px] text-zinc-600">${deepAnalysisSummary.total_parameters || Object.keys(paramCategories || {}).length || 0} параметров проанализировано</span>
                             </div>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                                <div class="p-2 rounded bg-zinc-800/50">
-                                    <div class="text-zinc-500">Всего параметров</div>
-                                    <div class="font-bold text-white">${deepAnalysisSummary.total_parameters || Object.keys(paramCategories || {}).length || 0}</div>
+                            <div class="grid grid-cols-3 gap-2 text-xs">
+
+                                <div class="p-3 rounded border ${(deepAnalysisSummary.killer_patterns_count || 0) > 0 ? 'bg-red-900/20 border-red-800/50' : 'bg-zinc-800/60 border-zinc-700/50'}">
+                                    <div class="text-[10px] text-zinc-500 mb-2">🛑 СТОП-лист</div>
+                                    ${(deepAnalysisSummary.killer_patterns_count || 0) > 0 ? `
+                                        <div class="text-[11px] text-red-400 font-bold mb-1">${deepAnalysisSummary.killer_patterns_count} сегмент(а) сливают бюджет</div>
+                                        <div class="text-[11px] text-zinc-400">Отключи → сэкономишь <span class="text-red-400 font-bold">$${(deepAnalysisSummary.killer_patterns_loss || 0).toFixed(0)}</span></div>
+                                    ` : `
+                                        <div class="text-[11px] text-green-400 font-bold mb-1">Всё чисто</div>
+                                        <div class="text-[11px] text-zinc-500">Явных сливов бюджета нет</div>
+                                    `}
                                 </div>
-                                <div class="p-2 rounded ${(deepAnalysisSummary.killer_patterns_count || 0) > 0 ? 'bg-red-900/30' : 'bg-zinc-800/50'}">
-                                    <div class="text-zinc-500">Паттерны-убийцы</div>
-                                    <div class="font-bold ${(deepAnalysisSummary.killer_patterns_count || 0) > 0 ? 'text-red-400' : 'text-white'}">${deepAnalysisSummary.killer_patterns_count || 0}</div>
+
+                                <div class="p-3 rounded border ${(deepAnalysisSummary.winning_combos_count || 0) > 0 ? 'bg-green-900/20 border-green-800/50' : 'bg-zinc-800/60 border-zinc-700/50'}">
+                                    <div class="text-[10px] text-zinc-500 mb-2">🚀 Скейл</div>
+                                    ${(deepAnalysisSummary.winning_combos_count || 0) > 0 ? `
+                                        <div class="text-[11px] text-green-400 font-bold mb-1">${deepAnalysisSummary.winning_combos_count} сегмент(а) готовы к росту</div>
+                                        <div class="text-[11px] text-zinc-400">Увеличь бюджет → +<span class="text-green-400 font-bold">$${(deepAnalysisSummary.winning_combos_profit || 0).toFixed(0)}</span> потенциал</div>
+                                    ` : `
+                                        <div class="text-[11px] text-zinc-400 font-bold mb-1">Нет явных кандидатов</div>
+                                        <div class="text-[11px] text-zinc-500">ROI/EPC/CPA не достигли порога</div>
+                                    `}
                                 </div>
-                                <div class="p-2 rounded ${(deepAnalysisSummary.winning_combos_count || 0) > 0 ? 'bg-green-900/30' : 'bg-zinc-800/50'}">
-                                    <div class="text-zinc-500">Winning combos</div>
-                                    <div class="font-bold ${(deepAnalysisSummary.winning_combos_count || 0) > 0 ? 'text-green-400' : 'text-white'}">${deepAnalysisSummary.winning_combos_count || 0}</div>
+
+                                <div class="p-3 rounded border bg-zinc-800/60 border-zinc-700/50">
+                                    <div class="text-[10px] text-zinc-500 mb-2">📋 Покрытие</div>
+                                    <div class="text-[11px] text-zinc-300 font-bold mb-1">${deepAnalysisSummary.total_parameters || Object.keys(paramCategories || {}).length || 0} параметров</div>
+                                    <div class="text-[11px] text-zinc-500">${filteredParams.length} карточек показано · ${Math.max(0, (deepAnalysisSummary.total_parameters || 0) - filteredParams.length)} скрыто (impact &lt; 5%)</div>
                                 </div>
-                                <div class="p-2 rounded ${(deepAnalysisSummary.high_impact_params || 0) > 0 ? 'bg-blue-900/30' : 'bg-zinc-800/50'}">
-                                    <div class="text-zinc-500">Влиятельные параметры</div>
-                                    <div class="font-bold ${(deepAnalysisSummary.high_impact_params || 0) > 0 ? 'text-blue-400' : 'text-white'}">${deepAnalysisSummary.high_impact_params || 0}</div>
-                                </div>
+
                             </div>
                         </div>
                         ` : ''}
