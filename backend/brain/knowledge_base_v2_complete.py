@@ -541,7 +541,7 @@ class KnowledgeBaseV2:
                     # Пробуем другой метод
                     offer_epc = campaign_data.get('epc', 0.1)
                     current_cpc = campaign_data.get('cpc', 0.05)
-                    result_str = instance.epc_cpc_deviation_rule(offer_epc, current_cpc)
+                    result_str = instance.epc_cpc_deviation_rule(offer_epc, current_cpc, current_budget)
                     result = {"action": result_str, "reason": f"EPC-CPC анализ: {result_str}"}
                 else:
                     result = {"action": "HOLD", "reason": f"Волатильность: {campaign_data.get('volatility', 0)}%"}
@@ -1027,10 +1027,12 @@ class KnowledgeBaseV2:
         decision = self.get_final_decision(campaign_data)
         return decision["final_verdict"]
         
-    def analyze_campaign(self, campaign_id: Optional[str] = None, roi: Optional[float] = None, 
-                        profit: Optional[float] = None, spend: Optional[float] = None, 
-                        clicks: Optional[int] = None, conversions: Optional[int] = None, 
-                        volatility: Optional[float] = None, daily_impact: Optional[List[float]] = None) -> Dict[str, Any]:
+    def analyze_campaign(self, campaign_id: Optional[str] = None, roi: Optional[float] = None,
+                        profit: Optional[float] = None, spend: Optional[float] = None,
+                        clicks: Optional[int] = None, conversions: Optional[int] = None,
+                        volatility: Optional[float] = None, daily_impact: Optional[List[float]] = None,
+                        payout: Optional[float] = None, epc: Optional[float] = None,
+                        cpc: Optional[float] = None) -> Dict[str, Any]:
         """
         Анализ кампании для обратной совместимости с вызовами в Top5ServiceV2 и LearningService.
         Преобразует позиционные параметры в словарь и вызывает analyze_campaign_simple.
@@ -1043,6 +1045,9 @@ class KnowledgeBaseV2:
             "clicks": clicks or 0,
             "conversions": conversions or 0,
             "volatility": volatility or 0.0,
-            "daily_impact": daily_impact or []
+            "daily_impact": daily_impact or [],
+            "payout": payout or 0.0,
+            "epc": epc or 0.0,
+            "cpc": cpc or 0.0
         }
         return self.analyze_campaign_simple(campaign_data)

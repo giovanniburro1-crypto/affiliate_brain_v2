@@ -2,12 +2,21 @@
   "default": [
     "os",
     "device_type",
+    "token1",
     "token2",
+    "token3",
+    "token4",
+    "token5",
+    "token6",
+    "token7",
+    "token8",
+    "token9",
+    "token10",
     "offer",
     "lander_id",
     "country"
   ],
-  "Approach X": ["os", "device_type", "token2", "offer", "lander_id", "country"],
-  "Affmy": ["os", "device_type", "token2", "offer", "lander_id", "country"],
-  "Traffichunt": ["os", "device_type", "token2", "offer", "lander_id", "country"]
+  "Approach X": ["os", "device_type", "token1", "token2", "token3", "token4", "token5", "token6", "token7", "token8", "token9", "token10", "offer", "lander_id", "country"],
+  "Affmy": ["os", "device_type", "token1", "token2", "token3", "token4", "token5", "token6", "token7", "token8", "token9", "token10", "offer", "lander_id", "country"],
+  "Traffichunt": ["os", "device_type", "token1", "token2", "token3", "token4", "token5", "token6", "token7", "token8", "token9", "token10", "offer", "lander_id", "country"]
 }

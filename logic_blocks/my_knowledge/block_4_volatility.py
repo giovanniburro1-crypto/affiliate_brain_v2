@@ -23,21 +23,32 @@ class AffiliateVolatilityPhase4:
             }
         return {"action": "Hold Budget", "reason": "ROI нестабилен и низок."}
 
-    def epc_cpc_deviation_rule(self, offer_epc, current_cpc):
+    def epc_cpc_deviation_rule(self, offer_epc, current_cpc, current_budget=0):
         """
-        ПРАВИЛО ОТКЛОНЕНИЯ (DEVIATION RULE 5-8%):
-        Допустимый убыток оффера перед отключением.
+        ПРАВИЛО ОТКЛОНЕНИЯ (DEVIATION RULE):
+        Допустимый убыток оффера перед отключением с учетом текущего бюджета.
         """
         if current_cpc == 0: return "Unknown CPC"
         
         loss_percent = (current_cpc - offer_epc) / current_cpc
-
-        if loss_percent > 0.08:
-            return "KILL OFFER (Critical Deviation > 8%)"
-        elif loss_percent > 0.05:
-            return "WARNING (Deviation 5-8%. Reduce weight)"
+        
+        # Динамические пороги отклонения в зависимости от бюджета
+        if current_budget < 50:
+            critical_limit = 0.15 # 15% на микро-бюджете (стадия разгона/теста)
+            warning_limit = 0.10
+        elif current_budget > 500:
+            critical_limit = 0.05 # 5% на большом спенде (жесткий контроль)
+            warning_limit = 0.03
         else:
-            return "ACCEPTABLE (Micro-loss < 5% or Profit. Keep working)"
+            critical_limit = 0.08 # Стандартные 8%
+            warning_limit = 0.05
+
+        if loss_percent > critical_limit:
+            return f"KILL OFFER (Critical Deviation > {critical_limit*100}%)"
+        elif loss_percent > warning_limit:
+            return f"WARNING (Deviation {warning_limit*100}-{critical_limit*100}%. Reduce weight)"
+        else:
+            return "ACCEPTABLE (Micro-loss or Profit. Keep working)"
 
     def probability_concentration_rule(self, current_offer_count):
         """

@@ -21,7 +21,9 @@ SEGMENT_MIN_CLICKS = 1  # Было 5 — при разрозненном тра�
 
 # Разрешённые колонки для сегментации (защита от SQL injection)
 _ALLOWED_SEGMENT_COLS = frozenset(
-    ["os", "device_type", "token2", "offer", "lander_id", "country", "traffic_source"]
+    ["os", "device_type", "token1", "token2", "token3", "token4", "token5", 
+     "token6", "token7", "token8", "token9", "token10", "offer", "lander_id", 
+     "country", "traffic_source"]
 )
 KILLER_SPEND_MULTIPLIER = 2.0
 ZACEP_MIN_CONVERSIONS = 3
@@ -84,10 +86,10 @@ def _calc_trend(daily_impact: List[float]) -> str:
 
 def _calc_instability_index(daily_data: List[Dict[str, float]]) -> float:
     """
-    Рассчитывает волатильность (0-100) по простым правилам:
-    1. День в минусе (impact < 0) = волатильный
-    2. Скачок ROI > 20% между соседними днями = волатильный
-    3. Волатильность = (волатильные_дни / общее_дни) * 100
+    Рассчитывает волатильность (0-100) по правилу "Только просадки":
+    Мы не наказываем за рост ROI (даже сильные скачки вверх).
+    Штраф (волатильный день) дается только если: Спенд > $15 И ROI < 10%.
+    Это защищает кампании, куда лиды долетают пачками.
     """
     if len(daily_data) < 2:
         return 0.0
@@ -95,19 +97,14 @@ def _calc_instability_index(daily_data: List[Dict[str, float]]) -> float:
     volatile_days = 0
     total_days = len(daily_data)
     
-    for i, day in enumerate(daily_data):
-        # Правило 1: день в минусе
-        if day.get('impact', 0) < 0:
+    for day in daily_data:
+        spend = day.get('cost', 0)
+        roi = day.get('roi', 0)
+        
+        # Считаем день нестабильным только если потратили больше $15 и ROI меньше 10%
+        if spend > 15 and roi < 10:
             volatile_days += 1
-            continue
             
-        # Правило 2: скачок ROI > 20% между соседними днями
-        if i > 0:
-            prev_roi = daily_data[i-1].get('roi', 0)
-            curr_roi = day.get('roi', 0)
-            if abs(curr_roi - prev_roi) > 20:  # скачок > 20%
-                volatile_days += 1
-    
     return (volatile_days / total_days) * 100
 
 
@@ -669,6 +666,11 @@ class Top5ServiceV2:
             confidence = round(confidence, 1)
             # Получаем голоса блоков
             block_votes = []
+            
+            payout = (revenue / conversions) if conversions > 0 else 0.0
+            epc = (revenue / clicks) if clicks > 0 else 0.0
+            cpc = (spend / clicks) if clicks > 0 else 0.0
+            
             try:
                 analysis_result = self.brain.analyze_campaign(
                     campaign_id=cid,
@@ -678,7 +680,10 @@ class Top5ServiceV2:
                     clicks=clicks,
                     conversions=conversions,
                     volatility=volatility,
-                    daily_impact=daily_impact
+                    daily_impact=daily_impact,
+                    payout=payout,
+                    epc=epc,
+                    cpc=cpc
                 )
                 if analysis_result and "block_votes" in analysis_result:
                     block_votes = analysis_result["block_votes"]
@@ -819,6 +824,11 @@ class Top5ServiceV2:
         confidence = round(confidence, 1)
         # Получаем голоса блоков
         block_votes = []
+        
+        payout = (revenue / conversions) if conversions > 0 else 0.0
+        epc = (revenue / clicks) if clicks > 0 else 0.0
+        cpc = (spend / clicks) if clicks > 0 else 0.0
+        
         try:
             analysis_result = self.brain.analyze_campaign(
                 campaign_id=campaign_id,
@@ -828,7 +838,10 @@ class Top5ServiceV2:
                 clicks=clicks,
                 conversions=conversions,
                 volatility=volatility,
-                daily_impact=daily_impact
+                daily_impact=daily_impact,
+                payout=payout,
+                epc=epc,
+                cpc=cpc
             )
             if analysis_result and "block_votes" in analysis_result:
                 block_votes = analysis_result["block_votes"]
