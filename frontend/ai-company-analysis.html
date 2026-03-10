@@ -119,6 +119,10 @@
             const el = document.getElementById('customDateRange');
             if (p === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); setDefaultCustomDates(); }
             else { el.classList.add('hidden'); el.classList.remove('flex'); }
+            
+            // Reload sources when the period changes
+            loadSources();
+            document.getElementById('campaignSelect').innerHTML = '<option value="">Campaign...</option>';
         }
         function getPeriodParams() {
             if (currentPeriod === 'custom') {
@@ -138,7 +142,9 @@
         }
 
         async function loadSources() {
-            const res = await fetch('/api/metrics/sources', { cache: 'no-store' });
+            const periodParam = getPeriodParams();
+            const listPeriod = (currentPeriod === 'custom') ? ('date_from=' + encodeURIComponent(document.getElementById('customDateFrom').value) + '&date_to=' + encodeURIComponent(document.getElementById('customDateTo').value)) : ('period=' + Math.max(getPeriodNum(), 7));
+            const res = await fetch(`/api/metrics/sources?${listPeriod}`, { cache: 'no-store' });
             const data = await res.json();
             const sel = document.getElementById('sourceSelect');
             sel.innerHTML = '<option value="">Source...</option>' + (data.sources || []).map(s => `<option value="${s}">${s}</option>`).join('');
