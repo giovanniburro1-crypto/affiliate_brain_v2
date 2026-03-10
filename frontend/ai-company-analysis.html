@@ -156,8 +156,7 @@
         async function loadCampaigns() {
             const source = document.getElementById('sourceSelect').value;
             if (!source) return;
-            const periodParam = getPeriodParams();
-            const listPeriod = (currentPeriod === 'custom') ? ('date_from=' + encodeURIComponent(document.getElementById('customDateFrom').value) + '&date_to=' + encodeURIComponent(document.getElementById('customDateTo').value)) : ('period=' + Math.max(getPeriodNum(), 90));
+            const listPeriod = (currentPeriod === 'custom') ? ('date_from=' + encodeURIComponent(document.getElementById('customDateFrom').value) + '&date_to=' + encodeURIComponent(document.getElementById('customDateTo').value)) : ('period=' + getPeriodNum());
             const res = await fetch(`/api/metrics/campaigns?source=${encodeURIComponent(source)}&min_cost=20&${listPeriod}`, { cache: 'no-store' });
             const data = await res.json();
             const sel = document.getElementById('campaignSelect');
