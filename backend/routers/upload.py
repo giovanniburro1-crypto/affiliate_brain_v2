@@ -148,37 +148,57 @@ def _build_traffic_rename_map(df):
             used_canonical.add('conversions')
     return rename
 
+from typing import List
+
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_files(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
     start = time.time()
     stats = {'total': 0, 'inserted': 0, 'bots': 0, 'matched': 0, 'orphans': 0, 'errors': []}
     try:
-        content = await file.read()
-        filename = file.filename.lower()
-        # #region agent log
-        try:
-            with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                _lf.write('{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"' + str(filename).replace('"', '') + '"},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-        except Exception: pass
-        # #endregion
-        if 'sale' in filename:
-            df = _read_sales_file(content)
-            _process_sales(df, db, stats)
-        else:
-            df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-            original_columns = list(df.columns)
-            rename_map = _build_traffic_rename_map(df)
-            df = df.rename(columns=rename_map)
+        for file in files:
+            content = await file.read()
+            filename = file.filename.lower()
             # #region agent log
             try:
                 with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                    _lf.write('{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":' + str("click_id" in list(rename_map.values()) or any("click" in str(c).lower() for c in original_columns)).lower() + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
+                    _lf.write('{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"' + str(filename).replace('"', '') + '"},"timestamp":' + str(int(time.time()*1000)) + '}\n')
             except Exception: pass
             # #endregion
-            _process_traffic(df, db, stats, original_columns=original_columns, rename_map=rename_map)
+            if 'sale' in filename:
+                df = _read_sales_file(content)
+                _process_sales(df, db, stats)
+            else:
+                try:
+                    df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+                except Exception:
+                    # Fallback to CSV if it's not a valid xlsx archive (e.g. user exported as CSV/XML)
+                    try:
+                        df = pd.read_csv(io.BytesIO(content))
+                    except Exception as csv_err:
+                        import traceback
+                        with open("/tmp/upload_err.log", "w") as _err:
+                            _err.write(traceback.format_exc())
+                        raise ValueError(f"Failed to read file {filename} as both Excel and CSV. Error: {str(csv_err)}")
+                
+                original_columns = list(df.columns)
+                rename_map = _build_traffic_rename_map(df)
+                df = df.rename(columns=rename_map)
+                # Deduplicate columns: if mapping created duplicates, keep only the first one to prevent Series errors later
+                df = df.loc[:, ~df.columns.duplicated()]
+                # #region agent log
+                try:
+                    with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
+                        _lf.write('{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":' + str("click_id" in list(rename_map.values()) or any("click" in str(c).lower() for c in original_columns)).lower() + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
+                except Exception: pass
+                # #endregion
+                _process_traffic(df, db, stats, original_columns=original_columns, rename_map=rename_map)
+                
         stats['time'] = round(time.time() - start, 2)
         return {"success": True, "stats": stats}
     except Exception as e:
+        import traceback
+        with open("/tmp/upload_err.log", "w") as _err:
+            _err.write(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 def _process_monetisation_rows(db, stats, monetisation_rows):
@@ -376,8 +396,16 @@ def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
             token9=str(row.get('token9', '')) if pd.notna(row.get('token9')) else None,
             token10=str(row.get('token10', '')) if pd.notna(row.get('token10')) else None,
             traffic_source=str(row.get('traffic_source', 'Unknown'))[:255],
+            path=str(row.get('path', ''))[:255] if pd.notna(row.get('path')) else None,
+            rule=str(row.get('rule', ''))[:255] if pd.notna(row.get('rule')) else None,
+            offer=str(row.get('offer', ''))[:255] if pd.notna(row.get('offer')) else None,
+            lander_id=str(row.get('lander_id', ''))[:100] if pd.notna(row.get('lander_id')) else None,
             os=os_val,
             device_type=device_val,
+            os_version=str(row.get('os_version', ''))[:50] if pd.notna(row.get('os_version')) else None,
+            browser_name=str(row.get('browser_name', ''))[:100] if pd.notna(row.get('browser_name')) else None,
+            country=str(row.get('country', ''))[:10] if pd.notna(row.get('country')) else None,
+            language=str(row.get('language', ''))[:20] if pd.notna(row.get('language')) else None,
             cost=float(row.get('cost', 0) or 0), revenue=revenue,
             conversions=conversions
         ))

@@ -1,0 +1,130 @@
+{
+    "default": {
+        "parameter_weights": {
+            "token1": 1,
+            "token2": 1,
+            "token3": 1,
+            "token4": 2,
+            "token5": 2,
+            "token6": 0,
+            "token7": 0,
+            "token8": 0,
+            "token9": 0,
+            "token10": 0,
+            "offer": 1,
+            "lander_id": 1,
+            "os": 2,
+            "device_type": 2,
+            "browser_name": 0,
+            "country": 2,
+            "language": 2,
+            "rule": 2,
+            "path": 2,
+            "campaign": 0,
+            "traffic_source": 0
+        },
+        "thresholds": {
+            "scale_min_roi": 20,
+            "scale_min_conversions": 3,
+            "scale_min_profit": 5,
+            "kill_min_spend": 20,
+            "kill_max_roi": -40
+        }
+    },
+    "affmy (adness 4  ivan)": {
+        "parameter_weights": {
+            "token1": 1,
+            "token2": 0,
+            "token3": 2,
+            "token4": 1,
+            "token5": 0,
+            "token6": 0,
+            "token7": 0,
+            "token8": 0,
+            "token9": 0,
+            "token10": 0,
+            "offer": 1,
+            "lander_id": 1,
+            "os": 2,
+            "device_type": 2,
+            "browser_name": 0,
+            "country": 0,
+            "language": 0,
+            "rule": 0,
+            "path": 0,
+            "campaign": 0,
+            "traffic_source": 0
+        },
+        "thresholds": {
+            "scale_min_roi": 20.0,
+            "scale_min_profit": 15.0,
+            "scale_min_conversions": 3.0,
+            "kill_min_spend": 20.0,
+            "kill_max_roi": -10.0
+        }
+    },
+    "approach x": {
+        "parameter_weights": {
+            "token1": 1,
+            "token2": 1,
+            "token3": 0,
+            "token4": 0,
+            "token5": 0,
+            "token6": 0,
+            "token7": 0,
+            "token8": 0,
+            "token9": 0,
+            "token10": 0,
+            "offer": 1,
+            "lander_id": 1,
+            "os": 2,
+            "device_type": 2,
+            "browser_name": 0,
+            "country": 0,
+            "language": 0,
+            "rule": 0,
+            "path": 0,
+            "campaign": 0,
+            "traffic_source": 0
+        },
+        "thresholds": {
+            "scale_min_roi": 20.0,
+            "scale_min_profit": 15.0,
+            "scale_min_conversions": 3.0,
+            "kill_min_spend": 20.0,
+            "kill_max_roi": -10.0
+        }
+    },
+    "traffichunt": {
+        "parameter_weights": {
+            "token1": 1,
+            "token2": 2,
+            "token3": 0,
+            "token4": 0,
+            "token5": 0,
+            "token6": 0,
+            "token7": 0,
+            "token8": 0,
+            "token9": 0,
+            "token10": 0,
+            "offer": 1,
+            "lander_id": 1,
+            "os": 2,
+            "device_type": 2,
+            "browser_name": 0,
+            "country": 2,
+            "language": 0,
+            "rule": 0,
+            "path": 0,
+            "campaign": 0,
+            "traffic_source": 0
+        },
+        "thresholds": {
+            "scale_min_roi": 20.0,
+            "scale_min_profit": 15.0,
+            "scale_min_conversions": 3.0,
+            "kill_min_spend": 20.0,
+            "kill_max_roi": -10.0
+        }
+    }
+}

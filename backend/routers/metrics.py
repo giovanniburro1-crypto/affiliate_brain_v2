@@ -357,12 +357,21 @@ async def get_sources(
     date_to_param: Optional[str] = Query(None, alias="date_to"),
     db: Session = Depends(get_db)
 ):
-    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    result = db.execute(text(
-        f"SELECT DISTINCT traffic_source FROM traffic_stats "
-        f"WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
-        f"ORDER BY traffic_source"
-    ), {'d': date_from, 'd_to': date_to}).fetchall()
+    if period == 0:
+        # Fetch all time
+        result = db.execute(text(
+            f"SELECT DISTINCT traffic_source FROM traffic_stats "
+            f"WHERE traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
+            f"ORDER BY traffic_source"
+        )).fetchall()
+    else:
+        date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+        result = db.execute(text(
+            f"SELECT DISTINCT traffic_source FROM traffic_stats "
+            f"WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
+            f"ORDER BY traffic_source"
+        ), {'d': date_from, 'd_to': date_to}).fetchall()
+        
     return {"sources": [r[0] for r in result]}
 
 @router.get("/metrics/daily")

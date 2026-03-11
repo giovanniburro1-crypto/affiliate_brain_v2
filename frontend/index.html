@@ -1,43 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Affiliate Brain v2.0</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238b5cf6'/%3E%3Cpath fill='%23fff' d='M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z'/%3E%3C/svg%3E" type="image/svg+xml">
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238b5cf6'/%3E%3Cpath fill='%23fff' d='M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z'/%3E%3C/svg%3E"
+        type="image/svg+xml">
     <!-- Tailwind CDN: для production лучше собрать CSS через PostCSS/CLI -->
     <script>
-      (function(){
-        var w = console.warn;
-        console.warn = function(m){ if (typeof m === 'string' && m.indexOf('cdn.tailwindcss.com') !== -1) return; w.apply(console, arguments); };
-      })();
+        (function () {
+            var w = console.warn;
+            console.warn = function (m) { if (typeof m === 'string' && m.indexOf('cdn.tailwindcss.com') !== -1) return; w.apply(console, arguments); };
+        })();
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
-        .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
-        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
-        .btn-primary { background: #8b5cf6; }
-        .btn-primary:hover { background: #7c3aed; }
-        .btn-secondary { background: #3f3f46; }
-        .nav-item { border-radius: 8px; transition: all 0.2s; }
-        .nav-item:hover { background: rgba(139,92,246,0.1); }
-        .nav-item.active { background: #8b5cf6; }
-        select { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
-        .profit-green { color: #22c55e; }
-        .profit-red { color: #ef4444; }
-        .cell-green { background: rgba(34,197,94,0.15); color: #22c55e; }
-        .cell-red { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .cell-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
-        th { background: #12121a; font-size: 11px; text-transform: uppercase; }
-        .modal { backdrop-filter: blur(4px); }
-        .progress-bar { height: 8px; border-radius: 4px; background: #2a2a3a; }
-        .progress-fill { height: 100%; border-radius: 4px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spinner { width: 24px; height: 24px; border: 3px solid #2a2a3a; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        .dashboard-loading { transition: opacity 0.2s; }
+        body {
+            background: #0a0a0f;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+        }
+
+        .sidebar {
+            background: #12121a;
+            border-right: 1px solid #2a2a3a;
+        }
+
+        .card {
+            background: #1a1a24;
+            border: 1px solid #2a2a3a;
+            border-radius: 12px;
+        }
+
+        .btn-primary {
+            background: #8b5cf6;
+        }
+
+        .btn-primary:hover {
+            background: #7c3aed;
+        }
+
+        .btn-secondary {
+            background: #3f3f46;
+        }
+
+        .nav-item {
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .nav-item.active {
+            background: #8b5cf6;
+        }
+
+        select {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            color: #fff;
+        }
+
+        .profit-green {
+            color: #22c55e;
+        }
+
+        .profit-red {
+            color: #ef4444;
+        }
+
+        .cell-green {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .cell-red {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .cell-yellow {
+            background: rgba(234, 179, 8, 0.15);
+            color: #eab308;
+        }
+
+        th {
+            background: #12121a;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .modal {
+            backdrop-filter: blur(4px);
+        }
+
+        .progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: #2a2a3a;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #2a2a3a;
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .dashboard-loading {
+            transition: opacity 0.2s;
+        }
+
         .campaigns-table-wrap {
             overflow-x: auto;
             overflow-y: auto;
@@ -46,47 +138,86 @@
             border-radius: 10px;
             background: #12121a;
         }
-        .campaigns-table-wrap::-webkit-scrollbar { height: 10px; }
-        .campaigns-table-wrap::-webkit-scrollbar-track { background: #1a1a24; border-radius: 5px; }
-        .campaigns-table-wrap::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
-        .campaigns-table-wrap::-webkit-scrollbar-thumb:hover { background: #52525b; }
-        .campaigns-table { min-width: max-content; }
-        .campaigns-table th:nth-child(n+4), .campaigns-table td:nth-child(n+4) { min-width: 2.75rem; }
-        .campaigns-table .date-col { font-size: 10px; color: #a1a1aa; white-space: nowrap; }
+
+        .campaigns-table-wrap::-webkit-scrollbar {
+            height: 10px;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar-track {
+            background: #1a1a24;
+            border-radius: 5px;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 5px;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+
+        .campaigns-table {
+            min-width: max-content;
+        }
+
+        .campaigns-table th:nth-child(n+4),
+        .campaigns-table td:nth-child(n+4) {
+            min-width: 2.75rem;
+        }
+
+        .campaigns-table .date-col {
+            font-size: 10px;
+            color: #a1a1aa;
+            white-space: nowrap;
+        }
     </style>
 </head>
+
 <body class="min-h-screen">
     <div class="flex">
         <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
             <div class="flex items-center gap-2 mb-8">
-                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                <div
+                    class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
                     <i data-lucide="brain" class="w-5 h-5"></i>
                 </div>
                 <span class="font-bold">AFFILIATE BRAIN</span>
             </div>
             <nav class="flex-1 space-y-1">
                 <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
-                <a href="/" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
+                <a href="/" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard"
+                        class="w-4 h-4"></i>Dashboard</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
-                <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
-                <a href="/ai-company-analysis" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
-                <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search" class="w-4 h-4"></i>Search for Gold</a>
-                <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw" class="w-4 h-4"></i>Re-checking</a>
+                <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy"
+                        class="w-4 h-4"></i>TOP-5</a>
+                <a href="/ai-company-analysis" class="nav-item flex items-center gap-3 px-3 py-2"><i
+                        data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
+                <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search"
+                        class="w-4 h-4"></i>Search for Gold</a>
+                <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw"
+                        class="w-4 h-4"></i>Re-checking</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
-                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
+                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings"
+                        class="w-4 h-4"></i>Settings</a>
             </nav>
             <div class="space-y-2">
-                <button onclick="openUpload()" class="btn-primary w-full py-2 rounded-lg flex items-center justify-center gap-2">
+                <button onclick="openUpload()"
+                    class="btn-primary w-full py-2 rounded-lg flex items-center justify-center gap-2">
                     <i data-lucide="upload" class="w-4 h-4"></i>Upload
                 </button>
-                <button onclick="openOrphans()" class="btn-secondary w-full py-2 rounded-lg flex items-center justify-center gap-2">
-                    <i data-lucide="help-circle" class="w-4 h-4"></i>Orphans <span id="orphanCount" class="text-xs bg-red-500 px-1.5 rounded">0</span>
+                <button onclick="openOrphans()"
+                    class="btn-secondary w-full py-2 rounded-lg flex items-center justify-center gap-2">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>Orphans <span id="orphanCount"
+                        class="text-xs bg-red-500 px-1.5 rounded">0</span>
                 </button>
             </div>
         </aside>
         <main class="ml-56 flex-1 p-6 relative">
             <!-- Индикатор загрузки -->
-            <div id="dashboardLoading" class="dashboard-loading hidden absolute inset-0 z-10 bg-black/40 flex items-center justify-center rounded-xl" style="margin: -1.5rem;">
+            <div id="dashboardLoading"
+                class="dashboard-loading hidden absolute inset-0 z-10 bg-black/40 flex items-center justify-center rounded-xl"
+                style="margin: -1.5rem;">
                 <div class="card p-6 flex flex-col items-center gap-4">
                     <div class="spinner"></div>
                     <span class="text-zinc-300">Loading data...</span>
@@ -95,32 +226,53 @@
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-bold">Dashboard</h1>
                 <div class="flex items-center gap-3">
-                    <select id="sourceSelect" class="px-3 py-2 rounded-lg text-sm"><option value="all">All Sources</option></select>
+                    <select id="sourceSelect" class="px-3 py-2 rounded-lg text-sm">
+                        <option value="all">All Sources</option>
+                    </select>
                     <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate()">
-                        <option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option>
+                        <option value="7">7 days</option>
+                        <option value="14" selected>14 days</option>
+                        <option value="30">30 days</option>
                         <option value="custom">Custom date</option>
                     </select>
                     <div id="customDateRange" class="hidden flex items-center gap-2">
-                        <input type="date" id="customDateFrom" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                        <input type="date" id="customDateFrom"
+                            class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
                         <span class="text-zinc-500">—</span>
-                        <input type="date" id="customDateTo" class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
+                        <input type="date" id="customDateTo"
+                            class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600">
                     </div>
-                    <button id="applyBtn" onclick="loadAll()" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 min-w-[100px] justify-center">Apply</button>
+                    <button id="applyBtn" onclick="loadAll()"
+                        class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 min-w-[100px] justify-center">Apply</button>
                 </div>
             </div>
             <div class="grid grid-cols-4 gap-4 mb-6">
-                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">Spend</div><div id="statSpend" class="text-2xl font-bold">$0</div></div>
-                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">Revenue</div><div id="statRevenue" class="text-2xl font-bold">$0</div></div>
-                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">Profit</div><div id="statProfit" class="text-2xl font-bold">$0</div></div>
-                <div class="card p-4"><div class="text-zinc-400 text-sm mb-1">ROI</div><div id="statRoi" class="text-2xl font-bold">0%</div></div>
+                <div class="card p-4">
+                    <div class="text-zinc-400 text-sm mb-1">Spend</div>
+                    <div id="statSpend" class="text-2xl font-bold">$0</div>
+                </div>
+                <div class="card p-4">
+                    <div class="text-zinc-400 text-sm mb-1">Revenue</div>
+                    <div id="statRevenue" class="text-2xl font-bold">$0</div>
+                </div>
+                <div class="card p-4">
+                    <div class="text-zinc-400 text-sm mb-1">Profit</div>
+                    <div id="statProfit" class="text-2xl font-bold">$0</div>
+                </div>
+                <div class="card p-4">
+                    <div class="text-zinc-400 text-sm mb-1">ROI</div>
+                    <div id="statRoi" class="text-2xl font-bold">0%</div>
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-6">
                 <div class="card p-4">
-                    <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4"></i>OS Split</h3>
+                    <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="smartphone"
+                            class="w-4 h-4"></i>OS Split</h3>
                     <div id="osSplit" class="space-y-3"></div>
                 </div>
                 <div class="card p-4">
-                    <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="monitor" class="w-4 h-4"></i>Device Split</h3>
+                    <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="monitor"
+                            class="w-4 h-4"></i>Device Split</h3>
                     <div id="deviceSplit" class="space-y-3"></div>
                 </div>
             </div>
@@ -168,27 +320,35 @@
             </div>
         </main>
     </div>
-    
+
     <!-- Upload Modal -->
     <div id="uploadModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="card p-6 w-96">
             <h3 class="font-semibold mb-4">Upload File</h3>
-            <input type="file" id="fileInput" accept=".xlsx,.csv" class="mb-4" onchange="uploadFile(this)">
+            <input type="file" id="fileInput" accept=".xlsx,.csv" class="mb-4" multiple onchange="uploadFile(this)">
             <div id="uploadStatus" class="text-sm"></div>
             <button onclick="closeUpload()" class="mt-4 text-zinc-400">Close</button>
         </div>
     </div>
-    
+
     <!-- Orphans Modal -->
     <div id="orphansModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="card p-6 w-[600px] max-h-[80vh] overflow-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="font-semibold">Orphans - Unmatched Records</h3>
-                <button onclick="closeOrphans()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <button onclick="closeOrphans()" class="text-zinc-400 hover:text-white"><i data-lucide="x"
+                        class="w-5 h-5"></i></button>
             </div>
             <div id="orphansSummary" class="text-sm text-zinc-400 mb-4"></div>
             <table class="w-full text-left text-sm">
-                <thead><tr><th class="px-2 py-2">Token1</th><th class="px-2 py-2">Date</th><th class="px-2 py-2 text-right">Revenue</th><th class="px-2 py-2">Source</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th class="px-2 py-2">Token1</th>
+                        <th class="px-2 py-2">Date</th>
+                        <th class="px-2 py-2 text-right">Revenue</th>
+                        <th class="px-2 py-2">Source</th>
+                    </tr>
+                </thead>
                 <tbody id="orphansTable"></tbody>
             </table>
         </div>
@@ -197,9 +357,9 @@
     <script>
         let chart;
         const colors = ['#8b5cf6', '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#ec4899'];
-        
+
         document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); setDefaultCustomDates(); toggleCustomDate(); loadSources(); loadAll(); loadOrphansCount(); });
-        
+
         function setDefaultCustomDates() {
             const to = new Date();
             const from = new Date(to);
@@ -221,7 +381,7 @@
             }
             return 'period=' + sel.value;
         }
-        
+
         /** Возвращает массив дат выбранного периода в формате MM-DD (как в API campaigns-table). */
         function getPeriodDateList() {
             const sel = document.getElementById('periodSelect');
@@ -254,26 +414,26 @@
             }
             return list;
         }
-        
+
         /** Для блока GENERAL ANALYSIS BY CAMPAIGNS: макс. 30 дней, обратный порядок (слева — старые, вправо — сегодня). */
         function getCampaignTableDateList() {
             const full = getPeriodDateList();
             const max30 = full.slice(-30);
             return max30.reverse();
         }
-        
+
         async function loadSources() {
             const res = await fetch('/api/metrics/sources', { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('sourceSelect').innerHTML = '<option value="all">All Sources</option>' + data.sources.map(s => `<option value="${s}">${s}</option>`).join('');
         }
-        
+
         async function loadOrphansCount() {
             const res = await fetch('/api/orphans');
             const data = await res.json();
             document.getElementById('orphanCount').textContent = data.total_count;
         }
-        
+
         async function loadAll() {
             const applyBtn = document.getElementById('applyBtn');
             const loadingEl = document.getElementById('dashboardLoading');
@@ -292,7 +452,7 @@
                 loadingEl.classList.remove('flex');
             }
         }
-        
+
         async function loadSummary(periodParam, source) {
             const url = `/api/metrics/summary?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
@@ -304,7 +464,7 @@
             document.getElementById('statRoi').textContent = d.roi + '%';
             document.getElementById('statRoi').className = 'text-2xl font-bold ' + (d.roi >= 0 ? 'profit-green' : 'profit-red');
         }
-        
+
         async function loadSplits(periodParam, source) {
             const url = `/api/metrics/splits?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
@@ -330,7 +490,7 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { ticks: { color: '#9ca3af' } }, y: { ticks: { color: '#9ca3af' } } } }
             });
         }
-        
+
         async function loadTrafficSourcesSummary(periodParam, source) {
             const url = `/api/metrics/traffic-sources-summary?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
@@ -338,19 +498,19 @@
             document.getElementById('trafficSourcesSummary').innerHTML = data.sources.map(s => `
                 <tr class="border-b border-zinc-800">
                     <td class="py-1.5 px-1 text-xs">${s.source}</td>
-                    <td class="text-right px-1">$${(s.spend/1000).toFixed(1)}k</td>
-                    <td class="text-right px-1">$${(s.revenue/1000).toFixed(1)}k</td>
-                    <td class="text-right px-1 ${s.profit >= 0 ? 'profit-green' : 'profit-red'}">$${(s.profit/1000).toFixed(1)}k</td>
+                    <td class="text-right px-1">$${(s.spend / 1000).toFixed(1)}k</td>
+                    <td class="text-right px-1">$${(s.revenue / 1000).toFixed(1)}k</td>
+                    <td class="text-right px-1 ${s.profit >= 0 ? 'profit-green' : 'profit-red'}">$${(s.profit / 1000).toFixed(1)}k</td>
                     <td class="text-right px-1 ${s.roi >= 0 ? 'profit-green' : 'profit-red'}">${s.roi}%</td>
                 </tr>
             `).join('');
         }
-        
+
         async function loadSourcesTable(periodParam, source) {
             const url = `/api/metrics/campaigns-table?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
-            
+
             // Даты: макс. 30 дней, обратный порядок (слева старые, вправо сегодня); нет данных — 0
             const dates = getCampaignTableDateList();
             // Подписи дат: DD.MM для читаемости
@@ -358,28 +518,28 @@
                 const [mm, dd] = d.split('-');
                 return dd + '.' + mm;
             });
-            
+
             // Вставляем заголовки дат (внутри блока с прокруткой)
             const headerCell = document.getElementById('dateHeaders');
             if (headerCell) {
-                headerCell.outerHTML = dateLabels.map((label, i) => 
+                headerCell.outerHTML = dateLabels.map((label, i) =>
                     `<th class="text-center py-2 px-1 date-col" title="${dates[i]}">${label}</th>`
                 ).join('');
             }
-            
+
             // Заполняем таблицу
             document.getElementById('campaignsTable').innerHTML = data.campaigns.map(c => {
                 const dateCells = dates.map(d => {
                     const dayData = c.days[d];
                     if (!dayData) return '<td class="px-1 py-1 text-center text-xs">0</td>';
-                    
+
                     let bgColor = '';
                     if (dayData.color === 'red') bgColor = 'bg-red-900/30';
                     else if (dayData.color === 'green') bgColor = 'bg-green-900/30';
-                    
+
                     return `<td class="px-1 py-1 text-center text-xs ${bgColor}">${dayData.profit}</td>`;
                 }).join('');
-                
+
                 return `<tr class="border-b border-zinc-800">
                     <td class="py-2 px-2 sticky left-0 bg-zinc-900 text-xs">${c.token1}</td>
                     <td class="py-2 px-2 sticky left-16 bg-zinc-900 text-xs truncate" style="max-width: 200px;">${(c.campaign || '').replace(/^Mediabuys\s*-\s*/i, '')}</td>
@@ -388,7 +548,7 @@
                 </tr>`;
             }).join('');
         }
-        
+
         function openUpload() {
             const modal = document.getElementById('uploadModal');
             const status = document.getElementById('uploadStatus');
@@ -403,7 +563,7 @@
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         }
-        
+
         async function openOrphans() {
             document.getElementById('orphansModal').classList.remove('hidden');
             document.getElementById('orphansModal').classList.add('flex');
@@ -414,22 +574,27 @@
             lucide.createIcons();
         }
         function closeOrphans() { document.getElementById('orphansModal').classList.add('hidden'); }
-        
+
         async function uploadFile(input) {
-            const file = input.files[0]; if (!file) return;
-            document.getElementById('uploadStatus').textContent = 'Uploading...';
-            const form = new FormData(); form.append('file', file);
+            const files = input.files; if (!files.length) return;
+            document.getElementById('uploadStatus').textContent = `Uploading ${files.length} file(s)...`;
+            const form = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                form.append('files', files[i]);
+            }
             const res = await fetch('/api/upload', { method: 'POST', body: form });
             const data = await res.json();
-            let msg = data.success ? `<span class="text-green-400">Done! ${data.stats.inserted} rows (${data.stats.time}s)</span>` : `<span class="text-red-400">Error</span>`;
+            let msg = data.success ? `<span class="text-green-400">Done! ${data.stats.inserted} rows (${data.stats.time}s)</span>` : `<span class="text-red-400">Error: ${data.detail || 'Upload failed'}</span>`;
             if (data.success && data.stats.had_os_column !== undefined) {
                 const osOk = data.stats.had_os_column ? 'yes' : 'no';
                 const devOk = data.stats.had_device_column ? 'yes' : 'no';
                 msg += `<br><span class="text-zinc-400 text-xs">OS column: ${osOk}, Device column: ${devOk}. Rows with OS: ${data.stats.rows_with_os || 0}, with Device: ${data.stats.rows_with_device || 0}</span>`;
             }
             document.getElementById('uploadStatus').innerHTML = msg;
+            input.value = '';
             if (data.success) setTimeout(() => { closeUpload(); loadAll(); loadOrphansCount(); }, 1500);
         }
     </script>
 </body>
+
 </html>

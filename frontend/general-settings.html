@@ -1,102 +1,553 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>General Settings - Affiliate Brain</title>
-    <script src="https://cdn.tailwindcss.com">
-    async function clearDB() {
-        if (!confirm('⚠️ This will delete ALL data! Are you sure?')) return;
-        if (!confirm('Really? This cannot be undone!')) return;
-        
-        const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
-        const data = await res.json();
-        
-        if (data.success) {
-            alert('✓ Database cleared!');
-            window.location.href = '/';
-        } else {
-            alert('✗ Error: ' + data.error);
-        }
-    }
-</script>
-    <script src="https://unpkg.com/lucide@latest">
-    async function clearDB() {
-        if (!confirm('⚠️ This will delete ALL data! Are you sure?')) return;
-        if (!confirm('Really? This cannot be undone!')) return;
-        
-        const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
-        const data = await res.json();
-        
-        if (data.success) {
-            alert('✓ Database cleared!');
-            window.location.href = '/';
-        } else {
-            alert('✗ Error: ' + data.error);
-        }
-    }
-</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
-        .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
-        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
-        .btn-danger { background: #ef4444; }
-        .nav-item { border-radius: 8px; }
-        .nav-item:hover { background: rgba(139,92,246,0.1); }
-        .nav-item.active { background: #8b5cf6; }
+        body {
+            background: #0a0a0f;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+        }
+
+        .sidebar {
+            background: #12121a;
+            border-right: 1px solid #2a2a3a;
+        }
+
+        .card {
+            background: #1a1a24;
+            border: 1px solid #2a2a3a;
+            border-radius: 12px;
+        }
+
+        .btn-primary {
+            background: #8b5cf6;
+        }
+
+        .btn-primary:hover {
+            background: #7c3aed;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .nav-item {
+            border-radius: 8px;
+            inset;
+        }
+
+        .nav-item:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .nav-item.active {
+            background: #8b5cf6;
+        }
+
+        .weight-btn {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #2a2a3a;
+            color: #a1a1aa;
+        }
+
+        .weight-btn.active-1 {
+            background: #10b981;
+            color: white;
+        }
+
+        /* Core: Green */
+        .weight-btn.active-2 {
+            background: #f59e0b;
+            color: white;
+        }
+
+        /* Secondary: Orange */
+        .weight-btn.active-3 {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* Tertiary: Blue */
+        .weight-btn.active-0 {
+            background: #3f3f46;
+            color: #71717a;
+        }
+
+        /* Ignore: Gray */
+
+        input,
+        select {
+            background: #0a0a0f;
+            border: 1px solid #2a2a3a;
+            color: white;
+            border-radius: 6px;
+            padding: 8px 12px;
+            width: 100%;
+        }
+
+        .accordion-header {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        .accordion-header:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .accordion-content {
+            display: none;
+        }
+
+        .accordion-content.open {
+            display: block;
+        }
     </style>
 </head>
-<body class="min-h-screen">
-    <div class="flex">
-        <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
-            <div class="flex items-center gap-2 mb-8">
-                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                    <i data-lucide="brain" class="w-5 h-5"></i>
+
+<body class="min-h-screen flex">
+    <aside class="sidebar w-56 h-screen flex-shrink-0 flex flex-col p-4 fixed">
+        <div class="flex items-center gap-2 mb-8">
+            <div
+                class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                <i data-lucide="brain" class="w-5 h-5"></i>
+            </div>
+            <span class="font-bold">AFFILIATE BRAIN</span>
+        </div>
+        <nav class="flex-1 space-y-1">
+            <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
+            <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard"
+                    class="w-4 h-4"></i>Dashboard</a>
+            <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
+            <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy"
+                    class="w-4 h-4"></i>TOP-5</a>
+            <a href="/ai-company-analysis" class="nav-item flex items-center gap-3 px-3 py-2"><i
+                    data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
+            <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search"
+                    class="w-4 h-4"></i>Search for Gold</a>
+            <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
+            <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings"
+                    class="w-4 h-4"></i>Settings</a>
+            <a href="/general-settings" class="nav-item active flex items-center gap-3 px-3 py-2"><i
+                    data-lucide="sliders" class="w-4 h-4"></i>Deep Insight Factory</a>
+        </nav>
+    </aside>
+
+    <main class="ml-56 flex-1 p-8">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">Insight Factory Settings</h1>
+                <p class="text-zinc-400">Configure connection formulas and Deep Insight rules for each traffic source.
+                </p>
+            </div>
+            <button onclick="openNewTemplate()"
+                class="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 font-semibold shadow-lg">
+                <i data-lucide="plus" class="w-5 h-5"></i> Add Template
+            </button>
+        </div>
+
+        <!-- Add New Template Form (Hidden by default) -->
+        <div id="newTemplateBlock" class="card mb-6 border-purple-500/50 hidden">
+            <div
+                class="p-4 border-b border-zinc-700/50 bg-purple-900/10 flex items-center justify-between rounded-t-xl">
+                <h2 class="text-xl font-bold flex items-center gap-2 text-purple-300">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i> Create New Source Template
+                </h2>
+                <button onclick="closeNewTemplate()" class="text-zinc-400 hover:text-white"><i data-lucide="x"
+                        class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6">
+                <!-- Source Selection -->
+                <div class="mb-6 flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-semibold text-zinc-300 mb-2">Select From Database
+                            Sources</label>
+                        <select id="newTemplateSourceSelect" class="w-full" onchange="syncNewSourceInput()">
+                            <option value="">-- Choose Source --</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-semibold text-zinc-300 mb-2">OR Type Custom Source Name</label>
+                        <input type="text" id="newTemplateSourceInput" placeholder="e.g. adsterra">
+                    </div>
                 </div>
-                <span class="font-bold">AFFILIATE BRAIN</span>
+
+                <!-- Template Settings Editor -->
+                <div id="newTemplateEditorContainer"></div>
+
+                <div class="mt-6 flex justify-end">
+                    <button onclick="saveNewTemplate()"
+                        class="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 font-bold text-lg">
+                        <i data-lucide="save" class="w-5 h-5"></i> Save & Activate
+                    </button>
+                </div>
             </div>
-            <nav class="flex-1 space-y-1">
-                <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
-                <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
-                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
-                <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
-                <a href="/ai-company-analysis" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
-                <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search" class="w-4 h-4"></i>Search for Gold</a>
-                <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw" class="w-4 h-4"></i>Re-checking</a>
-                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
-                <a href="/settings" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
-            </nav>
-        </aside>
-        <main class="ml-56 flex-1 p-6">
-            <div class="flex items-center gap-3 mb-6">
-                <a href="/settings" class="text-zinc-400 hover:text-white"><i data-lucide="arrow-left" class="w-5 h-5"></i></a>
-                <h1 class="text-2xl font-bold">General Settings</h1>
-            </div>
-            
-            <div class="card p-6">
-                <h3 class="font-semibold mb-4 text-lg">Database Cleanup</h3>
-                <p class="text-zinc-400 text-sm mb-4">Remove all data from the database. This action cannot be undone.</p>
-                <button onclick="clearDB()" class="btn-danger px-4 py-2 rounded-lg flex items-center gap-2 hover:opacity-90">
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>Clear Database
-                </button>
-            </div>
-        </main>
-    </div>
-    <script>lucide.createIcons();
-    async function clearDB() {
-        if (!confirm('⚠️ This will delete ALL data! Are you sure?')) return;
-        if (!confirm('Really? This cannot be undone!')) return;
-        
-        const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
-        const data = await res.json();
-        
-        if (data.success) {
-            alert('✓ Database cleared!');
-            window.location.href = '/';
-        } else {
-            alert('✗ Error: ' + data.error);
+        </div>
+
+        <!-- List of Saved Templates -->
+        <div id="templatesList" class="space-y-4 mb-20">
+            <!-- Templates will be rendered here via JS -->
+        </div>
+
+        <!-- Database Cleanup -->
+        <div class="mt-16 card p-6 border-l-4 border-l-red-500 bg-red-950/20">
+            <h3 class="font-bold text-xl mb-2 flex items-center gap-2 text-red-500">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i> Danger Zone
+            </h3>
+            <p class="text-zinc-300 text-sm mb-6">Clear all uploaded traffic data and metrics from the entire
+                application. <b>This action cannot be undone</b>. Your templates will remain intact.</p>
+            <button onclick="clearDB()"
+                class="btn-danger px-6 py-3 rounded-lg font-bold hover:opacity-90 flex items-center gap-2">
+                <i data-lucide="trash-2" class="w-5 h-5"></i> Erase Database
+            </button>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        const PARAMS_DISPLAY_NAMES = {
+            "token1": "Token 1", "token2": "Token 2", "token3": "Token 3", "token4": "Token 4", "token5": "Token 5",
+            "token6": "Token 6", "token7": "Token 7", "token8": "Token 8", "token9": "Token 9", "token10": "Token 10",
+            "offer": "Offer ID / Name", "lander_id": "Lander ID", "os": "Operating System", "device_type": "Device Type", "browser_name": "Browser",
+            "country": "Country", "language": "Language", "rule": "Rule", "path": "Path", "campaign": "Campaign Name", "traffic_source": "Traffic Source"
+        };
+
+        let allConfigs = {};
+        let dbSources = [];
+        let newTemplateConfig = {}; // working state for a new template
+
+        async function initPage() {
+            await fetchDbSources();
+            await fetchAllConfigs();
         }
-    }
-</script>
+
+        async function fetchDbSources() {
+            try {
+                // Fetch up to 3 years back to get ALL historically active sources
+                const res = await fetch('/api/metrics/sources?period=999');
+                const data = await res.json();
+                if (data.sources) {
+                    dbSources = data.sources;
+                }
+            } catch (err) {
+                console.error("Failed to fetch DB sources", err);
+            }
+        }
+
+        async function fetchAllConfigs() {
+            try {
+                const res = await fetch('/api/settings/insight-configs');
+                const data = await res.json();
+                if (data.success) {
+                    allConfigs = data.configs;
+                    renderTemplatesList();
+                }
+            } catch (err) {
+                console.error("Failed to load configs", err);
+            }
+        }
+
+        function toggleAccordion(sourceKey) {
+            const content = document.getElementById(`content-${sourceKey}`);
+            const icon = document.getElementById(`icon-${sourceKey}`);
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                icon.style.transform = "rotate(0deg)";
+            } else {
+                content.classList.add('open');
+                icon.style.transform = "rotate(180deg)";
+            }
+        }
+
+        // --- Render Functions ---
+
+        function renderTemplateEditor(config, prefix, isNew = false) {
+            const weights = config.parameter_weights || {};
+            const thresholds = config.thresholds || {};
+
+            let html = `
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <!-- Left Column: Thresholds -->
+                <div class="xl:col-span-1 space-y-6">
+                    <div class="card p-5 border-l-4 border-l-emerald-500 bg-black/20">
+                        <h3 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="rocket" class="text-emerald-500 w-4 h-4"></i> Scale (Success)</h3>
+                        <div class="space-y-3">
+                            <div><label class="text-xs text-zinc-400">Min ROI (%)</label><input type="number" id="${prefix}_scale_min_roi" value="${thresholds.scale_min_roi || 20}"></div>
+                            <div><label class="text-xs text-zinc-400">Min Profit ($)</label><input type="number" id="${prefix}_scale_min_profit" value="${thresholds.scale_min_profit || 5}"></div>
+                            <div><label class="text-xs text-zinc-400">Min Conversions</label><input type="number" id="${prefix}_scale_min_conversions" value="${thresholds.scale_min_conversions || 3}"></div>
+                        </div>
+                    </div>
+                    <div class="card p-5 border-l-4 border-l-red-500 bg-black/20">
+                        <h3 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="skull" class="text-red-500 w-4 h-4"></i> Kill (Toxic)</h3>
+                        <div class="space-y-3">
+                            <div><label class="text-xs text-zinc-400">Min Spend ($) w/o profit</label><input type="number" id="${prefix}_kill_min_spend" value="${thresholds.kill_min_spend || 20}"></div>
+                            <div><label class="text-xs text-zinc-400">Max ROI allowed (%)</label><input type="number" id="${prefix}_kill_max_roi" value="${thresholds.kill_max_roi || -40}"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Weights Grid -->
+                <div class="card p-6 xl:col-span-2 bg-black/20">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold flex items-center gap-2"><i data-lucide="network" class="text-purple-400 w-4 h-4"></i> Weights Matrix</h3>
+                        <div class="flex gap-3 text-[10px] font-bold uppercase tracking-wider">
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 1 (Core)</div>
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-amber-500 rounded-full"></span> 2 (Sec)</div>
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-500 rounded-full"></span> 3 (Tert)</div>
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 bg-zinc-600 rounded-full"></span> 0 (Skip)</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            `;
+
+            for (const [key, label] of Object.entries(PARAMS_DISPLAY_NAMES)) {
+                const val = weights[key] !== undefined ? weights[key] : 0;
+                // the buttons update the local object (allConfigs or newTemplateConfig) immediately, then re-render only the buttons if possible, 
+                // but to keep it simple we'll just re-render the whole editor.
+                const stateObj = isNew ? "newTemplateConfig" : `allConfigs['${prefix}']`;
+
+                html += `
+                    <div class="flex items-center justify-between p-2.5 bg-zinc-900 rounded border border-zinc-800">
+                        <span class="text-xs font-medium text-zinc-300 truncate pr-2" title="${label}">${label}</span>
+                        <div class="flex gap-1" id="${prefix}_weight_${key}">
+                            <button onclick="updateWeight('${prefix}', '${key}', 1, ${isNew})" class="weight-btn px-2 py-1 text-xs ${val === 1 ? 'active-1' : ''}">1</button>
+                            <button onclick="updateWeight('${prefix}', '${key}', 2, ${isNew})" class="weight-btn px-2 py-1 text-xs ${val === 2 ? 'active-2' : ''}">2</button>
+                            <button onclick="updateWeight('${prefix}', '${key}', 3, ${isNew})" class="weight-btn px-2 py-1 text-xs ${val === 3 ? 'active-3' : ''}">3</button>
+                            <button onclick="updateWeight('${prefix}', '${key}', 0, ${isNew})" class="weight-btn px-2 py-1 text-xs ${val === 0 ? 'active-0' : ''}">0</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div></div></div>`;
+            return html;
+        }
+
+        function renderTemplatesList() {
+            const container = document.getElementById('templatesList');
+            container.innerHTML = '';
+
+            // Sort keys so 'default' is always first
+            const keys = Object.keys(allConfigs).sort((a, b) => a === 'default' ? -1 : (b === 'default' ? 1 : a.localeCompare(b)));
+
+            for (const sourceKey of keys) {
+                const cfg = allConfigs[sourceKey];
+
+                const card = document.createElement('div');
+                card.className = "card overflow-hidden";
+
+                const displayName = sourceKey === 'default' ? 'Default Fallback Template' : `Template: ${sourceKey.toUpperCase()}`;
+
+                let successBadge = '';
+                if (cfg._justSaved) {
+                    successBadge = `<span class="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-1 rounded font-bold border border-emerald-500/30 flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3 h-3"></i> Successful</span>`;
+                    delete cfg._justSaved;
+                }
+
+                card.innerHTML = `
+                    <div class="accordion-header p-5 flex items-center justify-between border-b border-transparent bg-zinc-900/50" onclick="toggleAccordion('${sourceKey}')">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-bold text-lg text-white">${displayName}</h3>
+                            ${successBadge}
+                        </div>
+                        <i data-lucide="chevron-down" id="icon-${sourceKey}" class="text-zinc-500 transition-transform"></i>
+                    </div>
+                    <div id="content-${sourceKey}" class="accordion-content p-6 border-t border-zinc-800">
+                        <div id="editor-${sourceKey}">
+                            ${renderTemplateEditor(cfg, sourceKey, false)}
+                        </div>
+                        <div class="mt-6 flex justify-end gap-3">
+                            ${sourceKey !== 'default' ? `<button onclick="deleteTemplate('${sourceKey}')" class="btn-danger md:opacity-50 hover:opacity-100 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-opacity text-sm"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>` : ''}
+                            <button onclick="saveTemplate('${sourceKey}')" class="btn-primary hover:bg-purple-600 px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
+                                <i data-lucide="save" class="w-4 h-4"></i> Save Template
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            }
+            lucide.createIcons();
+
+            // Auto-open if there is only 1 or if we just saved one and want to see it
+            // Let's keep them closed by default, just 'default' is collapsed too.
+        }
+
+        // --- Interaction Logic ---
+
+        function updateWeight(prefix, paramKey, val, isNew) {
+            // Save current threshold DOM state before re-rendering to prevent losing user input
+            const currentThresholds = extractThresholdsFromDOM(prefix);
+
+            if (isNew) {
+                newTemplateConfig.thresholds = currentThresholds;
+                newTemplateConfig.parameter_weights[paramKey] = val;
+                document.getElementById('newTemplateEditorContainer').innerHTML = renderTemplateEditor(newTemplateConfig, 'new', true);
+            } else {
+                allConfigs[prefix].thresholds = currentThresholds;
+                allConfigs[prefix].parameter_weights[paramKey] = val;
+                document.getElementById(`editor-${prefix}`).innerHTML = renderTemplateEditor(allConfigs[prefix], prefix, false);
+            }
+            lucide.createIcons();
+        }
+
+        function extractThresholdsFromDOM(prefix) {
+            return {
+                scale_min_roi: parseFloat(document.getElementById(`${prefix}_scale_min_roi`).value) || 0,
+                scale_min_profit: parseFloat(document.getElementById(`${prefix}_scale_min_profit`).value) || 0,
+                scale_min_conversions: parseInt(document.getElementById(`${prefix}_scale_min_conversions`).value) || 0,
+                kill_min_spend: parseFloat(document.getElementById(`${prefix}_kill_min_spend`).value) || 0,
+                kill_max_roi: parseFloat(document.getElementById(`${prefix}_kill_max_roi`).value) || 0
+            };
+        }
+
+        async function saveTemplate(sourceKey) {
+            const config = allConfigs[sourceKey];
+            config.thresholds = extractThresholdsFromDOM(sourceKey);
+
+            try {
+                const res = await fetch(`/api/settings/insight-configs/${sourceKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    // Re-render specifically to show the success badge and collapse it
+                    allConfigs[sourceKey]._justSaved = true;
+                    renderTemplatesList();
+                } else {
+                    alert('Error saving template');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to communicate with DB.");
+            }
+        }
+
+        async function deleteTemplate(sourceKey) {
+            if (!confirm(`Are you sure you want to delete the template for '${sourceKey}'?`)) return;
+
+            try {
+                const res = await fetch(`/api/settings/insight-configs/${sourceKey}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await fetchAllConfigs(); // re-fetch and render
+                } else {
+                    alert('Error deleting template');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to delete template.");
+            }
+        }
+
+        // --- Add New Template Flow ---
+
+        function openNewTemplate() {
+            document.getElementById('newTemplateBlock').classList.remove('hidden');
+
+            // Re-clone default to start fresh
+            newTemplateConfig = JSON.parse(JSON.stringify(allConfigs['default'] || {
+                parameter_weights: {}, thresholds: { scale_min_roi: 20, scale_min_profit: 5, scale_min_conversions: 3, kill_min_spend: 20, kill_max_roi: -40 }
+            }));
+
+            // Populate select from DB existing sources (exclude those that already have templates)
+            const select = document.getElementById('newTemplateSourceSelect');
+            select.innerHTML = '<option value="">-- Choose Source from DB --</option>';
+
+            const existingTemplates = Object.keys(allConfigs);
+            dbSources.forEach(src => {
+                if (!existingTemplates.includes(src.toLowerCase())) {
+                    const opt = document.createElement('option');
+                    opt.value = src.toLowerCase();
+                    opt.text = src;
+                    select.appendChild(opt);
+                }
+            });
+
+            document.getElementById('newTemplateSourceInput').value = '';
+            document.getElementById('newTemplateEditorContainer').innerHTML = renderTemplateEditor(newTemplateConfig, 'new', true);
+            lucide.createIcons();
+
+            // smooth scroll to it
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function syncNewSourceInput() {
+            const val = document.getElementById('newTemplateSourceSelect').value;
+            if (val) {
+                document.getElementById('newTemplateSourceInput').value = val;
+            }
+        }
+
+        function closeNewTemplate() {
+            document.getElementById('newTemplateBlock').classList.add('hidden');
+        }
+
+        async function saveNewTemplate() {
+            const sourceKey = document.getElementById('newTemplateSourceInput').value.trim().toLowerCase();
+            if (!sourceKey) {
+                alert("Please select or type a Traffic Source name first.");
+                return;
+            }
+
+            newTemplateConfig.thresholds = extractThresholdsFromDOM('new');
+
+            try {
+                const res = await fetch(`/api/settings/insight-configs/${sourceKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newTemplateConfig)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeNewTemplate();
+                    await fetchAllConfigs(); // refetch to get updated list
+                    // Open the newly created one and show success
+                    if (allConfigs[sourceKey]) {
+                        allConfigs[sourceKey]._justSaved = true;
+                    }
+                    renderTemplatesList();
+                } else {
+                    alert('Error saving new template');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to create new template.");
+            }
+        }
+
+        // --- Global DB Action ---
+
+        async function clearDB() {
+            if (!confirm('⚠️ DANGER: This will delete ALL traffic metrics, stats, and uploaded reports. Your templates will be preserved. Proceed?')) return;
+            if (!confirm('Really? This cannot be undone!')) return;
+
+            const res = await fetch('/api/ai-settings/database/clear', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert('✓ Database cleared!');
+                window.location.href = '/';
+            } else {
+                alert('✗ Error: ' + data.error);
+            }
+        }
+
+        window.onload = initPage;
+    </script>
 </body>
+
 </html>
