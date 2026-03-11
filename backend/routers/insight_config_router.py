@@ -9,6 +9,7 @@ from backend.services.insight_config_service import (
     delete_config_for_source,
     DEFAULT_TEMPLATE
 )
+from backend.services.insight_factory_service import run_deep_insight_analysis
 
 router = APIRouter()
 
@@ -45,3 +46,12 @@ def delete_source_config(source_name: str):
         return {"success": True, "configs": updated_configs}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/insight-configs/{source_name}/run")
+def run_insight_factory(source_name: str, days: int = 30):
+    """Runs the Deep Insight Factory Engine for a given traffic source."""
+    try:
+        result = run_deep_insight_analysis(source_name, days)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

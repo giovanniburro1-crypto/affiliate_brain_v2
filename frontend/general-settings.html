@@ -367,12 +367,22 @@
                         <div id="editor-${sourceKey}">
                             ${renderTemplateEditor(cfg, sourceKey, false)}
                         </div>
-                        <div class="mt-6 flex justify-end gap-3">
-                            ${sourceKey !== 'default' ? `<button onclick="deleteTemplate('${sourceKey}')" class="btn-danger md:opacity-50 hover:opacity-100 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-opacity text-sm"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>` : ''}
-                            <button onclick="saveTemplate('${sourceKey}')" class="btn-primary hover:bg-purple-600 px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
-                                <i data-lucide="save" class="w-4 h-4"></i> Save Template
+                        <div class="mt-6 flex justify-between items-center border-t border-zinc-800/50 pt-6">
+                            <button onclick="runInsightFactory('${sourceKey}')" id="run-btn-${sourceKey}" class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all shadow-emerald-500/20">
+                                <i data-lucide="play" class="w-5 h-5"></i> Run Insight Factory
                             </button>
+                            
+                            <div class="flex gap-3">
+                                ${sourceKey !== 'default' ? `<button onclick="deleteTemplate('${sourceKey}')" class="btn-danger md:opacity-50 hover:opacity-100 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-opacity text-sm"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>` : ''}
+                                <button onclick="saveTemplate('${sourceKey}')" class="btn-primary hover:bg-purple-600 px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
+                                    <i data-lucide="save" class="w-4 h-4"></i> Save Template
+                                </button>
+                            </div>
                         </div>
+                        
+                        <!-- Factory Output Display -->
+                        <div id="results-${sourceKey}" class="mt-8 hidden space-y-4"></div>
+                        
                     </div>
                 `;
                 container.appendChild(card);
@@ -452,6 +462,105 @@
                 console.error(err);
                 alert("Failed to delete template.");
             }
+        }
+
+        async function runInsightFactory(sourceKey) {
+            const btn = document.getElementById(`run-btn-${sourceKey}`);
+            const resultsDiv = document.getElementById(`results-${sourceKey}`);
+
+            // UI Loading state
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Processing...`;
+            btn.disabled = true;
+            resultsDiv.classList.add('hidden');
+            resultsDiv.innerHTML = '';
+
+            try {
+                // Fetch default 30 days
+                const res = await fetch(`/api/settings/insight-configs/${sourceKey}/run?days=30`);
+                if (!res.ok) throw new Error("API Error");
+                const data = await res.json();
+
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    renderFactoryResults(sourceKey, data);
+                    resultsDiv.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to run the Insight Factory engine. Ensure server is running.");
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
+        function renderFactoryResults(sourceKey, data) {
+            const container = document.getElementById(`results-${sourceKey}`);
+            let html = `<div class="p-6 bg-[#12121a] rounded-xl border border-zinc-800">
+                <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="text-emerald-400"></i>
+                    Synergy Results (Last 30 Days)
+                </h3>
+                <p class="text-sm text-zinc-400 mb-6">Grouped by Core Parameters: <b>${data.core_parameters.join(' + ')}</b></p>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            `;
+
+            // Render Scale Region
+            html += `<div class="space-y-3">
+                <h4 class="font-bold text-emerald-500 uppercase flex items-center gap-2">
+                    <i data-lucide="rocket" class="w-4 h-4"></i> Top Synergies to Scale
+                </h4>`;
+
+            if (data.scale_combos.length === 0) {
+                html += `<div class="p-4 bg-emerald-900/10 border border-emerald-900/30 rounded-lg text-emerald-400/50 text-sm">No combinations hit your scale thresholds.</div>`;
+            } else {
+                for (let c of data.scale_combos) {
+                    html += `
+                        <div class="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-lg">
+                            <div class="font-mono text-sm text-emerald-300 font-bold break-all mb-2">${c.name}</div>
+                            <div class="flex flex-wrap gap-4 text-xs font-semibold">
+                                <span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded">PROFIT: $${c.profit}</span>
+                                <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded">ROI: ${c.roi}%</span>
+                                <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded">CONV: ${c.conversions}</span>
+                                <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded">SPEND: $${c.spend}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            html += `</div>`;
+
+            // Render Kill Region
+            html += `<div class="space-y-3">
+                <h4 class="font-bold text-red-500 uppercase flex items-center gap-2">
+                    <i data-lucide="skull" class="w-4 h-4"></i> Toxic Synergies to Kill
+                </h4>`;
+
+            if (data.kill_combos.length === 0) {
+                html += `<div class="p-4 bg-red-900/10 border border-red-900/30 rounded-lg text-red-400/50 text-sm">No combinations hit your kill thresholds. You are safe!</div>`;
+            } else {
+                for (let c of data.kill_combos) {
+                    html += `
+                        <div class="p-4 bg-red-950/20 border border-red-500/30 rounded-lg">
+                            <div class="font-mono text-sm text-red-300 font-bold break-all mb-2">${c.name}</div>
+                            <div class="flex flex-wrap gap-4 text-xs font-semibold">
+                                <span class="bg-red-500/10 text-red-400 px-2 py-1 rounded">SPEND: $${c.spend}</span>
+                                <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded">PROFIT: $${c.profit}</span>
+                                <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded">ROI: ${c.roi}%</span>
+                                <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded">CONV: ${c.conversions}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            html += `</div>`;
+
+            html += `</div></div>`;
+            container.innerHTML = html;
+            lucide.createIcons();
         }
 
         // --- Add New Template Flow ---
