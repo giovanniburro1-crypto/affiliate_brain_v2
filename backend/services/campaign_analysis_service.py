@@ -4,6 +4,7 @@ Rule-based анализ на основе breakdown и правил из logic_b
 """
 from typing import Any, Dict, List, Optional
 from backend.brain import KnowledgeBase
+from backend.services.deep_analysis_extensions import _calculate_confidence_score
 
 
 def _best_worst(items: List[Dict], profit_key: str = "profit") -> tuple:
@@ -123,18 +124,68 @@ def get_bot_actions(
     
     actions = []
     
-    # === 1. АНАЛИЗ ВСЕХ 26 ПАРАМЕТРОВ ИЗ BREAKDOWN ===
+    # === 1. ПОИСК СИНЕРГИЙ (СВЯЗОК) ===
+    # Ищем связки Token2 + Offer + Lander из готового массива
+    combos = breakdown.get("top_combinations_token2_offer_id_jump", [])
+    has_synergy = False
+    
+    for c in combos:
+        c_spend = c.get("spend", 0)
+        c_profit = c.get("profit", 0)
+        c_conversions = c.get("conversions", 0)
+        
+        token2 = c.get("token2") or c.get("name") or "(empty)"
+        offer = c.get("offer_id") or "(empty)"
+        lander = c.get("lander_id") or "(empty)"
+        
+        # Строим название только из непустых частей
+        parts = [p for p in [token2, offer, lander] if p and p != "(empty)"]
+        if len(parts) == 1:
+            # Только источник — называем SOURCE, не СВЯЗКУ
+            combo_name = parts[0]
+            combo_label = "SOURCE" if token2 != "(empty)" else "СВЯЗКА"
+        else:
+            combo_name = " + ".join(parts)
+            combo_label = "СВЯЗКУ"
+        
+        # Токсичные связки (Киллеры)
+        if c_spend > 20 and c_conversions == 0:
+            actions.append({
+                "type": "kill",
+                "param": combo_label,
+                "value": combo_name,
+                "text": f"💥 KILL {combo_label}: {combo_name}",
+                "reason": f"Токсичная: сжигает {c_spend:.0f}$ без конверсий",
+                "confidence_score": _calculate_confidence_score(c_profit, c_spend, c_conversions, "kill", analysis.get("volatility", 0))
+            })
+            has_synergy = True
+            
+        # Успешные связки (Scale)
+        elif c_spend > 15 and c_conversions >= 3 and c_profit > 10:
+            c_roi = (c_profit / c_spend) * 100
+            if c_roi > 30:
+                actions.append({
+                    "type": "scale",
+                    "param": combo_label,
+                    "value": combo_name,
+                    "text": f"🚀 SCALE {combo_label}: {combo_name}",
+                    "reason": f"+{c_profit:.0f}$ (ROI {c_roi:.0f}%, {c_conversions} конв)",
+                    "confidence_score": _calculate_confidence_score(c_profit, c_spend, c_conversions, "scale", analysis.get("volatility", 0))
+                })
+                has_synergy = True
+    
+    # === 2. АНАЛИЗ ВСЕХ 26 ПАРАМЕТРОВ ===
     
     # Получаем segment_config для этого источника
     segment_columns = brain.get_segment_columns(analysis.get("source", "default"))
     
     # Проходим по всем токенам и параметрам
     token_params = [f"by_token{i}" for i in range(2, 11)]
-    other_params = ["by_offer_id", "by_lander_id_jump", "by_path", "by_rule", 
-                   "by_os", "by_device_type", "by_country", "by_os_version", 
-                   "by_browser_name", "by_language"]
+    # Очевидные (технические) параметры переносим в отдельный список, чтобы фильтровать их
+    tech_params = ["by_os", "by_device_type", "by_browser_name", "by_language", "by_os_version"]
+    core_params = ["by_offer_id", "by_lander_id_jump", "by_path", "by_rule", "by_country"]
     
-    all_params = token_params + other_params
+    all_params = token_params + core_params + tech_params
     
     for param_key in all_params:
         items = breakdown.get(param_key, [])
@@ -160,7 +211,13 @@ def get_bot_actions(
         best_value = best.get(name_key) or best.get("name") or "(empty)"
         worst_value = worst.get(name_key) or worst.get("name") or "(empty)"
         
-        # === KILLER LOGIC ===
+        # Фильтрация очевидных/технических мусорных параметров (если есть мощная синергия, пропускаем их)
+        is_tech = param_key in tech_params
+        # Мы выводим технический параметр, только если он ТОКСИЧНЫЙ (убивает >20% бюджета) 
+        # или если он является ОЧЕНЬ крутым зацепом (ROI > 100%), иначе игнорируем.
+        
+        
+        # === ВЫЗОВ KILLER LOGIC (С учетом фильтрации) ===
         # Если сегмент убил > 20% от общего spend с профитом < -$10
         total_spend = analysis.get("spend", 0) or 0
         worst_spend = worst.get("spend", 0) or 0
@@ -175,28 +232,44 @@ def get_bot_actions(
                     "type": "kill",
                     "param": param_name.upper(),
                     "value": str(worst_value),
-                    "text": f"⛔ KILL {param_name.upper()}: {worst_value}",
+                    "text": f"💥 KILL {param_name.upper()}: {worst_value}",
                     "reason": f"Сжег ${abs(worst_profit):.0f} ({worst_spend_pct:.0f}% бюджета) без конверсий",
-                    "confidence": "HIGH"
+                    "confidence_score": _calculate_confidence_score(worst_profit, worst_spend, worst_conversions, "kill", analysis.get("volatility", 0), worst_spend_pct)
                 })
             
-            # Если просто минусит > $10 но есть конверсии
-            elif worst_profit < -10 and worst_spend_pct > 10:
+            # Если просто минусит > $10 но есть конверсии (для tech пропускаем эту мелочь)
+            elif worst_profit < -10 and worst_spend_pct > 10 and not is_tech:
                 actions.append({
                     "type": "optimize",
                     "param": param_name.upper(),
                     "value": str(worst_value),
                     "text": f"📉 OPTIMIZE {param_name.upper()}: {worst_value}",
                     "reason": f"Минус ${abs(worst_profit):.0f} ({worst_spend_pct:.0f}% бюджета). Снизить бид или отключить.",
-                    "confidence": "MEDIUM"
+                    "confidence_score": _calculate_confidence_score(worst_profit, worst_spend, worst_conversions, "optimize", analysis.get("volatility", 0), worst_spend_pct)
                 })
         
-        # === WINNER LOGIC (ISOLATE) ===
+        # === ВЫЗОВ WINNER LOGIC (С учетом фильтрации) ===
         best_conversions = best.get("conversions", 0) or 0
         best_roi = best.get("roi", 0) or 0
         
+        # Правило: готов к SCALE (ROI > 30%, конв >= 3)
+        if best_roi >= scaler_rules.get("min_roi", 30) and best_conversions >= scaler_rules.get("min_conversions", 3):
+            # Если это tech параметр и ROI < 100% — игнорим, это "мусорный" инсайт
+            if is_tech and best_roi < 100:
+                pass
+            else:
+                actions.append({
+                    "type": "scale",
+                    "param": param_name.upper(),
+                    "value": str(best_value),
+                    "text": f"🚀 SCALE {param_name.upper()}: {best_value}",
+                    "reason": f"ROI {best_roi:.0f}%, {best_conversions} конв, профит +${best_profit:.0f}. Увеличить бюджет.",
+                    "confidence_score": _calculate_confidence_score(best_profit, best_spend, best_conversions, "scale", analysis.get("volatility", 0))
+                })
+        
         # Правило: профит > $5, есть конверсии, но ROI < 30% (потенциал для изоляции)
-        if best_profit > 5 and best_conversions >= zacep_rules.get("min_conversions", 3):
+        elif best_profit > 5 and best_conversions >= zacep_rules.get("min_conversions", 3) and not is_tech:
+            best_spend = best.get("spend", 1)  # Защита от деления на 0
             if best_roi > 0 and best_roi < scaler_rules.get("min_roi", 30):
                 actions.append({
                     "type": "isolate",
@@ -204,21 +277,10 @@ def get_bot_actions(
                     "value": str(best_value),
                     "text": f"💎 ISOLATE {param_name.upper()}: {best_value}",
                     "reason": f"Профит +${best_profit:.0f}, {best_conversions} конв, ROI {best_roi:.0f}%. Вынести в отдельный path.",
-                    "confidence": "HIGH"
-                })
-            
-            # Правило: готов к SCALE (ROI > 30%, конв >= 3)
-            elif best_roi >= scaler_rules.get("min_roi", 30) and best_conversions >= scaler_rules.get("min_conversions", 3):
-                actions.append({
-                    "type": "scale",
-                    "param": param_name.upper(),
-                    "value": str(best_value),
-                    "text": f"🚀 SCALE {param_name.upper()}: {best_value}",
-                    "reason": f"ROI {best_roi:.0f}%, {best_conversions} конв, профит +${best_profit:.0f}. Увеличить бюджет.",
-                    "confidence": "HIGH"
+                    "confidence_score": _calculate_confidence_score(best_profit, best_spend, best_conversions, "isolate", analysis.get("volatility", 0))
                 })
     
-    # === 2. ОБЩИЙ АНАЛИЗ КАМПАНИИ ===
+    # === 3. ОБЩИЙ АНАЛИЗ КАМПАНИИ ===
     campaign_roi = analysis.get("roi", 0) or 0
     campaign_conversions = analysis.get("conversions", 0) or 0
     campaign_profit = analysis.get("profit", 0) or 0
@@ -231,7 +293,7 @@ def get_bot_actions(
             "value": analysis.get("campaign_id", ""),
             "text": "⛔ STOP CAMPAIGN",
             "reason": f"ROI {campaign_roi:.0f}% < {killer_rules.get('roi_threshold', -20)}%. Критические потери.",
-            "confidence": "CRITICAL"
+            "confidence_score": _calculate_confidence_score(campaign_profit, analysis.get("spend", 1), campaign_conversions, "kill", analysis.get("volatility", 0))
         })
     
     # Если вообще нет конверсий при spend > $50
@@ -242,10 +304,10 @@ def get_bot_actions(
             "value": analysis.get("campaign_id", ""),
             "text": "⛔ STOP CAMPAIGN",
             "reason": "0 конверсий при spend > $50. Слив бюджета.",
-            "confidence": "CRITICAL"
+            "confidence_score": _calculate_confidence_score(campaign_profit, analysis.get("spend", 1), 0, "kill", analysis.get("volatility", 0))
         })
     
-    # === 3. СОРТИРОВКА ДЕЙСТВИЙ ПО ПРИОРИТЕТУ ===
+    # === 4. СОРТИРОВКА ДЕЙСТВИЙ ПО ПРИОРИТЕТУ ===
     # KILL > SCALE > ISOLATE > OPTIMIZE
     priority = {"kill": 1, "scale": 2, "isolate": 3, "optimize": 4}
     actions.sort(key=lambda x: priority.get(x.get("type"), 999))

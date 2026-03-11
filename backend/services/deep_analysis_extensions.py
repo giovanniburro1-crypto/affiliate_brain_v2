@@ -118,10 +118,10 @@ def analyze_parameter_interconnections(
         }
     
     # Выявляем паттерны-убийцы (killer patterns)
-    killer_patterns = _find_killer_patterns(all_params, campaign_summary)
+    killer_patterns = _find_killer_patterns(all_params, campaign_summary, breakdown)
     
     # Выявляем winning combos
-    winning_combos = _find_winning_combos(all_params, campaign_summary)
+    winning_combos = _find_winning_combos(all_params, campaign_summary, breakdown)
     
     # Анализ взаимосвязей между параметрами
     correlations = _analyze_correlations(all_params)
@@ -393,12 +393,16 @@ def get_parameter_category_summary(
             # Определяем рекомендацию для конкретного значения
             # Обрабатываем случай с бесконечным ROI
             roi_value = item['roi']
-            if isinstance(roi_value, float) and (roi_value == float('inf') or roi_value == float('-inf')):
-                roi_display = '∞' if roi_value == float('inf') else '-∞'
+            # \u0417\u0430\u0449\u0438\u0442\u0430 \u043e\u0442 float('inf') — \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u043c \u0434\u043e \u0432\u044b\u0437\u043e\u0432\u0430 round()
+            if isinstance(roi_value, float) and (roi_value != roi_value or roi_value == float('inf') or roi_value == float('-inf')):
+                roi_display = '\u221e' if roi_value == float('inf') else ('-\u221e' if roi_value == float('-inf') else '?')
                 roi_for_recommendation = 999 if roi_value == float('inf') else -999
+            elif isinstance(roi_value, (int, float)):
+                roi_display = round(roi_value)
+                roi_for_recommendation = roi_value
             else:
-                roi_display = round(roi_value) if isinstance(roi_value, (int, float)) else roi_value
-                roi_for_recommendation = roi_value if isinstance(roi_value, (int, float)) else 0
+                roi_display = roi_value
+                roi_for_recommendation = 0
             
             val_recommendation = "SCALE" if item['profit'] > 0 and roi_for_recommendation > 50 else \
                                "OPTIMIZE" if item['profit'] > 0 else \
@@ -476,16 +480,50 @@ def _get_category_recommendation(total_profit, positive_count, negative_count, a
 
 def _find_killer_patterns(
     all_params: Dict[str, List[Dict]],
-    campaign_summary: Dict[str, Any]
+    campaign_summary: Dict[str, Any],
+    breakdown_data: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Выявляет паттерны-убийцы - комбинации параметров, которые гарантированно сливают бюджет.
+    Выявляет паттерны-убийцы - комбинации параметров, которые сливают бюджет.
+    В первую очередь ищет СИНЕРГИИ (Связки).
     """
     killer_patterns = []
     seen_killer_keys = set()
     total_spend = campaign_summary.get("spend", 0) or 0
     
-    # Анализируем каждый параметр на наличие критических потерь
+    # 1. СИНЕРГИИ И СВЯЗКИ (Наивысший приоритет)
+    if breakdown_data:
+        combos = breakdown_data.get("top_combinations_token2_offer_id_jump", [])
+        for c in combos:
+            c_profit = c.get("profit", 0)
+            c_spend = c.get("spend", 0)
+            c_conversions = c.get("conversions", 0)
+            
+            # Токсичная связка: сжигает бюджет без конверсий
+            if c_spend > 20 and c_conversions == 0:
+                token2 = c.get("token2") or c.get("name") or "(empty)"
+                offer = c.get("offer_id") or "(empty)"
+                lander = c.get("lander_id") or "(empty)"
+                parts = [p for p in [token2, offer, lander] if p and p != "(empty)"]
+                combo_name = " + ".join(parts) if len(parts) > 1 else (parts[0] if parts else "(empty)")
+                combo_label = "SOURCE" if len(parts) == 1 and token2 != "(empty)" else "СВЯЗКА"
+                
+                _killer_key = ("combo", combo_name)
+                seen_killer_keys.add(_killer_key)
+                
+                killer_patterns.append({
+                    "pattern_type": "zero_conversions_synergy",
+                    "parameter": combo_label,
+                    "value": combo_name,
+                    "profit": round(c_profit, 2),
+                    "spend": round(c_spend, 2),
+                    "reason": f"Токсичная: сжигает {c_spend:.0f}$ без конверсий",
+                    "severity": "critical" if c_spend > 35 else "high"
+                })
+    
+    # 2. ОДИНОЧНЫЕ ПАРАМЕТРЫ (Технические игнорируем, если они не критичны)
+    tech_params = ["by_os", "by_device_type", "by_browser_name", "by_language", "by_os_version"]
+    
     for param_name, values in all_params.items():
         for value_data in values:
             profit = value_data["profit"]
@@ -498,7 +536,13 @@ def _find_killer_patterns(
             # 3. Более 10% общего бюджета потрачено впустую
             
             _killer_key = (param_name, value_data["value"])
+            is_tech = any(t in param_name for t in tech_params)
+            
             if conversions == 0 and profit < -10:
+                # Одиночные мусорные параметры выводим только если они ОЧЕНЬ убыточны (spend > $35)
+                if is_tech and spend < 35:
+                    continue
+                    
                 if _killer_key not in seen_killer_keys:
                     killer_patterns.append({
                         "pattern_type": "zero_conversions",
@@ -516,6 +560,10 @@ def _find_killer_patterns(
                 spend_pct = (spend / total_spend * 100) if total_spend > 0 else 0
                 
                 if roi < -50 and spend > 15:
+                    # Одиночные мусорные параметры выводим только если они ОЧЕНЬ убыточны (spend_pct > 20%)
+                    if is_tech and spend_pct < 20:
+                        continue
+                        
                     if _killer_key not in seen_killer_keys:
                         killer_patterns.append({
                             "pattern_type": "critical_roi",
@@ -530,6 +578,9 @@ def _find_killer_patterns(
                         seen_killer_keys.add(_killer_key)
                 
                 if spend_pct > 10 and profit < -5:
+                    if is_tech and spend_pct < 15:
+                        continue
+                        
                     if _killer_key not in seen_killer_keys:
                         killer_patterns.append({
                             "pattern_type": "budget_drain",
@@ -554,12 +605,51 @@ def _find_killer_patterns(
 
 def _find_winning_combos(
     all_params: Dict[str, List[Dict]],
-    campaign_summary: Dict[str, Any]
+    campaign_summary: Dict[str, Any],
+    breakdown_data: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Выявляет winning combos - успешные комбинации параметров для масштабирования.
+    В первую очередь ищет СИНЕРГИИ (Связки).
     """
     winning_combos = []
+    seen_winning_keys = set()
+    
+    # 1. СИНЕРГИИ И СВЯЗКИ (Наивысший приоритет)
+    if breakdown_data:
+        combos = breakdown_data.get("top_combinations_token2_offer_id_jump", [])
+        for c in combos:
+            c_profit = c.get("profit", 0)
+            c_spend = c.get("spend", 0)
+            c_conversions = c.get("conversions", 0)
+            
+            # Успешная связка: ROI > 30%
+            if c_spend > 15 and c_conversions >= 3 and c_profit > 10:
+                c_roi = (c_profit / c_spend) * 100
+                if c_roi > 30:
+                    token2 = c.get("token2") or c.get("name") or "(empty)"
+                    offer = c.get("offer_id") or "(empty)"
+                    lander = c.get("lander_id") or "(empty)"
+                    parts = [p for p in [token2, offer, lander] if p and p != "(empty)"]
+                    combo_name = " + ".join(parts) if len(parts) > 1 else (parts[0] if parts else "(empty)")
+                    combo_label = "SOURCE" if len(parts) == 1 and token2 != "(empty)" else "СВЯЗКУ"
+                    
+                    seen_winning_keys.add(combo_name)
+                    
+                    winning_combos.append({
+                        "combo_type": "synergy",
+                        "parameter": combo_label,
+                        "value": combo_name,
+                        "roi": round(c_roi, 1),
+                        "profit": round(c_profit, 2),
+                        "conversions": c_conversions,
+                        "spend": round(c_spend, 2),
+                        "reason": f"+{c_profit:.0f}$ (ROI {c_roi:.0f}%)",
+                        "potential": "scale" if c_roi > 50 else "optimize"
+                    })
+    
+    # 2. ОДИНОЧНЫЕ ПАРАМЕТРЫ 
+    tech_params = ["by_os", "by_device_type", "by_browser_name", "by_language", "by_os_version"]
     
     # Ищем параметры с положительным ROI и достаточным объемом
     for param_name, values in all_params.items():
@@ -578,7 +668,14 @@ def _find_winning_combos(
                 # 2. EPC > $0.20 и spend > $10
                 # 3. CPA < $3 и conversions >= 3
                 
+                
+                is_tech = any(t in param_name for t in tech_params)
+                
                 if roi > 30 and conversions >= 2 and spend > 15:
+                    # Технические параметры игнорируем, если ROI < 100%
+                    if is_tech and roi < 100:
+                        continue
+                        
                     winning_combos.append({
                         "combo_type": "high_roi",
                         "parameter": param_name,
@@ -683,6 +780,70 @@ def _analyze_correlations(all_params: Dict[str, List[Dict]]) -> List[Dict[str, A
     return correlations[:5]  # Ограничиваем топ-5 корреляций
 
 
+def _calculate_confidence_score(
+    profit: float,
+    spend: float,
+    conversions: int,
+    action_type: str,
+    campaign_volatility: float = 0,
+    impact_score: float = 0
+) -> int:
+    """
+    Высчитывает процент уверенности (0-100%) для рекомендации.
+    Базируется на объеме данных, статистической значимости и волатильности среды.
+    """
+    score = 50.0  # Базовая уверенность
+    
+    # 1. Объем данных (Conversions)
+    if conversions == 0:
+        if spend > 30 and action_type == "kill":
+            score += 30  # Чем больше спенд без конверсий, тем мы увереннее отключаем
+        elif spend > 15 and action_type == "kill":
+            score += 15
+        else:
+            score -= 20  # Мало данных
+    elif conversions >= 5:
+        score += 20
+    elif conversions >= 3:
+        score += 10
+    
+    # 2. Объем денег (Spend) - статистическая значимость
+    if spend > 100:
+        score += 15
+    elif spend > 50:
+        score += 10
+    elif spend < 15:
+        score -= 15  # Слишком мало потрачено для уверенных выводов
+        
+    # 3. Волатильность кампании (неустойчивость среды снижает уверенность)
+    if campaign_volatility > 30:
+        score -= 15
+    elif campaign_volatility > 15:
+        score -= 5
+    elif campaign_volatility < 10:
+        score += 5  # Размеренная среда — прогнозам можно верить
+        
+    # 4. Специфика действий
+    roi = (profit / spend * 100) if spend > 0 else 0
+    
+    if action_type == "kill":
+        if roi < -80:
+            score += 15
+        elif roi < -50:
+            score += 5
+    elif action_type == "scale":
+        if roi > 100:
+            score += 15
+        elif roi > 50:
+            score += 10
+            
+    # Влияние параметра на всю кампанию
+    if abs(impact_score) > 30:
+        score += 10
+            
+    return max(10, min(99, int(score)))
+
+
 def generate_prioritized_recommendations(
     analysis: Dict[str, Any],
     deep_analysis: Dict[str, Any],
@@ -690,14 +851,27 @@ def generate_prioritized_recommendations(
 ) -> List[Dict[str, Any]]:
     """
     Генерирует приоритетные рекомендации с оценкой влияния.
-    Использует глубокий анализ для определения наиболее эффективных действий.
+    Использует глубокий анализ для определения наиболее эффективных действий
+    И снабжает действия процентом уверенности (confidence score).
     """
     recommendations = []
+    volatility = analysis.get("volatility", 0) or 0
     
     # 1. Рекомендации на основе killer patterns
     for pattern in deep_analysis.get("killer_patterns", []):
         if pattern["severity"] in ["critical", "high"]:
             action = "kill" if pattern["severity"] == "critical" else "optimize"
+            profit = pattern.get("profit", 0)
+            spend = pattern.get("spend", 0)
+            
+            # Рассчитываем уверенность: если 0 конверсий, передаем 0, иначе пытаемся достать (но в паттернах-убийцах обычно их 0)
+            confidence = _calculate_confidence_score(
+                profit=profit,
+                spend=spend,
+                conversions=0 if pattern.get("pattern_type") == "zero_conversions" else 1,
+                action_type=action,
+                campaign_volatility=volatility
+            )
             
             recommendations.append({
                 "priority": 1 if pattern["severity"] == "critical" else 2,
@@ -705,8 +879,9 @@ def generate_prioritized_recommendations(
                 "parameter": pattern["parameter"],
                 "value": pattern["value"],
                 "description": f"Устранить паттерн-убийцу: {pattern['reason']}",
+                "confidence_score": confidence,
                 "expected_impact": {
-                    "profit_improvement": abs(pattern.get("profit", 0)),
+                    "profit_improvement": abs(profit),
                     "risk_reduction": "high" if pattern["severity"] == "critical" else "medium"
                 },
                 "implementation_steps": [
@@ -719,14 +894,27 @@ def generate_prioritized_recommendations(
     # 2. Рекомендации на основе winning combos
     for combo in deep_analysis.get("winning_combos", []):
         if combo["potential"] == "scale":
+            profit = combo.get("profit", 0)
+            spend = combo.get("spend", 0)
+            conversions = combo.get("conversions", 2)
+            
+            confidence = _calculate_confidence_score(
+                profit=profit,
+                spend=spend,
+                conversions=conversions,
+                action_type="scale",
+                campaign_volatility=volatility
+            )
+            
             recommendations.append({
                 "priority": 2,
                 "action": "scale",
                 "parameter": combo["parameter"],
                 "value": combo["value"],
                 "description": f"Масштабировать winning combo: {combo['reason']}",
+                "confidence_score": confidence,
                 "expected_impact": {
-                    "profit_improvement": combo.get("profit", 0) * 0.3,  # 30% от текущей прибыли
+                    "profit_improvement": profit * 0.3,  # 30% от текущей прибыли
                     "risk": "low"
                 },
                 "implementation_steps": [
@@ -741,11 +929,21 @@ def generate_prioritized_recommendations(
         if abs(impact["impact_score"]) > 10:  # Значительное влияние
             action = "optimize" if impact["total_profit"] < 0 else "scale"
             
+            confidence = _calculate_confidence_score(
+                profit=impact["total_profit"],
+                spend=impact.get("total_spend", 0),
+                conversions=2, # Approximate for general influential params
+                action_type=action,
+                campaign_volatility=volatility,
+                impact_score=impact["impact_score"]
+            )
+            
             recommendations.append({
                 "priority": 2 if abs(impact["impact_score"]) > 20 else 3,
                 "action": action,
                 "parameter": param_name,
                 "description": f"Параметр влияет на {abs(impact['impact_score'])}% профита",
+                "confidence_score": confidence,
                 "expected_impact": {
                     "profit_improvement": abs(impact["total_profit"]) * 0.2,  # 20% от текущего влияния
                     "parameter_impact": impact["impact_score"]

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Campaign Analysis - Affiliate Brain</title>
+    <script>/* Suppress Tailwind CDN prod warning */var _w=console.warn;console.warn=function(m){if(typeof m==='string'&&m.indexOf('cdn.tailwindcss.com')!==-1)return;_w.apply(console,arguments);};</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -444,69 +445,54 @@
                     keyDriversCards = generateKeyDriversCards(keyDriversItems);
                 }
 
-                // ==================== УЛУЧШЕННЫЙ БЛОК "ДЕЙСТВИЯ" ====================
+                // ==================== БЛОК "ДЕЙСТВИЯ" — СИНЕРГИИ + ДЕЙСТВИЯ ====================
                 let botActions = analysisData.bot_actions || [];
                 let prioritizedActionsHtml = '';
-                
-                // Используем приоритетные рекомендации из глубокого анализа если доступны
-                if (analysisData.deep_analysis && analysisData.deep_analysis.prioritized_recommendations) {
-                    const prioritizedRecs = analysisData.deep_analysis.prioritized_recommendations;
-                    
-                    prioritizedActionsHtml = prioritizedRecs.map(rec => {
-                        const priorityColor = rec.priority === 1 ? 'border-red-500 bg-red-900/20' :
-                                            rec.priority === 2 ? 'border-orange-500 bg-orange-900/20' : 'border-blue-500 bg-blue-900/20';
-                        const priorityText = rec.priority === 1 ? '🔥 ВЫСОКИЙ ПРИОРИТЕТ' :
-                                           rec.priority === 2 ? '⚡ СРЕДНИЙ ПРИОРИТЕТ' : '📊 НИЗКИЙ ПРИОРИТЕТ';
-                        
+
+                if (botActions.length > 0) {
+                    // === РЕЖИМ 1: Синергийные bot_actions из backend (приоритет) ===
+                    prioritizedActionsHtml = botActions.map(act => {
+                        const score = act.confidence_score !== undefined ? act.confidence_score : '';
+                        const showScore = score !== '';
+                        const confClass = score > 80 ? 'text-green-500' : score > 50 ? 'text-yellow-500' : 'text-zinc-400';
+                        const confIcon = score > 80 ? '🔥' : score > 50 ? '⚡' : '🤔';
+                        const t = (act.type || '').toLowerCase();
+                        const actionColor = t === 'kill' ? 'text-red-400' : t === 'scale' ? 'text-green-400' : t === 'isolate' ? 'text-purple-400' : t === 'stop' ? 'text-red-500' : 'text-orange-400';
+                        const text = act.text || (act.param ? `${act.type} ${act.param}` : '');
                         return `
-                            <li class="flow-row flex flex-col gap-0.5 py-2 border-l-4 ${priorityColor} pl-3">
-                                <div class="flex justify-between items-start">
-                                    <span class="text-sm font-medium text-white">${escapeHtml(rec.description || '')}</span>
-                                    <span class="text-xs px-2 py-0.5 rounded ${rec.priority === 1 ? 'bg-red-700' : rec.priority === 2 ? 'bg-orange-700' : 'bg-blue-700'}">${priorityText}</span>
-                                </div>
-                                <span class="text-xs text-zinc-500">Действие: ${rec.action.toUpperCase()} • Параметр: ${rec.parameter || ''}${rec.value ? ' = ' + escapeHtml(rec.value) : ''}</span>
-                                <div class="mt-1 text-xs text-zinc-400">
-                                    <strong>Ожидаемый эффект:</strong> +$${rec.expected_impact?.profit_improvement?.toFixed(2) || '0'}
-                                </div>
-                                <div class="mt-1 text-[10px] text-zinc-500">
-                                    <strong>Шаги реализации:</strong>
-                                    ${rec.implementation_steps ? rec.implementation_steps.map(step => `<div>• ${escapeHtml(step)}</div>`).join('') : 'Нет конкретных шагов'}
-                                </div>
-                            </li>
-                        `;
+                        <li class="flow-row flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/20 px-2 rounded transition-colors">
+                            <div class="flex items-center gap-3">
+                                ${showScore ? `<span class="text-xs px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 ${confClass} flex items-center gap-1 font-mono" title="Уверенность">${confIcon} ${score}%</span>` : ''}
+                                <span class="text-sm font-semibold ${actionColor}">${escapeHtml(text)}</span>
+                            </div>
+                            ${act.reason ? `<span class="text-xs text-zinc-500 max-w-[250px] truncate" title="${escapeHtml(act.reason)}">${escapeHtml(act.reason)}</span>` : ''}
+                        </li>`;
                     }).join('');
-                    
-                    // Также добавляем стандартные bot actions для совместимости
-                    if (!botActions.length) {
-                        killers.forEach(k => {
-                            botActions.push({ type: 'kill', text: 'Отключить ' + (k.type || '') + ' ' + (k.value || ''), reason: '0 conv, spend $' + k.spend + ' > 2× payout' });
-                        });
-                    }
+
+                } else if (analysisData.deep_analysis && analysisData.deep_analysis.prioritized_recommendations && analysisData.deep_analysis.prioritized_recommendations.length) {
+                    // === РЕЖИМ 2: Старые приоритетные рекомендации (fallback) ===
+                    const prioritizedRecs = analysisData.deep_analysis.prioritized_recommendations;
+                    prioritizedActionsHtml = prioritizedRecs.map(rec => {
+                        const confidenceScore = rec.confidence_score || 0;
+                        const confClass = confidenceScore > 80 ? 'text-green-500' : confidenceScore > 50 ? 'text-yellow-500' : 'text-zinc-400';
+                        const confIcon = confidenceScore > 80 ? '🔥' : confidenceScore > 50 ? '⚡' : '🤔';
+                        const actionColor = rec.action === 'kill' ? 'text-red-400' : rec.action === 'scale' ? 'text-green-400' : 'text-blue-400';
+                        const priorityText = rec.priority === 1 ? '🔥 ВЫСОКИЙ' : rec.priority === 2 ? '⚡ СРЕДНИЙ' : '📊 НИЗКИЙ';
+                        return `
+                            <li class="flow-row flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/20 px-2 rounded transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 ${confClass} flex items-center gap-1 font-mono">${confIcon} ${confidenceScore}%</span>
+                                    <span class="text-sm font-bold ${actionColor} uppercase tracking-wider">${rec.action}</span>
+                                    <span class="text-sm text-white font-medium">${escapeHtml(rec.parameter || '')}</span>
+                                    ${rec.value ? `<span class="text-sm text-zinc-300 bg-zinc-800 px-2 py-0.5 rounded">${escapeHtml(rec.value)}</span>` : ''}
+                                    <span class="text-xs text-zinc-500 max-w-[300px] truncate ml-2">${escapeHtml(rec.description || '')}</span>
+                                </div>
+                                <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">${priorityText}</span>
+                            </li>`;
+                    }).join('');
                 } else {
-                    // Стандартные действия
-                    if (!botActions.length) {
-                        killers.forEach(k => {
-                            botActions.push({ type: 'kill', text: 'Отключить ' + (k.type || '') + ' ' + (k.value || ''), reason: '0 conv, spend $' + k.spend + ' > 2× payout' });
-                        });
-                        let pathOfferLander = analysisData.path_offer_lander || [];
-                        const br = analysisData.breakdown || {};
-                        if (!pathOfferLander.length && br.top_combinations_token2_offer_id_jump && br.top_combinations_token2_offer_id_jump.length) {
-                            pathOfferLander = br.top_combinations_token2_offer_id_jump.map(c => ({
-                                path: '(empty)', rule: '(empty)', offer_id: c.offer_id || c.offer || '(empty)', lander_id: c.lander_id || '(empty)',
-                                profit: c.profit || 0, roi: c.spend ? Math.round((c.profit || 0) / c.spend * 100) : 0, spend: c.spend || 0, clicks: c.clicks || 0
-                            }));
-                        }
-                        pathOfferLander.filter(c => c.profit < 0).slice(0, 2).forEach(c => {
-                            botActions.push({ type: 'optimize', text: 'Path ' + (c.path || '') + ' + Lander ' + (c.lander_id || '') + ': отключить или снизить бид', reason: 'Profit $' + c.profit });
-                        });
-                    }
-                    
-                    prioritizedActionsHtml = botActions.map(act => `
-                        <li class="flow-row flex flex-col gap-0.5 py-2 ${act.type === 'kill' ? 'border-l-4 border-red-500' : act.type === 'isolate' ? 'border-l-4 border-blue-500' : 'border-l-4 border-yellow-500/70'} pl-3">
-                            <span class="text-sm font-medium text-white">${escapeHtml(act.text || '')}</span>
-                            <span class="text-xs text-zinc-500">${escapeHtml(act.reason || '')}</span>
-                        </li>
-                    `).join('');
+                    // === РЕЖИМ 3: Пусто ===
+                    prioritizedActionsHtml = '<li class="text-zinc-500 text-sm py-2 px-2">Нет данных для анализа</li>';
                 }
 
                 let pathOfferLander = analysisData.path_offer_lander || [];
