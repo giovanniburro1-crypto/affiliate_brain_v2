@@ -11,6 +11,27 @@ router = APIRouter()
 FILTER_OUT_MONETISATION = "AND traffic_source != 'AddMonetisation' AND LOWER(traffic_source) NOT LIKE '%monetisation%'"
 
 
+def _apply_source_filter(params: dict, source: Optional[str], default_filter: str = "") -> str:
+    """Хелпер для применения фильтра по источнику (поддерживает мультивыбор через запятую)."""
+    if not source or source == "all":
+        return default_filter
+    
+    sources = [s.strip() for s in source.split(',') if s.strip()]
+    if not sources:
+        return default_filter
+    
+    if len(sources) == 1:
+        params['source'] = sources[0]
+        return "AND traffic_source = :source"
+    else:
+        placeholders = []
+        for i, s in enumerate(sources):
+            p_name = f"src_{i}"
+            params[p_name] = s
+            placeholders.append(f":{p_name}")
+        return f"AND traffic_source IN ({', '.join(placeholders)})"
+
+
 def _period_or_range(period: int, date_from_str: Optional[str], date_to_str: Optional[str]) -> tuple:
     """Возвращает (date_from, date_to). Если переданы date_from_str и date_to_str — парсим их, иначе период от сегодня."""
     today = date.today()
@@ -26,26 +47,33 @@ def _period_or_range(period: int, date_from_str: Optional[str], date_to_str: Opt
 
 
 def _get_totals(db: Session, date_from: date, date_to: date, source: Optional[str]):
-    """Единый расчёт тоталов: spend, base_revenue, add_mon, total_profit. Без AS в SELECT — порядок колонок: 0=cost, 1=revenue, 2=conversions, 3=clicks."""
-    source_filter = "AND traffic_source = :source" if source and source != 'all' else FILTER_OUT_MONETISATION
+    """Единый расчёт тоталов: spend, base_revenue, add_mon, total_profit."""
     params = {'date_from': date_from, 'date_to': date_to}
-    if source and source != 'all':
-        params['source'] = source
+    source_filter = _apply_source_filter(params, source, FILTER_OUT_MONETISATION)
+    
     r = db.execute(text(
         f"SELECT COALESCE(SUM(cost),0), COALESCE(SUM(revenue),0), COALESCE(SUM(conversions),0), COUNT(*) "
         f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to AND traffic_source IS NOT NULL {source_filter}"
     ), params).fetchone()
+    
     total_spend = int(round(float(r[0] or 0)))
     total_base_revenue = int(round(float(r[1] or 0)))
     conversions = int(r[2] or 0)
     clicks = int(r[3] or 0)
 
+    # Для доп. монетизации фильтруем по кампаниям, которые были активны в выбранных источниках
     if source and source != 'all':
-        add_mon = db.execute(text("""
+        # Используем тот же фильтр, но для подзапроса
+        # Нам нужно убедиться, что params содержит все src_i
+        add_mon = db.execute(text(f"""
             SELECT COALESCE(SUM(am.revenue), 0)
             FROM additional_monetization am
             WHERE am.date >= :date_from AND am.date <= :date_to
-              AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE date >= :date_from AND date <= :date_to AND traffic_source = :source)
+              AND am.campaign_id IN (
+                  SELECT DISTINCT campaign_id 
+                  FROM traffic_stats 
+                  WHERE date >= :date_from AND date <= :date_to {source_filter}
+              )
         """), params).scalar() or 0
     else:
         add_mon = db.execute(text(
@@ -81,19 +109,19 @@ async def get_campaigns(
     db: Session = Depends(get_db),
 ):
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    source_filter = "AND traffic_source = :source" if source and source != 'all' else ""
+    params = {'date_from': date_from, 'date_to': date_to}
+    source_filter = _apply_source_filter(params, source)
+    
     having = " HAVING SUM(cost) >= :min_cost" if min_cost > 0 else ""
+    if min_cost > 0:
+        params['min_cost'] = min_cost
+
     limit_val = 500 if min_cost > 0 else 50
     query = text(
         f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
         f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} "
         f"GROUP BY campaign_id, campaign, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT {limit_val}"
     )
-    params = {'date_from': date_from, 'date_to': date_to}
-    if source and source != 'all':
-        params['source'] = source
-    if min_cost > 0:
-        params['min_cost'] = min_cost
     rows = db.execute(query, params).fetchall()
     campaigns = []
     for row in rows:
@@ -386,11 +414,9 @@ async def get_daily(
     General Dynamics: данные за выбранный период или кастомный диапазон.
     """
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    today = date_to
-    source_filter = "AND traffic_source = :source" if source and source != "all" else FILTER_OUT_MONETISATION
     params = {"d": date_from, "d_to": date_to}
-    if source and source != "all":
-        params["source"] = source
+    source_filter = _apply_source_filter(params, source, FILTER_OUT_MONETISATION)
+    
     rows = db.execute(
         text(f"""
         SELECT date, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) as clicks
@@ -405,11 +431,11 @@ async def get_daily(
 
     # Добавляем доп. монетизацию по дням
     if source and source != "all":
-        add_mon_rows = db.execute(text("""
+        add_mon_rows = db.execute(text(f"""
             SELECT date, SUM(revenue)
             FROM additional_monetization
             WHERE date >= :d AND date <= :d_to
-              AND campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE date >= :d AND date <= :d_to AND traffic_source = :source)
+              AND campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE date >= :d AND date <= :d_to {source_filter})
             GROUP BY date
         """), params).fetchall()
     else:
@@ -482,10 +508,8 @@ async def get_splits(
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     total_spend, total_base_revenue, add_mon, total_profit, _, _ = _get_totals(db, date_from, date_to, source)
 
-    source_filter = "AND traffic_source = :source" if source and source != 'all' else FILTER_OUT_MONETISATION
     params = {'date_from': date_from, 'date_to': date_to}
-    if source and source != 'all':
-        params['source'] = source
+    source_filter = _apply_source_filter(params, source, FILTER_OUT_MONETISATION)
 
     # 1. OS Split
     os_raw = db.execute(text(f"""
@@ -698,18 +722,16 @@ async def get_traffic_sources_summary(
     db: Session = Depends(get_db),
 ):
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
     params = {'d': date_from, 'd_to': date_to}
-    if source and source != "all":
-        params['source'] = source
+    source_filter = _apply_source_filter(params, source)
 
     # additional_monetization за период (при выборе источника — только кампании этого источника)
     if source and source != "all":
-        total_add = float(db.execute(text("""
+        total_add = float(db.execute(text(f"""
             SELECT COALESCE(SUM(am.revenue), 0)
             FROM additional_monetization am
             WHERE am.date >= :d AND am.date <= :d_to
-              AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE date >= :d AND date <= :d_to AND traffic_source = :source)
+              AND am.campaign_id IN (SELECT DISTINCT campaign_id FROM traffic_stats WHERE date >= :d AND date <= :d_to {source_filter})
         """), params).scalar() or 0)
     else:
         total_add = float(db.execute(text(
@@ -737,10 +759,9 @@ async def get_traffic_sources_summary(
             ts.traffic_source,
             SUM(am.revenue) as add_rev
         FROM additional_monetization am
-        JOIN (SELECT DISTINCT campaign_id, traffic_source FROM traffic_stats WHERE date >= :d AND date <= :d_to) ts 
+        JOIN (SELECT DISTINCT campaign_id, traffic_source FROM traffic_stats WHERE date >= :d AND date <= :d_to {source_filter}) ts 
           ON am.campaign_id = ts.campaign_id
         WHERE am.date >= :d AND am.date <= :d_to
-          {source_filter.replace('traffic_source', 'ts.traffic_source')}
         GROUP BY ts.traffic_source
     """), params).fetchall()
     
@@ -777,11 +798,9 @@ async def get_campaigns_table(
     db: Session = Depends(get_db),
 ):
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
     # Для SQLite даты должны быть строками
     params = {'d': str(date_from), 'd_to': str(date_to)}
-    if source and source != "all":
-        params['source'] = source
+    source_filter = _apply_source_filter(params, source)
 
     # 1. Находим ТОП-25 по суммарному доходу (Base + AddMon), включая те, где нет спенда
     top_campaigns_query = f"""
@@ -796,7 +815,7 @@ async def get_campaigns_table(
         campaign_base AS (
             SELECT 
                 ts.campaign_id, 
-                MAX(ts.token1) as token1, 
+                MAX(CASE WHEN INSTR(ts.token1, '_') > 0 THEN ts.token1 ELSE NULL END) as token1, 
                 MAX(ts.campaign) as name,
                 SUM(ts.cost) as total_spend,
                 SUM(ts.revenue) as base_revenue

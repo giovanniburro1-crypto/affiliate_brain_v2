@@ -171,6 +171,116 @@
             color: #a1a1aa;
             white-space: nowrap;
         }
+        /* Custom Multiselect */
+        .multiselect-container {
+            position: relative;
+            width: 200px;
+        }
+
+        .multiselect-trigger {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            min-height: 38px;
+        }
+
+        .multiselect-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a1a24;
+            border: 1px solid #2a2a3a;
+            border-radius: 8px;
+            margin-top: 4px;
+            z-index: 100;
+            max-height: 300px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        .multiselect-dropdown.show {
+            display: flex;
+        }
+
+        .multiselect-search {
+            padding: 8px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .multiselect-search input {
+            width: 100%;
+            background: #0a0a0f;
+            border: 1px solid #3f3f46;
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: #fff;
+            font-size: 12px;
+        }
+
+        .multiselect-options {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .multiselect-option {
+            padding: 6px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .multiselect-option:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .multiselect-option input {
+            cursor: pointer;
+        }
+
+        .multiselect-footer {
+            padding: 8px;
+            border-top: 1px solid #2a2a3a;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            transform: translateY(100px);
+            transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            z-index: 1000;
+        }
+
+        .copy-toast.show {
+            transform: translateY(0);
+        }
+
+        .source-name-cell {
+            cursor: copy;
+            transition: color 0.2s;
+        }
+
+        .source-name-cell:hover {
+            color: #8b5cf6;
+        }
     </style>
 </head>
 
@@ -226,9 +336,24 @@
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-bold">Dashboard</h1>
                 <div class="flex items-center gap-3">
-                    <select id="sourceSelect" class="px-3 py-2 rounded-lg text-sm">
-                        <option value="all">All Sources</option>
-                    </select>
+                    <div class="multiselect-container" id="sourceMultiselect">
+                        <div class="multiselect-trigger" onclick="toggleSourceDropdown()">
+                            <span id="multiselectLabel">All Sources</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </div>
+                        <div class="multiselect-dropdown" id="sourceDropdown">
+                            <div class="multiselect-search">
+                                <input type="text" placeholder="Search source..." oninput="filterSources(this.value)">
+                            </div>
+                            <div class="multiselect-options" id="sourceOptions">
+                                <!-- Options will be loaded here -->
+                            </div>
+                            <div class="multiselect-footer">
+                                <button class="text-xs text-purple-400 hover:text-purple-300" onclick="selectAllSources(true)">Select All</button>
+                                <button class="text-xs text-zinc-400 hover:text-zinc-300" onclick="selectAllSources(false)">Clear</button>
+                            </div>
+                        </div>
+                    </div>
                     <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate()">
                         <option value="7">7 days</option>
                         <option value="14" selected>14 days</option>
@@ -321,6 +446,9 @@
         </main>
     </div>
 
+    <!-- Toast -->
+    <div id="copyToast" class="copy-toast">Copied to clipboard!</div>
+
     <!-- Upload Modal -->
     <div id="uploadModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="card p-6 w-96">
@@ -357,8 +485,25 @@
     <script>
         let chart;
         const colors = ['#8b5cf6', '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#ec4899'];
+        let selectedSources = [];
+        let allSourcesList = [];
 
-        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); setDefaultCustomDates(); toggleCustomDate(); loadSources(); loadAll(); loadOrphansCount(); });
+        document.addEventListener('DOMContentLoaded', () => { 
+            lucide.createIcons(); 
+            setDefaultCustomDates(); 
+            toggleCustomDate(); 
+            loadSources(); 
+            loadAll(); 
+            loadOrphansCount(); 
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                const container = document.getElementById('sourceMultiselect');
+                if (container && !container.contains(e.target)) {
+                    document.getElementById('sourceDropdown').classList.remove('show');
+                }
+            });
+        });
 
         function setDefaultCustomDates() {
             const to = new Date();
@@ -422,10 +567,62 @@
             return max30.reverse();
         }
 
+        function toggleSourceDropdown() {
+            document.getElementById('sourceDropdown').classList.toggle('show');
+        }
+
+        function filterSources(val) {
+            const options = document.querySelectorAll('.multiselect-option');
+            val = val.toLowerCase();
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                opt.style.display = text.includes(val) ? 'flex' : 'none';
+            });
+        }
+
+        function selectAllSources(state) {
+            const checks = document.querySelectorAll('.source-check');
+            checks.forEach(c => c.checked = state);
+            updateSelectedSources();
+        }
+
+        function updateSelectedSources() {
+            const checks = document.querySelectorAll('.source-check');
+            selectedSources = Array.from(checks).filter(c => c.checked).map(c => c.value);
+            const label = document.getElementById('multiselectLabel');
+            if (selectedSources.length === 0) label.textContent = 'All Sources';
+            else if (selectedSources.length === 1) label.textContent = selectedSources[0];
+            else label.textContent = `${selectedSources.length} selected`;
+        }
+
+        function cleanToken1(t) {
+            if (!t) return '';
+            // Если токен имеет вид "2306_y", возвращаем только цифры "2306"
+            const match = t.match(/^(\d+)_/);
+            return match ? match[1] : t;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('copyToast');
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2000);
+            });
+        }
+
         async function loadSources() {
             const res = await fetch('/api/metrics/sources', { cache: 'no-store' });
             const data = await res.json();
-            document.getElementById('sourceSelect').innerHTML = '<option value="all">All Sources</option>' + data.sources.map(s => `<option value="${s}">${s}</option>`).join('');
+            allSourcesList = data.sources;
+            const options = document.getElementById('sourceOptions');
+            if (options) {
+                options.innerHTML = data.sources.map(s => `
+                    <label class="multiselect-option">
+                        <input type="checkbox" class="source-check" value="${s}" onchange="updateSelectedSources()">
+                        <span>${s}</span>
+                    </label>
+                `).join('');
+            }
         }
 
         async function loadOrphansCount() {
@@ -443,7 +640,7 @@
             loadingEl.classList.add('flex');
             try {
                 const periodParam = getPeriodParams();
-                const source = document.getElementById('sourceSelect').value;
+                const source = selectedSources.join(',');
                 await Promise.all([loadSummary(periodParam, source), loadSplits(periodParam, source), loadChart(periodParam, source), loadTrafficSourcesSummary(periodParam, source), loadSourcesTable(periodParam, source)]);
             } finally {
                 applyBtn.disabled = false;
@@ -454,7 +651,7 @@
         }
 
         async function loadSummary(periodParam, source) {
-            const url = `/api/metrics/summary?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const url = `/api/metrics/summary?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const d = await res.json();
             document.getElementById('statSpend').textContent = '$' + d.spend.toLocaleString();
@@ -466,14 +663,14 @@
         }
 
         async function loadSplits(periodParam, source) {
-            const url = `/api/metrics/splits?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const url = `/api/metrics/splits?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('osSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">OS</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.os.map(o => `<tr class="border-b border-zinc-800"><td class="py-1.5">${o.name}</td><td class="text-right">${o.traffic_pct}%</td><td class="text-right">${o.clicks.toLocaleString()}</td><td class="text-right">${o.profit_pct}%</td><td class="text-right ${o.profit >= 0 ? 'profit-green' : 'profit-red'}">$${o.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
             document.getElementById('deviceSplit').innerHTML = `<table class="w-full text-xs"><thead><tr class="text-zinc-500 border-b border-zinc-700"><th class="text-left py-1">Device</th><th class="text-right py-1">Traffic %</th><th class="text-right py-1">Clicks</th><th class="text-right py-1">Profit %</th><th class="text-right py-1">Profit $</th></tr></thead><tbody>${data.device.map(d => `<tr class="border-b border-zinc-800"><td class="py-1.5">${d.name}</td><td class="text-right">${d.traffic_pct}%</td><td class="text-right">${d.clicks.toLocaleString()}</td><td class="text-right">${d.profit_pct}%</td><td class="text-right ${d.profit >= 0 ? 'profit-green' : 'profit-red'}">$${d.profit.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
         }
         async function loadChart(periodParam, source) {
-            const url = `/api/metrics/daily?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const url = `/api/metrics/daily?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             if (chart) chart.destroy();
@@ -492,12 +689,12 @@
         }
 
         async function loadTrafficSourcesSummary(periodParam, source) {
-            const url = `/api/metrics/traffic-sources-summary?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const url = `/api/metrics/traffic-sources-summary?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
             document.getElementById('trafficSourcesSummary').innerHTML = data.sources.map(s => `
                 <tr class="border-b border-zinc-800">
-                    <td class="py-1.5 px-1 text-xs">${s.source}</td>
+                    <td class="py-1.5 px-1 text-xs source-name-cell" onclick="copyToClipboard('${s.source}')" title="Click to copy">${s.source}</td>
                     <td class="text-right px-1">$${(s.spend / 1000).toFixed(1)}k</td>
                     <td class="text-right px-1">$${(s.revenue / 1000).toFixed(1)}k</td>
                     <td class="text-right px-1 ${s.profit >= 0 ? 'profit-green' : 'profit-red'}">$${(s.profit / 1000).toFixed(1)}k</td>
@@ -507,7 +704,7 @@
         }
 
         async function loadSourcesTable(periodParam, source) {
-            const url = `/api/metrics/campaigns-table?${periodParam}` + (source && source !== 'all' ? `&source=${encodeURIComponent(source)}` : '');
+            const url = `/api/metrics/campaigns-table?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
 
@@ -540,8 +737,9 @@
                     return `<td class="px-1 py-1 text-center text-xs ${bgColor}">${dayData.profit}</td>`;
                 }).join('');
 
+                const cleanedToken = cleanToken1(c.token1);
                 return `<tr class="border-b border-zinc-800">
-                    <td class="py-2 px-2 sticky left-0 bg-zinc-900 text-xs">${c.token1}</td>
+                    <td class="py-2 px-2 sticky left-0 bg-zinc-900 text-xs source-name-cell" onclick="copyToClipboard('${cleanedToken}')" title="Click to copy cleaned Token1">${cleanedToken}</td>
                     <td class="py-2 px-2 sticky left-16 bg-zinc-900 text-xs truncate" style="max-width: 200px;">${(c.campaign || '').replace(/^Mediabuys\s*-\s*/i, '')}</td>
                     <td class="py-2 px-2 text-right text-xs">${c.spend.toLocaleString()}</td>
                     ${dateCells}
@@ -570,7 +768,14 @@
             const res = await fetch('/api/orphans');
             const data = await res.json();
             document.getElementById('orphansSummary').textContent = `Total: ${data.total_count} orphans, $${data.total_revenue.toFixed(2)} revenue`;
-            document.getElementById('orphansTable').innerHTML = data.orphans.map(o => `<tr class="border-b border-zinc-800"><td class="px-2 py-2 font-mono text-xs">${o.token1}</td><td class="px-2 py-2">${o.date || '-'}</td><td class="px-2 py-2 text-right profit-green">$${o.revenue.toFixed(2)}</td><td class="px-2 py-2">${o.source}</td></tr>`).join('');
+            document.getElementById('orphansTable').innerHTML = data.orphans.map(o => `
+                <tr class="border-b border-zinc-800">
+                    <td class="px-2 py-2 font-mono text-xs source-name-cell" onclick="copyToClipboard('${o.token1}')" title="Click to copy full Token1">${o.token1}</td>
+                    <td class="px-2 py-2">${o.date || '-'}</td>
+                    <td class="px-2 py-2 text-right profit-green">$${o.revenue.toFixed(2)}</td>
+                    <td class="px-2 py-2">${o.source}</td>
+                </tr>
+            `).join('');
             lucide.createIcons();
         }
         function closeOrphans() { document.getElementById('orphansModal').classList.add('hidden'); }
