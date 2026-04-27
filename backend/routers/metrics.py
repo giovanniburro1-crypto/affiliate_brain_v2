@@ -401,12 +401,12 @@ async def get_daily(
         """),
         params,
     ).fetchall()
-    by_date = {row[0]: {"cost": int(row[1] or 0), "revenue": int(row[2] or 0), "conversions": int(row[3] or 0), "clicks": int(row[4] or 0)} for row in rows}
+    by_date = {str(row[0]): {"cost": int(row[1] or 0), "revenue": int(row[2] or 0), "conversions": int(row[3] or 0), "clicks": int(row[4] or 0)} for row in rows}
     daily = []
     days_count = (date_to - date_from).days + 1
     for i in range(days_count):
         d = date_from + timedelta(days=i)
-        rec = by_date.get(d, {"cost": 0, "revenue": 0, "conversions": 0, "clicks": 0})
+        rec = by_date.get(d.isoformat(), {"cost": 0, "revenue": 0, "conversions": 0, "clicks": 0})
         daily.append({
             "date": d.isoformat(),
             "cost": rec["cost"],
@@ -555,20 +555,81 @@ async def get_splits(
 
 @router.get("/orphans")
 async def get_orphans(db: Session = Depends(get_db)):
-    rows = db.execute(text("SELECT id, token1, date, revenue, source FROM orphans ORDER BY revenue DESC LIMIT 100")).fetchall()
-    orphans = [{"id": row[0], "token1": row[1], "date": row[2].isoformat() if row[2] else None, "revenue": float(row[3] or 0), "source": row[4]} for row in rows]
-    total = db.execute(text("SELECT COUNT(*), SUM(revenue) FROM orphans")).fetchone()
-    return {"orphans": orphans, "total_count": total[0] or 0, "total_revenue": float(total[1] or 0)}
+    rows = db.execute(text("SELECT id, token1, date, revenue, source FROM orphans")).fetchall()
+    
+    def format_date(d):
+        if not d: return None
+        if isinstance(d, str): return d
+        try: return d.isoformat()
+        except: return str(d)
+
+    groups = {}
+    for r in rows:
+        t = str(r[1])
+        parts = t.split('_')
+        # Берем первые два префикса (например, 2157_y)
+        prefix = '_'.join(parts[:2]) if len(parts) >= 2 else t
+        
+        if prefix not in groups:
+            groups[prefix] = {
+                "id": r[0],
+                "token1": prefix,
+                "revenue": 0.0,
+                "sources": set(),
+                "date": format_date(r[2])
+            }
+        
+        groups[prefix]["revenue"] += float(r[3] or 0)
+        if r[4]:
+            groups[prefix]["sources"].add(str(r[4]))
+            
+    orphans = []
+    total_count = 0
+    total_revenue = 0.0
+    
+    for p, g in groups.items():
+        if g["revenue"] > 0:
+            total_count += 1
+            total_revenue += g["revenue"]
+            orphans.append({
+                "id": g["id"],
+                "token1": g["token1"],
+                "date": g["date"],
+                "revenue": round(g["revenue"], 2),
+                "source": " / ".join(sorted(list(g["sources"])))
+            })
+        
+    orphans.sort(key=lambda x: x["revenue"], reverse=True)
+    orphans = orphans[:100]
+
+    return {"orphans": orphans, "total_count": total_count, "total_revenue": round(total_revenue, 2)}
 
 @router.post("/orphans/match")
 async def match_orphan(orphan_id: int, campaign_id: str, db: Session = Depends(get_db)):
-    orphan = db.execute(text("SELECT token1, date, revenue, source FROM orphans WHERE id = :id"), {"id": orphan_id}).fetchone()
-    if not orphan:
+    target = db.execute(text("SELECT token1 FROM orphans WHERE id = :id"), {"id": orphan_id}).fetchone()
+    if not target:
         return {"success": False, "error": "Orphan not found"}
-    db.execute(text("INSERT INTO additional_monetization (campaign_id, token1, date, revenue, source) VALUES (:cid, :t, :d, :r, :s)"), {"cid": campaign_id, "t": orphan[0], "d": orphan[1], "r": orphan[2], "s": orphan[3]})
-    db.execute(text("DELETE FROM orphans WHERE id = :id"), {"id": orphan_id})
+        
+    t = str(target[0])
+    parts = t.split('_')
+    target_prefix = '_'.join(parts[:2]) if len(parts) >= 2 else t
+    
+    all_orphans = db.execute(text("SELECT id, token1, date, revenue, source FROM orphans")).fetchall()
+    
+    matched_count = 0
+    for r in all_orphans:
+        r_t = str(r[1])
+        r_parts = r_t.split('_')
+        r_prefix = '_'.join(r_parts[:2]) if len(r_parts) >= 2 else r_t
+        
+        if r_prefix == target_prefix:
+            db.execute(text("INSERT INTO additional_monetization (campaign_id, token1, date, revenue, source) VALUES (:cid, :t, :d, :r, :s)"), 
+                       {"cid": campaign_id, "t": r[1], "d": r[2], "r": r[3], "s": r[4]})
+            db.execute(text("DELETE FROM orphans WHERE id = :id"), {"id": r[0]})
+            matched_count += 1
+            
     db.commit()
-    return {"success": True}
+    return {"success": True, "matched": matched_count}
 
 @router.get("/metrics/traffic-sources-summary")
 async def get_traffic_sources_summary(
@@ -651,16 +712,17 @@ async def get_campaigns_table(
 ):
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     source_filter = "AND traffic_source = :source" if source and source != "all" else ""
-    params = {'d': date_from, 'd_to': date_to}
+    # Для SQLite даты должны быть строками
+    params = {'d': str(date_from), 'd_to': str(date_to)}
     if source and source != "all":
         params['source'] = source
 
     # Получаем топ-25 кампаний по spend (с учётом выбранного источника)
     campaigns_query = f"""
-        SELECT campaign_id, campaign, SUM(cost) as total_spend
+        SELECT token1, campaign, SUM(cost) as total_spend, campaign_id
         FROM traffic_stats 
         WHERE date >= :d AND date <= :d_to AND campaign_id IS NOT NULL {source_filter}
-        GROUP BY campaign_id, campaign
+        GROUP BY token1, campaign, campaign_id
         ORDER BY total_spend DESC
         LIMIT 25
     """
@@ -668,10 +730,14 @@ async def get_campaigns_table(
 
     result = []
     for row in campaigns:
-        campaign_id = row[0]
+        # row: (token1, campaign, total_spend, campaign_id)
+        token1_val = row[0]
         campaign_name = row[1]
         total_spend = int(row[2] or 0)
-        day_params = {'cid': campaign_id, 'd': date_from, 'd_to': date_to}
+        campaign_id = row[3]
+        
+        # Для SQLite даты должны быть строками
+        day_params = {'cid': campaign_id, 'd': str(date_from), 'd_to': str(date_to)}
         if source and source != "all":
             day_params['source'] = source
 
@@ -687,7 +753,15 @@ async def get_campaigns_table(
         
         days = {}
         for day_row in daily:
-            day_date = day_row[0].strftime('%m-%d')
+            # SQLite returns string for date
+            d_val = day_row[0]
+            if isinstance(d_val, str):
+                from datetime import datetime
+                d_obj = datetime.fromisoformat(d_val)
+            else:
+                d_obj = d_val
+            
+            day_date = d_obj.strftime('%m-%d')
             day_spend = int(day_row[1] or 0)
             day_base_revenue = int(day_row[2] or 0)
             
@@ -696,7 +770,7 @@ async def get_campaigns_table(
                 SELECT COALESCE(SUM(revenue), 0)
                 FROM additional_monetization
                 WHERE campaign_id = :cid AND date = :dt
-            """), {'cid': campaign_id, 'dt': day_row[0]}).scalar() or 0
+            """), {'cid': campaign_id, 'dt': str(d_val)}).scalar() or 0
             
             day_total_revenue = day_base_revenue + int(day_add_revenue)
             day_profit = day_total_revenue - day_spend
@@ -713,7 +787,7 @@ async def get_campaigns_table(
             days[day_date] = {'profit': day_profit, 'color': color}
         
         result.append({
-            'token1': campaign_id,
+            'token1': row[0],
             'campaign': campaign_name,
             'spend': total_spend,
             'days': days
@@ -744,7 +818,13 @@ def get_campaign_daily_days(
     daily = db.execute(text(daily_query), params).fetchall()
     days = {}
     for day_row in daily:
-        day_date = day_row[0].strftime('%m-%d')
+        d_val = day_row[0]
+        if isinstance(d_val, str):
+            from datetime import datetime
+            d_obj = datetime.fromisoformat(d_val)
+        else:
+            d_obj = d_val
+        day_date = d_obj.strftime('%m-%d')
         day_spend = int(day_row[1] or 0)
         day_base_revenue = int(day_row[2] or 0)
         day_add_revenue = db.execute(text("""
@@ -854,7 +934,7 @@ async def get_upload_dates(db: Session = Depends(get_db)):
             COUNT(DISTINCT campaign_id) as campaigns,
             COUNT(DISTINCT traffic_source) as sources
         FROM traffic_stats
-        WHERE date >= CURRENT_DATE - INTERVAL '14 days'
+        WHERE date >= date('now', '-14 days')
         GROUP BY date
         ORDER BY date DESC
     """)).fetchall()
@@ -876,7 +956,7 @@ async def get_upload_dates(db: Session = Depends(get_db)):
             COUNT(*) as rows,
             SUM(revenue) as revenue
         FROM additional_monetization
-        WHERE date >= CURRENT_DATE - INTERVAL '14 days'
+        WHERE date >= date('now', '-14 days')
         GROUP BY date
         ORDER BY date DESC
     """)).fetchall()
@@ -897,7 +977,7 @@ async def get_upload_dates(db: Session = Depends(get_db)):
             COUNT(*) as rows,
             SUM(revenue) as revenue
         FROM orphans
-        WHERE date >= CURRENT_DATE - INTERVAL '14 days'
+        WHERE date >= date('now', '-14 days')
         GROUP BY date
         ORDER BY date DESC
     """)).fetchall()
@@ -924,7 +1004,7 @@ async def get_recent_uploads(hours: int = Query(2, description="Hours to look ba
     # Группируем по created_at (округлённому до минут) и считаем статистику
     uploads = db.execute(text("""
         SELECT 
-            DATE_TRUNC('minute', created_at) as upload_time,
+            strftime('%Y-%m-%d %H:%M', created_at) as upload_time,
             COUNT(*) as rows_inserted,
             COUNT(DISTINCT campaign_id) as campaigns,
             COUNT(DISTINCT traffic_source) as sources,
@@ -932,7 +1012,7 @@ async def get_recent_uploads(hours: int = Query(2, description="Hours to look ba
             MAX(date) as max_date_in_data
         FROM traffic_stats
         WHERE created_at >= :cutoff
-        GROUP BY DATE_TRUNC('minute', created_at)
+        GROUP BY strftime('%Y-%m-%d %H:%M', created_at)
         ORDER BY upload_time DESC
     """), {'cutoff': cutoff_time}).fetchall()
     

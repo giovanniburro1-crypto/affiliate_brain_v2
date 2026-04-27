@@ -21,6 +21,7 @@ class TrafficStats(Base):
     token9 = Column(String(255))
     token10 = Column(String(255))
     traffic_source = Column(String(255))
+    affiliate_network = Column(String(255))
     path = Column(String(255))
     rule = Column(String(255))
     offer = Column(String(255))

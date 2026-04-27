@@ -192,7 +192,7 @@ class Top5Service:
                 # Используем только whitelist колонок
                 rows = self.db.execute(
                     text(f"""
-                        SELECT COALESCE({col}::text, '(empty)'),
+                        SELECT COALESCE(CAST({col} AS TEXT), '(empty)'),
                                SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
                         FROM traffic_stats
                         WHERE campaign_id = :cid AND date >= :d AND date <= :d_to

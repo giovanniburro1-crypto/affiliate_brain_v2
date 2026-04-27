@@ -18,6 +18,7 @@ TRAFFIC_COLS = {
     'Token 6': 'token6', 'Token 7': 'token7', 'Token 8': 'token8',
     'Token 9': 'token9', 'Token 10': 'token10', 'Traffic Source': 'traffic_source',
     'Path': 'path', 'Rule': 'rule', 'Offer': 'offer', 'Offer ID': 'offer', 'Lander ID': 'lander_id',
+    'Affiliate Network': 'affiliate_network',
     'Device Type': 'device_type', 'OS': 'os', 'OS Version': 'os_version',
     'Browser Name': 'browser_name', 'Country': 'country', 'Language': 'language',
     'Cost': 'cost', 'Payout': 'revenue', 'Conversion': 'conversions', 'Conversions': 'conversions',
@@ -26,6 +27,14 @@ TRAFFIC_COLS = {
 # Варианты названий колонок (регистр и пробелы не важны)
 COL_OS_ALIASES = ('os',)
 COL_DEVICE_ALIASES = ('device type', 'devicetype', 'device_type')
+
+EXPECTED_TRAFFIC_COLS_SET = {
+    "Click ID", "Date Click", "Campaign ID", "Campaign", "Path", "Rule", 
+    "Offer ID", "Lander ID", "Traffic Source", "Affiliate Network", 
+    "Device Type", "Country", "OS", "OS Version", "Browser Name", "Language", 
+    "Payout", "Conversion", "Cost", "Token 1", "Token 2", "Token 3", 
+    "Token 4", "Token 5", "Token 6", "Token 7", "Token 8", "Token 9", "Token 10"
+}
 COL_TRAFFIC_SOURCE_ALIASES = ('traffic source', 'trafficsource', 'traffic_source')
 COL_CONVERSION_ALIASES = ('conversion', 'conversions')
 COL_OFFER_ALIASES = ('offer id', 'offer_id', 'offerid')
@@ -158,12 +167,6 @@ async def upload_files(files: List[UploadFile] = File(...), db: Session = Depend
         for file in files:
             content = await file.read()
             filename = file.filename.lower()
-            # #region agent log
-            try:
-                with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                    _lf.write('{"hypothesisId":"H5","location":"upload.py:upload_file","message":"Upload started","data":{"filename":"' + str(filename).replace('"', '') + '"},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-            except Exception: pass
-            # #endregion
             if 'sale' in filename:
                 df = _read_sales_file(content)
                 _process_sales(df, db, stats)
@@ -171,30 +174,50 @@ async def upload_files(files: List[UploadFile] = File(...), db: Session = Depend
                 try:
                     df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
                 except Exception:
-                    # Fallback to CSV if it's not a valid xlsx archive (e.g. user exported as CSV/XML)
+                    # Fallback to CSV: try semicolon first (tracker exports), then comma
                     try:
-                        df = pd.read_csv(io.BytesIO(content))
-                    except Exception as csv_err:
-                        import traceback
-                        with open("/tmp/upload_err.log", "w") as _err:
-                            _err.write(traceback.format_exc())
-                        raise ValueError(f"Failed to read file {filename} as both Excel and CSV. Error: {str(csv_err)}")
+                        df = pd.read_csv(io.BytesIO(content), sep=';')
+                        if len(df.columns) <= 1:
+                            # Semicolon didn't work, try comma
+                            df = pd.read_csv(io.BytesIO(content), sep=',')
+                    except Exception:
+                        try:
+                            df = pd.read_csv(io.BytesIO(content), sep=',')
+                        except Exception as csv_err:
+                            import traceback
+                            with open("/tmp/upload_err.log", "w") as _err:
+                                _err.write(traceback.format_exc())
+                            raise ValueError(f"Failed to read file {filename} as both Excel and CSV. Error: {str(csv_err)}")
                 
+                # Строгая проверка шаблона (если это не sale-файл)
+                uploaded_cols = set(df.columns)
+                missing_cols = EXPECTED_TRAFFIC_COLS_SET - uploaded_cols
+                extra_cols = uploaded_cols - EXPECTED_TRAFFIC_COLS_SET
+                
+                if missing_cols or extra_cols:
+                    error_msg = "Файл не соответствует шаблону БД."
+                    if extra_cols: error_msg += f" Лишние колонки: {extra_cols}."
+                    if missing_cols: error_msg += f" Отсутствуют: {missing_cols}."
+                    raise ValueError(error_msg)
+
                 original_columns = list(df.columns)
                 rename_map = _build_traffic_rename_map(df)
                 df = df.rename(columns=rename_map)
                 # Deduplicate columns: if mapping created duplicates, keep only the first one to prevent Series errors later
                 df = df.loc[:, ~df.columns.duplicated()]
-                # #region agent log
-                try:
-                    with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                        _lf.write('{"hypothesisId":"H1","location":"upload.py:traffic_rename","message":"Traffic columns","data":{"has_click_id":' + str("click_id" in list(rename_map.values()) or any("click" in str(c).lower() for c in original_columns)).lower() + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-                except Exception: pass
-                # #endregion
                 _process_traffic(df, db, stats, original_columns=original_columns, rename_map=rename_map)
+                db.commit()
                 
+        # После загрузки любых файлов - пытаемся сматчить всех старых Orphans
+        _rematch_orphans(db, stats)
+        
         stats['time'] = round(time.time() - start, 2)
         return {"success": True, "stats": stats}
+    except ValueError as ve:
+        import traceback
+        with open("/tmp/upload_err.log", "w") as _err:
+            _err.write(traceback.format_exc())
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         import traceback
         with open("/tmp/upload_err.log", "w") as _err:
@@ -221,9 +244,11 @@ def _process_monetisation_rows(db, stats, monetisation_rows):
         batch_prefixes = prefixes_list[i:i + batch_size]
         placeholders = ','.join([f"'{str(p).replace(chr(39), chr(39)+chr(39))}'" for p in batch_prefixes])
         matches = db.execute(text(f"""
-            SELECT DISTINCT split_part(token1, '_', 1) as prefix, campaign_id
+            SELECT DISTINCT
+                CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END as prefix,
+                campaign_id
             FROM traffic_stats
-            WHERE split_part(token1, '_', 1) IN ({placeholders})
+            WHERE CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END IN ({placeholders})
         """)).fetchall()
         for prefix, campaign_id in matches:
             if campaign_id:
@@ -252,25 +277,87 @@ def _process_monetisation_rows(db, stats, monetisation_rows):
         for r in matched:
             seen_cid[r['click_id']] = r
         matched_deduped = list(seen_cid.values())
-        # #region agent log
-        try:
-            with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                _lf.write('{"hypothesisId":"H1,H2","location":"upload.py:_process_monetisation_rows","message":"Monet dedup","data":{"before":' + str(len(matched)) + ',"after":' + str(len(matched_deduped)) + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-        except Exception: pass
-        # #endregion
         matched = matched_deduped
         _insert_monetisation_with_upsert(db, matched)
     db.commit()
 
+def _rematch_orphans(db, stats):
+    """
+    Сканирует таблицу orphans и ищет родителей в traffic_stats.
+    Вызывается в конце каждой загрузки.
+    """
+    orphans = db.execute(text("SELECT id, token1, date, revenue, source FROM orphans")).fetchall()
+    if not orphans:
+        return
+        
+    prefixes_set = set()
+    orphan_map = []
+    for r in orphans:
+        p = extract_prefix(r[1]) # token1
+        if p:
+            prefixes_set.add(p)
+            orphan_map.append({'id': r[0], 'token1': r[1], 'prefix': p, 'date': r[2], 'revenue': r[3], 'source': r[4]})
+            
+    if not prefixes_set:
+        return
+        
+    prefixes_list = list(prefixes_set)
+    prefix_to_campaign = {}
+    batch_size = 100
+    for i in range(0, len(prefixes_list), batch_size):
+        batch_prefixes = prefixes_list[i:i+batch_size]
+        placeholders = ','.join([f"'{str(p).replace(chr(39), chr(39)+chr(39))}'" for p in batch_prefixes])
+        
+        matches = db.execute(text(f"""
+            SELECT DISTINCT
+                CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END as prefix,
+                campaign_id
+            FROM traffic_stats
+            WHERE CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END IN ({placeholders})
+        """)).fetchall()
+        
+        for prefix, campaign_id in matches:
+            if campaign_id:
+                prefix_to_campaign[prefix] = campaign_id
+                
+    matched_ids = []
+    matched_records = []
+    for o in orphan_map:
+        campaign_id = prefix_to_campaign.get(o['prefix'])
+        if campaign_id:
+            matched_ids.append(o['id'])
+            
+            # Парсим дату для _sale_click_id
+            date_val = o['date']
+            from datetime import datetime
+            if isinstance(date_val, str):
+                try: date_val = datetime.strptime(date_val[:10], '%Y-%m-%d').date()
+                except: date_val = datetime.now().date()
+            
+            click_id = _sale_click_id(o['token1'], date_val, o['source'], o['revenue'])
+            matched_records.append({
+                'click_id': click_id,
+                'campaign_id': campaign_id,
+                'token1': o['token1'],
+                'date': date_val,
+                'revenue': o['revenue'],
+                'source': o['source']
+            })
+            
+    if matched_records:
+        # Вставляем сматченные записи
+        _insert_monetisation_with_upsert(db, matched_records)
+        
+        # Удаляем их из orphans
+        placeholders_ids = ','.join([str(id) for id in matched_ids])
+        db.execute(text(f"DELETE FROM orphans WHERE id IN ({placeholders_ids})"))
+        db.commit()
+        stats['rematched_orphans'] = len(matched_records)
+
+
 
 def _insert_monetisation_with_upsert(db, rows):
     """Bulk INSERT ... ON CONFLICT (click_id) DO UPDATE SET ..."""
-    # #region agent log
-    try:
-        with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-            _lf.write('{"hypothesisId":"H4","location":"upload.py:_insert_monetisation_with_upsert","message":"Upsert entry","data":{"rows":' + str(len(rows)) + ',"batches":' + str((len(rows)+499)//500) + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-    except Exception: pass
-    # #endregion
     batch_size = 500
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
@@ -284,17 +371,15 @@ def _insert_monetisation_with_upsert(db, rows):
             src = str(r['source']).replace("'", "''")
             values.append(f"('{cid}', '{camp}', '{t1}', '{d}', {rev}, '{src}')")
         sql = f"""
-            INSERT INTO additional_monetization (click_id, campaign_id, token1, date, revenue, source)
+            INSERT OR REPLACE INTO additional_monetization (click_id, campaign_id, token1, date, revenue, source)
             VALUES {', '.join(values)}
-            ON CONFLICT (click_id) DO UPDATE SET campaign_id = EXCLUDED.campaign_id,
-                token1 = EXCLUDED.token1, date = EXCLUDED.date, revenue = EXCLUDED.revenue,
-                source = EXCLUDED.source
         """
         db.execute(text(sql))
 
 def _read_sales_file(content):
     try:
-        df = pd.read_csv(io.BytesIO(content), sep=';', encoding='utf-8')
+        # Читаем файл без заголовков, чтобы поддерживать формат: дата;токен;доп;клики;доход
+        df = pd.read_csv(io.BytesIO(content), sep=';', encoding='utf-8', header=None)
         if len(df.columns) > 1: return df
     except: pass
     try:
@@ -345,19 +430,12 @@ def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
         is_monet, mon_conf = _is_monetisation_by_column(traffic_source_val, campaign_val)
         if is_monet and mon_conf >= CONFIDENCE_THRESHOLD:
             token1_val = str(row.get('token1', '')).strip() if pd.notna(row.get('token1')) else ''
+            if token1_val:
+                token1_val = token1_val.replace('{', '').replace('}', '').replace('"', '').replace("'", '')
             if token1_val and token1_val not in ('', 'nan', 'None'):
                 click_id_val = str(row.get('click_id', '')).strip() if pd.notna(row.get('click_id')) else ''
                 if not click_id_val:
                     click_id_val = f"mon_{token1_val}_{date_val}"
-                # #region agent log
-                global _monet_log_sampled
-                if _monet_log_sampled < 10:
-                    try:
-                        with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                            _lf.write('{"hypothesisId":"H1","location":"upload.py:_process_traffic_monet","message":"Monet row","data":{"had_click_id":' + str(bool(click_id_val and not click_id_val.startswith("mon_"))).lower() + ',"token1":"' + str(token1_val)[:25].replace('"','') + '","date":"' + str(date_val) + '"},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-                        _monet_log_sampled += 1
-                    except Exception: pass
-                # #endregion
                 monetisation_rows.append({
                     'click_id': click_id_val[:255],
                     'token1': token1_val,
@@ -385,7 +463,7 @@ def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
             click_id=str(row.get('click_id', f'gen_{stats["inserted"]}'))[:255],
             campaign_id=str(row.get('campaign_id', '')) if pd.notna(row.get('campaign_id')) else None,
             campaign=str(row.get('campaign', 'Unknown'))[:255], date=date_val,
-            token1=str(row.get('token1', '')) if pd.notna(row.get('token1')) else None,
+            token1=(str(row.get('token1', '')).replace('{', '').replace('}', '').replace('"', '').replace("'", '') if pd.notna(row.get('token1')) else None),
             token2=token2 or None,
             token3=str(row.get('token3', '')) if pd.notna(row.get('token3')) else None,
             token4=str(row.get('token4', '')) if pd.notna(row.get('token4')) else None,
@@ -479,56 +557,50 @@ def _save_traffic_batch(db, batch):
             f"{traffic_source}, {os_val}, {device_type_val}, {cost}, {revenue}, {conversions})"
         )
     
-    # Bulk INSERT с ON CONFLICT DO NOTHING
+    # Bulk INSERT с ON CONFLICT REPLACE
     sql = f"""
-        INSERT INTO traffic_stats 
+        INSERT OR REPLACE INTO traffic_stats 
         (click_id, campaign_id, campaign, date, token1, token2, token3, token4, token5, 
          token6, token7, token8, token9, token10, traffic_source, os, device_type, cost, revenue, conversions)
         VALUES {', '.join(values_parts)}
-        ON CONFLICT (click_id) DO NOTHING
     """
     
     try:
         db.execute(text(sql))
-        db.commit()
     except Exception as e:
         # Если SQL слишком большой или другая ошибка - fallback на старый метод
-        db.rollback()
         try:
             db.bulk_save_objects(unique_batch)
-            db.commit()
         except IntegrityError:
-            db.rollback()
             # Игнорируем дубликаты
             pass
 
 def _process_sales(df, db, stats):
     """
-    Оптимизированная обработка sales файлов:
-    1. Собираем все prefixes за один раз
-    2. Делаем ОДИН batch запрос для матчинга всех prefixes
-    3. Используем полученный маппинг для быстрой классификации
+    Обработка файлов продаж (sale).
+    Ожидаемый формат из 5 колонок: Date ; Token 1 ; Col 2 ; Clicks ; Revenue
+    Без заголовков (header=None).
     """
     stats['total'] = len(df)
-    cols = list(df.columns)
-    col_map = {}
-    for col in cols:
-        if 'sub id 1' in str(col).lower(): col_map[col] = 'token1'
-    if len(cols) >= 5:
-        col_map[cols[0]] = 'date'
-        col_map[cols[-1]] = 'revenue'
-        if len(cols) >= 3:
-            col_map[cols[2]] = 'col2'
-    df = df.rename(columns=col_map)
-    if 'token1' not in df.columns:
-        raise ValueError(f"Missing Sub ID 1 column")
+    
+    if len(df.columns) >= 5:
+        # Переименовываем первые 5 колонок по индексу (позиции)
+        new_cols = list(df.columns)
+        new_cols[0] = 'date'
+        new_cols[1] = 'token1'
+        new_cols[2] = 'col2'
+        new_cols[3] = 'clicks'
+        new_cols[4] = 'revenue'
+        df.columns = new_cols
+    else:
+        raise ValueError("Sale file must have at least 5 columns: Date; Token1; Col2; Clicks; Revenue")
     
     # ШАГ 1: Собираем все уникальные prefixes из файла
     prefixes_set = set()
     rows_data = []
 
     for _, row in df.iterrows():
-        token1 = str(row.get('token1', ''))
+        token1 = str(row.get('token1', '')).replace('{', '').replace('}', '').replace('"', '').replace("'", '')
         if not token1 or token1 in ['', 'nan', 'None']:
             continue
         if 'итого' in token1.lower():
@@ -583,9 +655,11 @@ def _process_sales(df, db, stats):
         placeholders = ','.join([f"'{p}'" for p in batch_prefixes])
         
         matches = db.execute(text(f"""
-            SELECT DISTINCT split_part(token1, '_', 1) as prefix, campaign_id
+            SELECT DISTINCT
+                CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END as prefix,
+                campaign_id
             FROM traffic_stats
-            WHERE split_part(token1, '_', 1) IN ({placeholders})
+            WHERE CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END IN ({placeholders})
         """)).fetchall()
         
         for prefix, campaign_id in matches:
@@ -595,12 +669,6 @@ def _process_sales(df, db, stats):
     # ШАГ 3: Классифицируем все строки используя маппинг
     matched_batch = []
     orphan_batch = []
-    # #region agent log
-    try:
-        with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-            _lf.write('{"hypothesisId":"H2","location":"upload.py:_process_sales","message":"Sales start","data":{"rows_count":' + str(len(rows_data)) + ',"unique_token1_date":' + str(len(set((r["token1"],str(r["date"])) for r in rows_data))) + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-    except Exception: pass
-    # #endregion
     for row_data in rows_data:
         campaign_id = prefix_to_campaign.get(row_data['prefix'])
         
@@ -643,12 +711,6 @@ def _process_sales(df, db, stats):
                 'source': obj.source
             }
         matched_dicts = list(seen_cid.values())
-        # #region agent log
-        try:
-            with open("/Users/andreylp/Desktop/affiliate_brain_v2/.cursor/debug.log", "a") as _lf:
-                _lf.write('{"hypothesisId":"H2","location":"upload.py:_process_sales_upsert","message":"Sales before upsert","data":{"total_rows":' + str(len(matched_dicts)) + ',"unique_click_ids":' + str(len(seen_cid)) + '},"timestamp":' + str(int(time.time()*1000)) + '}\n')
-        except Exception: pass
-        # #endregion
         _insert_monetisation_with_upsert(db, matched_dicts)
     if orphan_batch:
         db.bulk_save_objects(orphan_batch)

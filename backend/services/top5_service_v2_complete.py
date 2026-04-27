@@ -230,7 +230,7 @@ class Top5ServiceV2:
                 # Используем только whitelist колонок
                 rows = self.db.execute(
                     text(f"""
-                        SELECT COALESCE({col}::text, '(empty)'),
+                        SELECT COALESCE(CAST({col} AS TEXT), '(empty)'),
                                SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
                         FROM traffic_stats
                         WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
@@ -584,7 +584,7 @@ class Top5ServiceV2:
                     SELECT campaign_id 
                     FROM recheck_queue 
                     WHERE recheck_after_days = 0 
-                       OR (applied_at + INTERVAL '1 day' * recheck_after_days > CURRENT_DATE)
+                       OR (datetime(applied_at, '+' || recheck_after_days || ' days') > date('now'))
                 """)
             ).fetchall()
             excluded_campaigns = [row[0] for row in excluded_rows]

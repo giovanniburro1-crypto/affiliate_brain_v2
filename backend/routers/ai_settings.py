@@ -50,23 +50,66 @@ import subprocess
 async def git_commit(data: dict):
     try:
         message = data.get('message', 'Auto backup')
-        subprocess.run(['git', 'add', '.'], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', check=True)
-        subprocess.run(['git', 'commit', '-m', message], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', check=True)
-        result = subprocess.run(['git', 'push'], cwd='/Users/andreylp/Desktop/affiliate_brain_v2', capture_output=True, text=True)
+        subprocess.run(['git', 'add', '.'], cwd='/Users/andreylp/affiliate_brain/app', check=True)
+        subprocess.run(['git', 'commit', '-m', message], cwd='/Users/andreylp/affiliate_brain/app', check=True)
+        result = subprocess.run(['git', 'push'], cwd='/Users/andreylp/affiliate_brain/app', capture_output=True, text=True)
         return {"success": True, "message": "Pushed to GitHub!"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@router.get("/database/info")
+async def get_db_info():
+    """Возвращает информацию о размере БД"""
+    import os
+    db_path = "/Users/andreylp/affiliate_brain/database.db"
+    if os.path.exists(db_path):
+        size_bytes = os.path.getsize(db_path)
+        size_mb = round(size_bytes / (1024 * 1024), 2)
+        return {"success": True, "size_mb": size_mb, "path": db_path}
+    return {"success": False, "error": "Database file not found"}
+
 @router.post("/database/clear")
-async def clear_database(db: Session = Depends(get_db)):
-    """Очистка всех данных из БД"""
+async def clear_database(data: dict = None, db: Session = Depends(get_db)):
+    """Очистка данных из БД (опционально за период)"""
     try:
-        db.execute(text("TRUNCATE TABLE traffic_stats CASCADE"))
-        db.execute(text("TRUNCATE TABLE additional_monetization CASCADE"))
-        db.execute(text("TRUNCATE TABLE orphans CASCADE"))
-        db.execute(text("TRUNCATE TABLE matching_logs CASCADE"))
+        date_from = data.get('date_from') if data else None
+        date_to = data.get('date_to') if data else None
+        
+        where_clause = ""
+        params = {}
+        if date_from and date_to:
+            where_clause = " WHERE date >= :d_from AND date <= :d_to"
+            params = {"d_from": date_from, "d_to": date_to}
+        
+        # В SQLite используем DELETE FROM вместо TRUNCATE
+        db.execute(text(f"DELETE FROM traffic_stats{where_clause}"), params)
+        db.execute(text(f"DELETE FROM additional_monetization{where_clause}"), params)
+        db.execute(text(f"DELETE FROM orphans{where_clause}"), params)
+        
+        # Если это полная очистка (без дат), чистим и другие таблицы
+        if not where_clause:
+            try:
+                db.execute(text("DELETE FROM recheck_queue"))
+            except: pass
+            
+            db.commit()
+            
+            # Используем полностью независимое подключение для VACUUM
+            # чтобы не сломать пул соединений SQLAlchemy
+            import sqlite3
+            import os
+            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "database.db")
+            if os.path.exists(db_path):
+                try:
+                    conn = sqlite3.connect(db_path, isolation_level=None)
+                    conn.execute("VACUUM")
+                    conn.close()
+                except: pass
+            
+            return {"success": True, "message": "Database fully reset and optimized (VACUUM)"}
+            
         db.commit()
-        return {"success": True, "message": "Database cleared"}
+        return {"success": True, "message": "Data cleared successfully"}
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}

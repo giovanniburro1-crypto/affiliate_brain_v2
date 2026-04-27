@@ -65,7 +65,7 @@
     },
     "approach x": {
         "parameter_weights": {
-            "token1": 1,
+            "token1": 0,
             "token2": 1,
             "token3": 0,
             "token4": 0,
@@ -97,7 +97,7 @@
     },
     "traffichunt": {
         "parameter_weights": {
-            "token1": 1,
+            "token1": 2,
             "token2": 2,
             "token3": 0,
             "token4": 0,
@@ -106,9 +106,9 @@
             "token7": 0,
             "token8": 0,
             "token9": 0,
-            "token10": 0,
-            "offer": 1,
-            "lander_id": 1,
+            "token10": 1,
+            "offer": 0,
+            "lander_id": 0,
             "os": 2,
             "device_type": 2,
             "browser_name": 0,

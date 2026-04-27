@@ -11,6 +11,7 @@ from backend.database import get_db
 from backend.brain import KnowledgeBase
 from backend.services.top5_service import Top5Service
 from backend.services.campaign_analysis_service import get_parameter_conclusions, get_bot_actions
+from backend.services.insight_factory_service import get_factory_opportunities
 from backend.services.deep_analysis_extensions import (
     analyze_parameter_interconnections,
     generate_prioritized_recommendations,
@@ -116,6 +117,9 @@ async def get_company_analysis(
         breakdown=breakdown,
         campaign_summary=breakdown.get("summary", {})
     )
+    
+    # --- OPPORTUNITY ENGINE (Factory Cross-Analysis) ---
+    factory_opportunities = get_factory_opportunities(breakdown, analysis.get("source"))
 
     return {
         "success": True,
@@ -125,6 +129,7 @@ async def get_company_analysis(
         "breakdown": breakdown,
         "path_offer_lander": path_offer_lander,
         "bot_actions": bot_actions,
+        "factory_opportunities": factory_opportunities,
         "days": daily_days,
         "brain": {
             "core_rules": core_rules,

@@ -1,101 +1,259 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Campaign Analysis - Affiliate Brain</title>
-    <script>/* Suppress Tailwind CDN prod warning */var _w=console.warn;console.warn=function(m){if(typeof m==='string'&&m.indexOf('cdn.tailwindcss.com')!==-1)return;_w.apply(console,arguments);};</script>
+    <script>/* Suppress Tailwind CDN prod warning */var _w = console.warn; console.warn = function (m) { if (typeof m === 'string' && m.indexOf('cdn.tailwindcss.com') !== -1) return; _w.apply(console, arguments); };</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* Дополнительные стили для исправления макета */
-        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        @media (min-width: 768px) {
-            .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .grid-cols-1 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
         }
+
+        .grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .grid-cols-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        @media (min-width: 768px) {
+            .md\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         @media (min-width: 1024px) {
-            .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .lg\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .lg\:grid-cols-3 {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
         }
     </style>
     <style>
-        body { background: #0a0a0f; color: #fff; font-family: system-ui, sans-serif; }
-        .sidebar { background: #12121a; border-right: 1px solid #2a2a3a; }
-        .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
-        .nav-item { border-radius: 8px; }
-        .nav-item:hover { background: rgba(139,92,246,0.1); }
-        .nav-item.active { background: #8b5cf6; }
-        select { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
-        .verdict-SCALE { color: #22c55e; }
-        .verdict-STOP { color: #ef4444; }
-        .verdict-OPTIMIZE { color: #3b82f6; }
-        .verdict-HOLD { color: #eab308; }
-        .profit-green { color: #22c55e; }
-        .profit-red { color: #ef4444; }
-        .driver-card { padding: 0.875rem 1rem; border-left-width: 4px; }
-        .driver-negative { border-left-color: #ef4444; background: linear-gradient(90deg, rgba(239,68,68,0.05) 0%, transparent 100%); }
-        .driver-positive { border-left-color: #22c55e; background: linear-gradient(90deg, rgba(34,197,94,0.05) 0%, transparent 100%); }
-        .badge { padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.7rem; }
-        .badge-red { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
-        .badge-green { background: #052e16; color: #86efac; border: 1px solid #14532d; }
-        .metrics-hero { font-size: 1.1rem; font-weight: 600; }
-        .metrics-hero .profit { font-size: 1.35rem; }
-        .dyn-table { min-width: max-content; font-size: 0.7rem; }
-        .dyn-table th, .dyn-table td { padding: 4px 6px; min-width: 2rem; text-align: center; }
-        .flow-row { background: #12121a; border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
-        .campaigns-table-wrap { overflow-x: auto; overflow-y: auto; max-height: 400px; border: 1px solid #2a2a3a; border-radius: 10px; background: #12121a; }
-        .period-btn { padding: 6px 12px; border-radius: 8px; background: #2a2a3a; font-size: 13px; cursor: pointer; }
-        .period-btn.active { background: #8b5cf6; }
-        .period-btn:hover { background: #3f3f46; }
+        body {
+            background: #0a0a0f;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+        }
+
+        .sidebar {
+            background: #12121a;
+            border-right: 1px solid #2a2a3a;
+        }
+
+        .card {
+            background: #1a1a24;
+            border: 1px solid #2a2a3a;
+            border-radius: 12px;
+        }
+
+        .nav-item {
+            border-radius: 8px;
+        }
+
+        .nav-item:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .nav-item.active {
+            background: #8b5cf6;
+        }
+
+        select {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            color: #fff;
+        }
+
+        .verdict-SCALE {
+            color: #22c55e;
+        }
+
+        .verdict-STOP {
+            color: #ef4444;
+        }
+
+        .verdict-OPTIMIZE {
+            color: #3b82f6;
+        }
+
+        .verdict-HOLD {
+            color: #eab308;
+        }
+
+        .profit-green {
+            color: #22c55e;
+        }
+
+        .profit-red {
+            color: #ef4444;
+        }
+
+        .driver-card {
+            padding: 0.875rem 1rem;
+            border-left-width: 4px;
+        }
+
+        .driver-negative {
+            border-left-color: #ef4444;
+            background: linear-gradient(90deg, rgba(239, 68, 68, 0.05) 0%, transparent 100%);
+        }
+
+        .driver-positive {
+            border-left-color: #22c55e;
+            background: linear-gradient(90deg, rgba(34, 197, 94, 0.05) 0%, transparent 100%);
+        }
+
+        .badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.7rem;
+        }
+
+        .badge-red {
+            background: #450a0a;
+            color: #fca5a5;
+            border: 1px solid #7f1d1d;
+        }
+
+        .badge-green {
+            background: #052e16;
+            color: #86efac;
+            border: 1px solid #14532d;
+        }
+
+        .metrics-hero {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .metrics-hero .profit {
+            font-size: 1.35rem;
+        }
+
+        .dyn-table {
+            min-width: max-content;
+            font-size: 0.7rem;
+        }
+
+        .dyn-table th,
+        .dyn-table td {
+            padding: 4px 6px;
+            min-width: 2rem;
+            text-align: center;
+        }
+
+        .flow-row {
+            background: #12121a;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        .campaigns-table-wrap {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 400px;
+            border: 1px solid #2a2a3a;
+            border-radius: 10px;
+            background: #12121a;
+        }
+
+        .period-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: #2a2a3a;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .period-btn.active {
+            background: #8b5cf6;
+        }
+
+        .period-btn:hover {
+            background: #3f3f46;
+        }
     </style>
 </head>
+
 <body class="min-h-screen">
     <div class="flex">
         <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
             <div class="flex items-center gap-2 mb-8">
-                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                <div
+                    class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
                     <i data-lucide="brain" class="w-5 h-5"></i>
                 </div>
                 <span class="font-bold">AFFILIATE BRAIN</span>
             </div>
             <nav class="flex-1 space-y-1">
                 <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
-                <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</a>
+                <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard"
+                        class="w-4 h-4"></i>Dashboard</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
-                <a href="/top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy" class="w-4 h-4"></i>TOP-5</a>
-                <a href="/ai-company-analysis" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
-                <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search" class="w-4 h-4"></i>Search for Gold</a>
-                <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw" class="w-4 h-4"></i>Re-checking</a>
+                <a href="/top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy"
+                        class="w-4 h-4"></i>TOP-5</a>
+                <a href="/ai-company-analysis" class="nav-item active flex items-center gap-3 px-3 py-2"><i
+                        data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
+                <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search"
+                        class="w-4 h-4"></i>Search for Gold</a>
+                <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw"
+                        class="w-4 h-4"></i>Re-checking</a>
                 <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
-                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings" class="w-4 h-4"></i>Settings</a>
+                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings"
+                        class="w-4 h-4"></i>Settings</a>
             </nav>
         </aside>
         <main class="ml-56 flex-1 p-4">
             <!-- Header + Filters in one row -->
             <div class="flex flex-wrap items-center gap-3 mb-4">
-                <h1 class="text-xl font-bold flex items-center gap-2 shrink-0"><i data-lucide="building-2" class="w-5 h-5 text-purple-400"></i>Campaign Analysis</h1>
-                <select id="sourceSelect" class="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-600 text-white text-sm min-w-[140px]" onchange="onSourceChange()">
+                <h1 class="text-xl font-bold flex items-center gap-2 shrink-0"><i data-lucide="building-2"
+                        class="w-5 h-5 text-purple-400"></i>Campaign Analysis</h1>
+                <select id="sourceSelect"
+                    class="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-600 text-white text-sm min-w-[140px]"
+                    onchange="onSourceChange()">
                     <option value="">Source...</option>
                 </select>
-                <select id="campaignSelect" class="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-600 text-white text-sm flex-1 min-w-[180px] max-w-[360px]">
+                <select id="campaignSelect"
+                    class="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-600 text-white text-sm flex-1 min-w-[180px] max-w-[360px]">
                     <option value="">Campaign...</option>
                 </select>
                 <div class="flex gap-0.5">
-                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="3" onclick="setPeriod(3)">3</button>
-                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="7" onclick="setPeriod(7)">7</button>
-                    <button type="button" class="period-btn active py-1 px-2 text-xs" data-period="14" onclick="setPeriod(14)">14</button>
-                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="30" onclick="setPeriod(30)">30</button>
-                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="custom" onclick="setPeriod('custom')">Custom</button>
+                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="3"
+                        onclick="setPeriod(3)">3</button>
+                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="7"
+                        onclick="setPeriod(7)">7</button>
+                    <button type="button" class="period-btn active py-1 px-2 text-xs" data-period="14"
+                        onclick="setPeriod(14)">14</button>
+                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="30"
+                        onclick="setPeriod(30)">30</button>
+                    <button type="button" class="period-btn py-1 px-2 text-xs" data-period="custom"
+                        onclick="setPeriod('custom')">Custom</button>
                 </div>
                 <div id="customDateRange" class="hidden flex items-center gap-1">
-                    <input type="date" id="customDateFrom" class="px-2 py-1 rounded text-xs bg-zinc-800 border border-zinc-600">
+                    <input type="date" id="customDateFrom"
+                        class="px-2 py-1 rounded text-xs bg-zinc-800 border border-zinc-600">
                     <span class="text-zinc-500 text-xs">—</span>
-                    <input type="date" id="customDateTo" class="px-2 py-1 rounded text-xs bg-zinc-800 border border-zinc-600">
+                    <input type="date" id="customDateTo"
+                        class="px-2 py-1 rounded text-xs bg-zinc-800 border border-zinc-600">
                 </div>
-                <button id="loadBtn" class="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 font-medium text-sm shrink-0">Analyze</button>
+                <button id="loadBtn"
+                    class="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 font-medium text-sm shrink-0">Analyze</button>
             </div>
 
             <div id="analysisResult" class="space-y-6"></div>
@@ -120,7 +278,7 @@
             const el = document.getElementById('customDateRange');
             if (p === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); setDefaultCustomDates(); }
             else { el.classList.add('hidden'); el.classList.remove('flex'); }
-            
+
             // Reload sources when the period changes
             loadSources();
             document.getElementById('campaignSelect').innerHTML = '<option value="">Campaign...</option>';
@@ -163,19 +321,19 @@
             const sel = document.getElementById('campaignSelect');
             const campaigns = data.campaigns || [];
             sel.innerHTML = campaigns.length
-                ? campaigns.map(c => `<option value="${(c.campaign_id||'').replace(/"/g,'"')}">${(c.campaign||'').replace(/^[^-]+-\s*/i,'')} ($${c.spend})</option>`).join('')
+                ? campaigns.map(c => `<option value="${(c.campaign_id || '').replace(/"/g, '"')}">${(c.campaign || '').replace(/^[^-]+-\s*/i, '')} ($${c.spend})</option>`).join('')
                 : '<option value="">No campaigns</option>';
         }
 
-        function escapeHtml(s) { return (s || '').replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>'); }
+        function escapeHtml(s) { return (s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>'); }
         function copyId(el) {
             const t = el.dataset.copy || '';
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(t).then(() => { el.title='Скопировано!'; }).catch(() => { copyFallback(t); el.title='Скопировано!'; });
-            } else { copyFallback(t); el.title='Скопировано!'; }
+                navigator.clipboard.writeText(t).then(() => { el.title = 'Скопировано!'; }).catch(() => { copyFallback(t); el.title = 'Скопировано!'; });
+            } else { copyFallback(t); el.title = 'Скопировано!'; }
         }
         function copyFallback(t) {
-            const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText='position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         }
 
         function getDateList() {
@@ -258,34 +416,34 @@
                 const hasParameterCategories = analysisData.deep_analysis && analysisData.deep_analysis.parameter_category_summary;
                 let paramCategories = null;
                 let filteredParams = [];
-                
+
                 // Проверяем, есть ли данные для нового формата Key Drivers
                 if (hasParameterCategories) {
                     // ===== НОВЫЙ ФОРМАТ: Компактные параметры по категориям =====
                     paramCategories = analysisData.deep_analysis.parameter_category_summary;
-                    
+
                     // Преобразуем объект в массив для сортировки
                     // ИНТЕЛЛЕКТУАЛЬНАЯ ФИЛЬТРАЦИЯ ПАРАМЕТРОВ согласно спецификации
                     filteredParams = Object.entries(paramCategories)
                         .filter(([paramName, paramData]) => {
                             // 1. Параметры с impact_score < 5% должны скрываться
                             if (Math.abs(paramData.impact_score || 0) < 5) return false;
-                            
+
                             // 2. Параметры, где все значения "(empty)" и трафик 100% - скрывать
                             const topValues = paramData.top_values || [];
-                            const allEmpty = topValues.length > 0 && topValues.every(val => 
+                            const allEmpty = topValues.length > 0 && topValues.every(val =>
                                 !val.value || val.value === "(empty)" || val.value === "empty"
                             );
                             if (allEmpty && (paramData.traffic_pct || 0) > 95) return false;
-                            
+
                             // 3. Параметры без конверсий и с трафиком < 5% - скрывать
                             if ((paramData.total_conversions || 0) === 0 && (paramData.traffic_pct || 0) < 5) return false;
-                            
+
                             // 4. Параметры с одним значением и отрицательным profit показывать только при impact_score > 50%
                             if (paramData.total_values === 1 && (paramData.total_profit || 0) < 0) {
                                 return Math.abs(paramData.impact_score) > 50;
                             }
-                            
+
                             // Параметр прошел все фильтры
                             return true;
                         })
@@ -365,16 +523,16 @@
                             </div>
                         `;
                     }).join('');
-                    
+
                 } else if (hasDeepAnalysis) {
                     // ===== СТАРЫЙ ФОРМАТ ГЛУБОКОГО АНАЛИЗА =====
                     // Используем глубокий анализ
                     const deepDrivers = analysisData.deep_analysis.key_drivers_extended;
-                    
+
                     // 1. Killer Patterns
                     const killerPatternsCards = (deepDrivers.killer_patterns || []).map(pattern => {
                         const severityClass = pattern.severity === 'critical' ? 'bg-red-900/40 border-red-700' :
-                                            pattern.severity === 'high' ? 'bg-red-800/30 border-red-600' : 'bg-red-700/20 border-red-500';
+                            pattern.severity === 'high' ? 'bg-red-800/30 border-red-600' : 'bg-red-700/20 border-red-500';
                         return `
                             <div class="card driver-card driver-negative border-l-4 border-red-500 ${severityClass}">
                                 <div class="flex justify-between items-start mb-1.5">
@@ -388,11 +546,11 @@
                             </div>
                         `;
                     }).join('');
-                    
+
                     // 2. Winning Combos
                     const winningCombosCards = (deepDrivers.winning_combos || []).map(combo => {
                         const potentialClass = combo.potential === 'scale' ? 'bg-green-900/30 border-green-600' :
-                                             combo.potential === 'optimize' ? 'bg-blue-900/30 border-blue-600' : 'bg-purple-900/30 border-purple-600';
+                            combo.potential === 'optimize' ? 'bg-blue-900/30 border-blue-600' : 'bg-purple-900/30 border-purple-600';
                         const potentialIcon = combo.potential === 'scale' ? '🚀' : combo.potential === 'optimize' ? '📈' : '🧪';
                         return `
                             <div class="card driver-card driver-positive border-l-4 border-green-500 ${potentialClass}">
@@ -407,12 +565,12 @@
                             </div>
                         `;
                     }).join('');
-                    
+
                     // 3. Most Influential Parameters
                     const influentialCards = (deepDrivers.most_influential || []).map(([paramName, impact]) => {
                         const isPositive = impact.total_profit > 0;
                         const impactClass = isPositive ? 'driver-positive border-l-4 border-green-500 bg-green-900/10' :
-                                                         'driver-negative border-l-4 border-red-500 bg-red-900/10';
+                            'driver-negative border-l-4 border-red-500 bg-red-900/10';
                         const badgeClass = isPositive ? 'badge-green' : 'badge-red';
                         const impactIcon = isPositive ? '📊' : '⚠️';
                         return `
@@ -430,9 +588,9 @@
                             </div>
                         `;
                     }).join('');
-                    
+
                     keyDriversCards = killerPatternsCards + winningCombosCards + influentialCards;
-                    
+
                     // Если нет данных в глубоком анализе, используем старый подход
                     if (!keyDriversCards.trim()) {
                         // Fallback к старой логике
@@ -448,6 +606,51 @@
                 // ==================== БЛОК "ДЕЙСТВИЯ" — СИНЕРГИИ + ДЕЙСТВИЯ ====================
                 let botActions = analysisData.bot_actions || [];
                 let prioritizedActionsHtml = '';
+
+                // ==================== БЛОК OPPORTUNITY ENGINE ====================
+                const factoryOpps = analysisData.factory_opportunities || [];
+                let factoryHtml = '';
+                if (factoryOpps.length > 0) {
+                    factoryHtml = factoryOpps.map(opp => {
+                        const isPivot = opp.type === 'PIVOT';
+                        const oppIcon = isPivot ? '🔄' : '👑';
+                        const oppColor = isPivot ? 'text-blue-400' : 'text-green-400';
+                        const oppBg = isPivot ? 'bg-blue-900/20 border-blue-800' : 'bg-green-900/20 border-green-800';
+
+                        // Matched params (what campaign already has) 
+                        const matchedTags = (opp.matched_params || []).map(p =>
+                            `<span class="inline-block text-[10px] bg-green-900/40 text-green-300 border border-green-800/60 px-1.5 py-0.5 rounded mr-1 mb-1">✓ ${escapeHtml(p)}</span>`
+                        ).join('');
+
+                        // Missing params (what to test)
+                        const missingTags = (opp.missing_params || []).map(p =>
+                            `<span class="inline-block text-[10px] bg-orange-900/40 text-orange-300 border border-orange-800/60 px-1.5 py-0.5 rounded mr-1 mb-1">→ ${escapeHtml(p)}</span>`
+                        ).join('');
+
+                        const conv = opp.conversions || 0;
+                        const oppSpend = opp.spend || 0;
+
+                        return `
+                        <div class="p-3 mb-2 rounded border ${oppBg}">
+                            <div class="flex items-start justify-between mb-1">
+                                <div class="text-[13px] font-bold ${oppColor} flex items-center gap-1">${oppIcon} ${isPivot ? 'PIVOT ТЕСТ' : 'TOP СВЯЗКА'}</div>
+                                <div class="text-[11px] font-mono text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-700" title="Глобальный профит связки">+$${Math.abs(opp.profit || 0).toFixed(0)} <span class="text-zinc-500">(ROI ${opp.roi}%)</span></div>
+                            </div>
+                            <div class="text-[11px] text-zinc-300 mb-2 leading-relaxed">${escapeHtml(opp.message || '')}</div>
+                            ${matchedTags || missingTags ? `
+                            <div class="flex flex-wrap gap-0.5 mb-2">
+                                ${matchedTags}${missingTags}
+                            </div>` : ''}
+                            <div class="flex items-center gap-3 text-[10px] text-zinc-500 border-t border-dashed border-zinc-700/50 pt-1">
+                                <span>💰 Spend: $${oppSpend.toFixed(0)}</span>
+                                <span>🔁 Conv: ${conv}</span>
+                                <span title="Глобальная связка из фабрики"><strong>Связка:</strong> ${escapeHtml(opp.combo || '')}</span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else {
+                    factoryHtml = '<div class="text-zinc-500 text-sm py-4 px-2 text-center border border-dashed border-zinc-800 rounded bg-zinc-900/30">Глобальные точки масштабирования не найдены. Фабрика инсайтов пуста или не настроена для этого источника.</div>';
+                }
 
                 if (botActions.length > 0) {
                     // === РЕЖИМ 1: Синергийные bot_actions из backend (приоритет) ===
@@ -510,8 +713,8 @@
                 }
 
                 // Определяем заголовок для Key Drivers в зависимости от типа анализа
-                const keyDriversTitle = hasDeepAnalysis ? 
-                    '🔥 Глубокий анализ Key Drivers' : 
+                const keyDriversTitle = hasDeepAnalysis ?
+                    '🔥 Глубокий анализ Key Drivers' :
                     '🔥 Key Drivers';
                 const keyDriversSubtitle = hasDeepAnalysis ?
                     '<span class="text-[10px] font-normal text-zinc-500 bg-purple-900 px-2 py-0.5 rounded border border-purple-800">Анализ 26 параметров + паттерны</span>' :
@@ -519,7 +722,7 @@
 
                 // Получаем сводку глубокого анализа если она есть
                 const deepAnalysisSummary = analysisData.deep_analysis?.summary || {};
-                
+
                 // Создаем фильтры по категориям для Key Drivers (только если есть параметры по категориям)
                 let categoryFiltersHtml = '';
                 if (hasParameterCategories) {
@@ -528,7 +731,7 @@
                         const cat = paramData.category || 'other';
                         categories[cat] = (categories[cat] || 0) + 1;
                     });
-                    
+
                     const categoryList = Object.entries(categories).map(([cat, count]) => ({
                         cat,
                         count,
@@ -541,13 +744,13 @@
                             'other': '⚫'
                         }[cat] || '⚫'
                     }));
-                    
+
                     categoryFiltersHtml = `
                         <div class="flex flex-wrap gap-2 mb-4" id="categoryFilters">
                             <button class="category-filter active px-3 py-1.5 text-xs rounded-lg bg-purple-700 text-white" data-category="all">
                                 Все (${filteredParams.length})
                             </button>
-                            ${categoryList.map(({cat, count, icon}) => `
+                            ${categoryList.map(({ cat, count, icon }) => `
                                 <button class="category-filter px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700" data-category="${cat}">
                                     ${icon} ${cat} (${count})
                                 </button>
@@ -559,7 +762,7 @@
                 div.innerHTML = `
                     <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
                         <div>
-                            <h2 class="text-lg font-bold text-white mb-3">${escapeHtml(a.campaign || '')} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${escapeHtml(a.campaign_id||'')}" onclick="copyId(this)" title="Скопировать">(${escapeHtml(a.campaign_id||'')})</span></h2>
+                            <h2 class="text-lg font-bold text-white mb-3">${escapeHtml(a.campaign || '')} <span class="text-zinc-500 text-sm font-normal cursor-pointer hover:text-zinc-300" data-copy="${escapeHtml(a.campaign_id || '')}" onclick="copyId(this)" title="Скопировать">(${escapeHtml(a.campaign_id || '')})</span></h2>
                             <div class="flex flex-wrap gap-x-6 gap-y-1 metrics-hero text-white/90">
                                 <span>Profit <span class="profit ${a.profit >= 0 ? 'text-green-400' : 'text-red-400'}">$${a.profit}</span></span>
                                 <span>ROI ${a.roi}%</span>
@@ -578,7 +781,7 @@
 
                     <div class="card p-3 mb-4 overflow-x-auto">
                         <table class="dyn-table w-full text-zinc-400 border-collapse">
-                            <thead><tr class="border-b border-zinc-700">${dateLabels.map((l,i) => '<th class="py-2 font-normal">'+l+'</th>').join('')}</tr></thead>
+                            <thead><tr class="border-b border-zinc-700">${dateLabels.map((l, i) => '<th class="py-2 font-normal">' + l + '</th>').join('')}</tr></thead>
                             <tbody><tr class="border-b border-zinc-800">${dateCells}</tr></tbody>
                         </table>
                     </div>
@@ -656,27 +859,46 @@
                     </section>
 
                     <div class="card p-4 mb-4">
-                        <h3 class="text-sm font-bold text-white mb-3">Действия</h3>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div>
-                                <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                    ${analysisData.deep_analysis && analysisData.deep_analysis.prioritized_recommendations ? '🎯 Приоритетные рекомендации' : '🤖 Бот рекомендует (Logic Blocks)'}
+                        <h3 class="text-sm font-bold text-white mb-4 flex items-center justify-between">
+                            <span>⚡ ОПЕРАЦИОННЫЕ ДЕЙСТВИЯ</span>
+                        </h3>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            
+                            <!-- ЛЕВАЯ КОЛОНКА (Кампания) -->
+                            <div class="pr-0 lg:pr-4 lg:border-r border-zinc-800">
+                                <h4 class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-orange-500"></div> 
+                                    Локальный анализ (Эта кампания)
                                 </h4>
-                                <ul class="space-y-2">
-                                    ${prioritizedActionsHtml || '<li class="text-zinc-500 text-sm">Нет рекомендаций — мало данных или кампания в норме</li>'}
-                                </ul>
-                            </div>
-                            <div>
-                                <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Path → Offer → Lander</h4>
-                                <div class="space-y-1.5">
+                                
+                                <div class="mb-5">
+                                    <ul class="space-y-1.5">
+                                        ${prioritizedActionsHtml || '<li class="text-zinc-500 text-sm">Нет действий</li>'}
+                                    </ul>
+                                </div>
+                                
+                                <h4 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest mb-2 border-b border-zinc-800/50 pb-1">Path → Offer → Lander</h4>
+                                <div class="space-y-1.5 bg-zinc-900/30 p-2 rounded">
                                     ${pathOfferLander.length ? pathOfferLander.map(c => `
-                                    <div class="flow-row flex justify-between items-center">
-                                        <span>${escapeHtml(c.path||'')}/${escapeHtml(c.rule||'')} → ${escapeHtml(c.offer_id||c.offer||'')}/${escapeHtml(c.lander_id||'')}</span>
-                                        <span class="${(c.profit||0) >= 0 ? 'text-green-400' : 'text-red-400'} font-mono">$${c.profit||0}</span>
+                                    <div class="flow-row flex justify-between items-center text-[11px]">
+                                        <span class="text-zinc-300 truncate pr-2">${escapeHtml(c.path || '')}/${escapeHtml(c.rule || '')} → <span class="text-white">${escapeHtml(c.offer_id || c.offer || '')}</span>/${escapeHtml(c.lander_id || '')}</span>
+                                        <span class="${(c.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'} font-bold shrink-0">$${c.profit || 0}</span>
                                     </div>
-                                    `).join('') : '<p class="text-zinc-500 text-sm">Нет данных. Нужен трафик с path/rule/offer/lander.</p>'}
+                                    `).join('') : '<p class="text-zinc-600 text-[10px]">Нет данных.</p>'}
                                 </div>
                             </div>
+                            
+                            <!-- ПРАВАЯ КОЛОНКА (Фабрика) -->
+                            <div>
+                                <h4 class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div> 
+                                    Глобальный анализ (Opportunity Engine)
+                                </h4>
+                                <div class="space-y-0">
+                                    ${factoryHtml}
+                                </div>
+                            </div>
+                            
                         </div>
                     </div>
 
@@ -708,15 +930,15 @@
                         <div class="px-3 pb-3 space-y-1.5">
                             ${decisions.length ? decisions.map(d => `
                             <div class="text-xs py-1.5 border-b border-zinc-800 last:border-0">
-                                ${escapeHtml(d.decision_date)} — <span class="verdict-${d.bot_proposal||'HOLD'}">${d.bot_proposal||''}</span> → <span class="verdict-${d.user_choice||'HOLD'}">${d.user_choice||''}</span>
-                                ${d.user_comment ? '<span class="text-zinc-500 block">'+escapeHtml(d.user_comment)+'</span>' : ''}
+                                ${escapeHtml(d.decision_date)} — <span class="verdict-${d.bot_proposal || 'HOLD'}">${d.bot_proposal || ''}</span> → <span class="verdict-${d.user_choice || 'HOLD'}">${d.user_choice || ''}</span>
+                                ${d.user_comment ? '<span class="text-zinc-500 block">' + escapeHtml(d.user_comment) + '</span>' : ''}
                             </div>
                             `).join('') : '<p class="text-zinc-500 text-sm">Нет записей</p>'}
                         </div>
                     </details>
                 `;
                 lucide.createIcons();
-                
+
                 // Добавляем обработчики для фильтров категорий
                 if (hasParameterCategories) {
                     setupCategoryFilters();
@@ -747,7 +969,7 @@
                     label: (w.type || '') + ' ' + (w.value || ''),
                     profit: w.profit,
                     text: 'Слив бюджета. ROI низкий, ' + (w.traffic_pct || 0) + '% трафика.',
-                    meta: 'Spend: $' + w.spend + ' • ROI: ' + (w.profit && w.spend ? Math.round(w.profit/w.spend*100) : 0) + '%'
+                    meta: 'Spend: $' + w.spend + ' • ROI: ' + (w.profit && w.spend ? Math.round(w.profit / w.spend * 100) : 0) + '%'
                 });
             });
             strengths.forEach(s => {
@@ -816,10 +1038,10 @@
         function setupCategoryFilters() {
             const container = document.getElementById('keyDriversContainer');
             const filterButtons = document.querySelectorAll('.category-filter');
-            
+
             // Сохраняем оригинальное содержимое контейнера ДО любых изменений
             const originalContainerHTML = container.innerHTML;
-            
+
             // Инициализируем data-атрибуты категорий для каждой карточки
             const allCards = container.querySelectorAll('.driver-card');
             allCards.forEach(card => {
@@ -830,23 +1052,23 @@
             });
 
             filterButtons.forEach(button => {
-                button.addEventListener('click', function() {
+                button.addEventListener('click', function () {
                     // Сбрасываем активное состояние у всех кнопок
                     filterButtons.forEach(btn => {
                         btn.classList.remove('active', 'bg-purple-700', 'text-white');
                         btn.classList.add('bg-zinc-800', 'text-zinc-300');
                     });
-                    
+
                     // Устанавливаем активное состояние для текущей кнопки
                     this.classList.remove('bg-zinc-800', 'text-zinc-300');
                     this.classList.add('active', 'bg-purple-700', 'text-white');
-                    
+
                     const selectedCategory = this.dataset.category;
-                    
+
                     if (selectedCategory === 'all') {
                         // ВОССТАНАВЛИВАЕМ оригинальное содержимое контейнера
                         container.innerHTML = originalContainerHTML;
-                        
+
                         // Снова инициализируем data-атрибуты для восстановленных карточек
                         const restoredCards = container.querySelectorAll('.driver-card');
                         restoredCards.forEach(card => {
@@ -858,7 +1080,7 @@
                         // Фильтруем по выбранной категории
                         const allCards = container.querySelectorAll('.driver-card');
                         let hasVisibleCards = false;
-                        
+
                         allCards.forEach(card => {
                             if (card.dataset.category === selectedCategory) {
                                 card.style.display = 'block';
@@ -867,7 +1089,7 @@
                                 card.style.display = 'none';
                             }
                         });
-                        
+
                         // Показываем сообщение если нет карточек в этой категории
                         const noDataMessage = container.querySelector('.text-zinc-500.text-sm.col-span-full');
                         if (!hasVisibleCards) {
@@ -889,4 +1111,5 @@
         loadSources();
     </script>
 </body>
+
 </html>
