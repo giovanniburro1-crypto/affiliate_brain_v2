@@ -94,3 +94,19 @@ class AIAgent(Base):
     model = Column(String(100))
     system_prompt = Column(Text)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AdvertiserDirective(Base):
+    __tablename__ = 'advertiser_directives'
+    id = Column(Integer, primary_key=True)
+    token1 = Column(String(50), nullable=False)
+    affiliate_network = Column(String(255), nullable=False)
+    action = Column(String(20), nullable=False)  # STOP / SCALE / BUMP / TEST
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        # Unique constraint for upsert: same token1 + network = overwrite
+        # Using Index with unique=True for SQLite compatibility
+    )
+

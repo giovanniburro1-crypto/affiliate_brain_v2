@@ -18,6 +18,7 @@
         .nav-item.active { background: #8b5cf6; }
         select, textarea, input[type="text"] { background: #12121a; border: 1px solid #2a2a3a; color: #fff; }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css">
 </head>
 <body class="min-h-screen">
     <div class="flex">
@@ -43,7 +44,7 @@
         <main class="ml-56 flex-1 p-6">
             <h1 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="settings" class="w-6 h-6"></i>Settings</h1>
             
-            <!-- Git Commit Section -->
+            <!-- Git Backup Section -->
             <div class="card p-4 mb-6">
                 <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="git-branch" class="w-4 h-4"></i>Git Backup</h3>
                 <div class="flex gap-3">
@@ -53,6 +54,63 @@
                     </button>
                 </div>
                 <div id="gitStatus" class="text-sm mt-3"></div>
+            </div>
+
+            <!-- Advertiser Directives Section -->
+            <div class="card p-4 mb-6">
+                <div class="flex justify-between items-center cursor-pointer mb-1" onclick="toggleDirectives()">
+                    <h3 class="font-semibold flex items-center gap-2">
+                        <i data-lucide="clipboard-list" class="w-4 h-4"></i>Advertiser Directives
+                    </h3>
+                    <i data-lucide="chevron-down" id="directivesChevron" class="w-5 h-5 transition-transform duration-200"></i>
+                </div>
+                <p class="text-xs text-zinc-500 mb-4">Stop / Scale / Bump / Test rules from advertisers</p>
+
+                <div id="directivesContent">
+                    <!-- Add form -->
+                    <div class="flex gap-3 items-end mb-4 flex-wrap">
+                        <div class="w-28">
+                            <label class="text-xs text-zinc-400 block mb-1">Token1</label>
+                            <input type="text" id="dirToken1" placeholder="e.g. 2090" class="w-full px-3 py-2 rounded-lg text-sm" pattern="[0-9]*" inputmode="numeric">
+                        </div>
+                        <div class="flex-1 min-w-[200px] relative">
+                            <label class="text-xs text-zinc-400 block mb-1">Affiliate Network</label>
+                            <input type="text" id="dirNetworkInput" placeholder="Search network..." class="w-full px-3 py-2 rounded-lg text-sm" autocomplete="off" oninput="searchNetworks(this.value)" onfocus="showNetworkDropdown()">
+                            <div id="networkDropdown" class="absolute z-50 w-full mt-1 rounded-lg border border-zinc-700 max-h-48 overflow-y-auto hidden" style="background: #202024;">
+                            </div>
+                        </div>
+                        <div class="w-32">
+                            <label class="text-xs text-zinc-400 block mb-1">Action</label>
+                            <select id="dirAction" class="w-full px-3 py-2 rounded-lg text-sm">
+                                <option value="STOP">🔴 STOP</option>
+                                <option value="SCALE">🟢 SCALE</option>
+                                <option value="BUMP">⬆️ BUMP</option>
+                                <option value="TEST">🔵 TEST</option>
+                            </select>
+                        </div>
+                        <button onclick="addDirective()" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-1">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Add
+                        </button>
+                    </div>
+
+                    <div id="dirStatus" class="text-sm mb-3 hidden"></div>
+
+                    <!-- Directives table (Max 15 rows scrolling) -->
+                    <div class="overflow-x-auto" style="max-height: 530px; overflow-y: auto;">
+                        <table class="w-full text-sm">
+                            <thead class="sticky top-0" style="background: #202024;">
+                                <tr class="text-zinc-400 text-xs border-b border-zinc-700">
+                                    <th class="text-left py-2 px-3">Token1</th>
+                                    <th class="text-left py-2 px-3">Affiliate Network</th>
+                                    <th class="text-center py-2 px-3">Action</th>
+                                    <th class="text-center py-2 px-3 w-16"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="directivesTable"></tbody>
+                        </table>
+                        <div id="directivesEmpty" class="text-center text-zinc-500 text-sm py-6 hidden">No directives yet. Add your first rule above.</div>
+                    </div>
+                </div>
             </div>
             
             <!-- General Settings Section -->
@@ -74,15 +132,43 @@
         </main>
     </div>
     <script>
+        const ACTION_BADGES = {
+            'STOP': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30">🔴 STOP</span>',
+            'SCALE': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">🟢 SCALE</span>',
+            'BUMP': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">⬆️ BUMP</span>',
+            'TEST': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">🔵 TEST</span>',
+        };
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
+            loadDirectives();
+
+            // Close network dropdown on outside click
+            document.addEventListener('click', (e) => {
+                const dd = document.getElementById('networkDropdown');
+                const inp = document.getElementById('dirNetworkInput');
+                if (dd && inp && !dd.contains(e.target) && e.target !== inp) {
+                    dd.classList.add('hidden');
+                }
+            });
         });
 
+        function toggleDirectives() {
+            const content = document.getElementById('directivesContent');
+            const chevron = document.getElementById('directivesChevron');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                content.classList.add('hidden');
+                chevron.style.transform = 'rotate(-90deg)';
+            }
+        }
+
+        // ─── Git ───
         async function gitCommit() {
             const msg = document.getElementById('commitMessage').value || 'Auto backup';
             const status = document.getElementById('gitStatus');
             status.innerHTML = '<span class="text-yellow-400">Pushing to GitHub...</span>';
-            
             try {
                 const res = await fetch('/api/ai-settings/git/commit', {
                     method: 'POST',
@@ -99,6 +185,134 @@
             } catch (e) {
                 status.innerHTML = '<span class="text-red-400">✗ ' + e.message + '</span>';
             }
+        }
+
+        // ─── Directives ───
+        let allNetworks = [];
+
+        async function loadDirectives() {
+            try {
+                const res = await fetch('/api/directives');
+                const data = await res.json();
+                renderDirectives(data.directives || []);
+            } catch (e) {
+                console.error('Failed to load directives', e);
+            }
+        }
+
+        function renderDirectives(directives) {
+            const tbody = document.getElementById('directivesTable');
+            const empty = document.getElementById('directivesEmpty');
+            if (!directives.length) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            tbody.innerHTML = directives.map(d => `
+                <tr class="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
+                    <td class="py-2 px-3 font-mono font-bold text-white">${d.token1}</td>
+                    <td class="py-2 px-3 text-zinc-300">${d.affiliate_network}</td>
+                    <td class="py-2 px-3 text-center">${ACTION_BADGES[d.action] || d.action}</td>
+                    <td class="py-2 px-3 text-center">
+                        <button onclick="deleteDirective(${d.id})" class="text-zinc-500 hover:text-red-400 transition-colors" title="Delete">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        async function addDirective() {
+            const token1 = document.getElementById('dirToken1').value.trim();
+            const network = document.getElementById('dirNetworkInput').value.trim();
+            const action = document.getElementById('dirAction').value;
+            const status = document.getElementById('dirStatus');
+
+            if (!token1 || !network) {
+                status.className = 'text-sm mb-3 text-red-400';
+                status.textContent = 'Token1 and Affiliate Network are required';
+                status.classList.remove('hidden');
+                setTimeout(() => status.classList.add('hidden'), 3000);
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/directives', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token1, affiliate_network: network, action })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    status.className = 'text-sm mb-3 text-emerald-400';
+                    status.textContent = '✓ Directive saved';
+                    status.classList.remove('hidden');
+                    document.getElementById('dirToken1').value = '';
+                    document.getElementById('dirNetworkInput').value = '';
+                    loadDirectives();
+                    setTimeout(() => status.classList.add('hidden'), 2000);
+                } else {
+                    status.className = 'text-sm mb-3 text-red-400';
+                    status.textContent = '✗ ' + (data.error || 'Error');
+                    status.classList.remove('hidden');
+                }
+            } catch (e) {
+                status.className = 'text-sm mb-3 text-red-400';
+                status.textContent = '✗ Network error';
+                status.classList.remove('hidden');
+            }
+        }
+
+        async function deleteDirective(id) {
+            if (!confirm('Delete this directive?')) return;
+            try {
+                await fetch('/api/directives/' + id, { method: 'DELETE' });
+                loadDirectives();
+            } catch (e) {
+                alert('Error deleting directive');
+            }
+        }
+
+        // ─── Network Search Dropdown ───
+        let searchTimeout = null;
+
+        function showNetworkDropdown() {
+            searchNetworks(document.getElementById('dirNetworkInput').value);
+        }
+
+        async function searchNetworks(query) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const url = query ? `/api/directives/networks?q=${encodeURIComponent(query)}` : '/api/directives/networks';
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    allNetworks = data.networks || [];
+                    renderNetworkDropdown(allNetworks);
+                } catch (e) {
+                    console.error(e);
+                }
+            }, 150);
+        }
+
+        function renderNetworkDropdown(networks) {
+            const dd = document.getElementById('networkDropdown');
+            if (!networks.length) {
+                dd.innerHTML = '<div class="px-3 py-2 text-xs text-zinc-500">No networks found</div>';
+                dd.classList.remove('hidden');
+                return;
+            }
+            dd.innerHTML = networks.map(n =>
+                `<div class="px-3 py-2 text-sm text-zinc-300 hover:bg-emerald-500/15 hover:text-white cursor-pointer transition-colors" onclick="selectNetwork('${n.replace(/'/g, "\\'")}')">${n}</div>`
+            ).join('');
+            dd.classList.remove('hidden');
+        }
+
+        function selectNetwork(name) {
+            document.getElementById('dirNetworkInput').value = name;
+            document.getElementById('networkDropdown').classList.add('hidden');
         }
     </script>
 

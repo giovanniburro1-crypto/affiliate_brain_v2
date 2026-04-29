@@ -189,6 +189,7 @@
             background: #3f3f46;
         }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css">
 </head>
 
 <body class="min-h-screen">
@@ -321,7 +322,7 @@
             const sel = document.getElementById('campaignSelect');
             const campaigns = data.campaigns || [];
             sel.innerHTML = campaigns.length
-                ? campaigns.map(c => `<option value="${(c.campaign_id || '').replace(/"/g, '"')}">${(c.campaign || '').replace(/^[^-]+-\s*/i, '')} ($${c.spend})</option>`).join('')
+                ? campaigns.map(c => `<option value="${(c.campaign_id || '').replace(/"/g, '&quot;')}">${(c.campaign || '').replace(/^Mediabuys\s*-\s*/i, '')} ($${c.spend})</option>`).join('')
                 : '<option value="">No campaigns</option>';
         }
 

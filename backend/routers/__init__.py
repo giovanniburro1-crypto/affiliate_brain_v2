@@ -5,3 +5,5 @@ from backend.routers.ai_settings import router as ai_settings_router
 from backend.routers.providers import router as providers_router
 from backend.routers.ai_agents import router as ai_agents_router
 from backend.routers.company_analytics import router as company_analytics_router
+from backend.routers.directives import router as directives_router
+

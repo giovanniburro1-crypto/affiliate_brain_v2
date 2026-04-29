@@ -1,0 +1,186 @@
+:root {
+    --bg-main: #18181b;       /* Zinc 900 */
+    --bg-sidebar: #111113;    /* Darker gray */
+    --bg-card: #202024;       /* Zinc 800 */
+    --bg-card-hover: #27272a; /* Zinc 750 */
+    --border-main: #3f3f46;   /* Zinc 700 */
+    
+    --primary: #10b981;       /* Emerald 500 */
+    --primary-hover: #059669; /* Emerald 600 */
+    --primary-light: rgba(16, 185, 129, 0.15);
+    --primary-glow: rgba(16, 185, 129, 0.3);
+    
+    --text-light: #ffffff;
+    --text-muted: #a1a1aa;
+}
+
+/* Global Styles Override */
+body {
+    background-color: var(--bg-main) !important;
+    color: var(--text-light) !important;
+    transition: background-color 0.3s ease;
+}
+
+.sidebar {
+    background-color: var(--bg-sidebar) !important;
+    border-right: 1px solid var(--border-main) !important;
+}
+
+.card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-main) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+/* Maximizing visibility and clickability */
+.card:hover {
+    background-color: var(--bg-card-hover) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Standardize Primary Buttons */
+.btn-primary, 
+.btn-success, 
+.btn-blue, 
+.btn-github,
+button.bg-purple-600, 
+a.bg-purple-600,
+.bg-purple-600,
+#loadBtn,
+#applyBtn {
+    background-color: var(--primary) !important;
+    color: var(--text-light) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    padding: 10px 20px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border: 1px solid transparent !important;
+    outline: none !important;
+}
+
+.btn-primary:hover, 
+.btn-success:hover, 
+.btn-blue:hover, 
+.btn-github:hover,
+button.bg-purple-600:hover, 
+a.bg-purple-600:hover,
+.bg-purple-600:hover,
+#loadBtn:hover,
+#applyBtn:hover {
+    background-color: var(--primary-hover) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 12px var(--primary-glow) !important;
+}
+
+.btn-primary:active, 
+.btn-success:active, 
+#loadBtn:active,
+#applyBtn:active {
+    transform: translateY(0) !important;
+}
+
+/* Nav items */
+.nav-item {
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+    color: var(--text-muted) !important;
+    font-weight: 500 !important;
+}
+
+.nav-item:hover {
+    background-color: var(--primary-light) !important;
+    color: var(--text-light) !important;
+}
+
+.nav-item.active {
+    background-color: var(--primary) !important;
+    color: var(--text-light) !important;
+    box-shadow: 0 4px 6px -1px var(--primary-light) !important;
+}
+
+/* Form controls */
+select, textarea, input[type="text"], input[type="date"] {
+    background-color: var(--bg-sidebar) !important;
+    border: 1px solid var(--border-main) !important;
+    color: var(--text-light) !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+    outline: none !important;
+}
+
+select:focus, textarea:focus, input[type="text"]:focus, input[type="date"]:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 2px var(--primary-light) !important;
+}
+
+/* Override common Tailwind classes */
+.text-purple-400 { color: var(--primary) !important; }
+.text-purple-500 { color: var(--primary) !important; }
+.hover\:text-purple-300:hover { color: #34d399 !important; }
+.bg-purple-500 { background-color: var(--primary) !important; }
+.bg-purple-700 { background-color: var(--primary-hover) !important; }
+.hover\:bg-purple-700:hover { background-color: var(--primary-hover) !important; }
+.bg-purple-900 { background-color: #064e3b !important; }
+.border-purple-800 { border-color: #065f46 !important; }
+
+/* Multiselect Overrides */
+.multiselect-trigger {
+    background-color: var(--bg-sidebar) !important;
+    border: 1px solid var(--border-main) !important;
+}
+.multiselect-dropdown {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-main) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+.multiselect-option:hover {
+    background-color: var(--primary-light) !important;
+}
+
+/* Scrollbars for readability */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-main);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Custom badges and status */
+.verdict-SCALE { color: #34d399 !important; }
+.verdict-STOP { color: #f87171 !important; }
+.verdict-OPTIMIZE { color: #60a5fa !important; }
+.verdict-HOLD, .verdict-CONTINUE { color: #fbbf24 !important; }
+
+.profit-green { color: #34d399 !important; font-weight: 600; }
+.profit-red { color: #f87171 !important; font-weight: 600; }
+
+/* Sidebar gradient enhancement */
+.bg-gradient-to-br.from-purple-500.to-pink-500,
+.bg-gradient-to-br.from-purple-600.to-pink-600 {
+    background-image: linear-gradient(135deg, var(--primary) 0%, #14b8a6 100%) !important;
+}
+
+/* Call-to-actions glow */
+.source-name-cell:hover {
+    color: var(--primary) !important;
+    text-decoration: underline;
+}
+
+.period-btn.active {
+    background-color: var(--primary) !important;
+}

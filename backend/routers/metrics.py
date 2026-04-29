@@ -388,17 +388,22 @@ async def get_sources(
     if period == 0:
         # Fetch all time
         result = db.execute(text(
-            f"SELECT DISTINCT traffic_source FROM traffic_stats "
+            f"SELECT traffic_source FROM traffic_stats "
             f"WHERE traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
+            f"GROUP BY traffic_source "
+            f"HAVING SUM(cost) >= 10 "
             f"ORDER BY traffic_source"
         )).fetchall()
     else:
         date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
         result = db.execute(text(
-            f"SELECT DISTINCT traffic_source FROM traffic_stats "
+            f"SELECT traffic_source FROM traffic_stats "
             f"WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
+            f"GROUP BY traffic_source "
+            f"HAVING SUM(cost) >= 10 "
             f"ORDER BY traffic_source"
         ), {'d': date_from, 'd_to': date_to}).fetchall()
+
         
     return {"sources": [r[0] for r in result]}
 
@@ -477,8 +482,12 @@ async def get_sources_table(
 ):
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
     sources = db.execute(text(
-        f"SELECT DISTINCT traffic_source FROM traffic_stats WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION}"
+        f"SELECT traffic_source FROM traffic_stats "
+        f"WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
+        f"GROUP BY traffic_source "
+        f"HAVING SUM(cost) >= 10"
     ), {'d': date_from, 'd_to': date_to}).fetchall()
+
     result = []
     for (src,) in sources:
         daily = db.execute(text("SELECT date, SUM(cost), SUM(revenue) FROM traffic_stats WHERE traffic_source = :s AND date >= :d AND date <= :d_to GROUP BY date ORDER BY date"), {'s': src, 'd': date_from, 'd_to': date_to}).fetchall()
@@ -842,7 +851,7 @@ async def get_campaigns_table(
         FROM all_cids ac
         LEFT JOIN campaign_base cb ON ac.campaign_id = cb.campaign_id
         LEFT JOIN campaign_add ca ON ac.campaign_id = ca.campaign_id
-        ORDER BY total_rev DESC, total_spend DESC
+        ORDER BY total_spend DESC, total_rev DESC
         LIMIT 25
     """
 
@@ -856,9 +865,8 @@ async def get_campaigns_table(
         c_name = row[2]
         total_spend_val = int(row[3] or 0)
         
-        day_params = {'cid': cid, 'd': str(date_from), 'd_to': str(date_to)}
-        if source and source != "all":
-            day_params['source'] = source
+        day_params = {**params, 'cid': cid}
+
         
         # Собираем данные из трафика и монетизации по дням
         daily_traffic = db.execute(text(f"""
@@ -906,11 +914,13 @@ async def get_campaigns_table(
             days_dict[day_key] = {"profit": d_profit, "color": color}
 
         result.append({
+            "campaign_id": cid,
             "token1": token1_val,
             "campaign": c_name,
             "spend": total_spend_val,
             "days": days_dict
         })
+
 
     
     return {'campaigns': result, 'date_from': date_from.strftime('%Y-%m-%d')}
@@ -924,10 +934,9 @@ def get_campaign_daily_days(
     source: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Возвращает days[MM-DD] = {profit, color} для внутреннего использования."""
-    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
     params = {'cid': campaign_id, 'd': date_from, 'd_to': date_to}
-    if source and source != "all":
-        params['source'] = source
+    source_filter = _apply_source_filter(params, source)
+
     daily_query = f"""
         SELECT date, SUM(cost), SUM(revenue)
         FROM traffic_stats
@@ -974,10 +983,9 @@ async def get_campaign_daily_row(
     last14: суммарные метрики за последние 14 дней.
     """
     date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
-    source_filter = "AND traffic_source = :source" if source and source != "all" else ""
     params = {'cid': campaign_id, 'd': date_from, 'd_to': date_to}
-    if source and source != "all":
-        params['source'] = source
+    source_filter = _apply_source_filter(params, source)
+
 
     # Campaign name and total spend for the period
     meta = db.execute(text(f"""
@@ -1007,13 +1015,13 @@ async def get_campaign_daily_row(
     last14_to = date.today()
     last14_from = last14_to - timedelta(days=13)
     last14_params = {'cid': campaign_id, 'd': last14_from, 'd_to': last14_to}
-    if source and source != "all":
-        last14_params['source'] = source
+    last14_source_filter = _apply_source_filter(last14_params, source)
     last14_row = db.execute(text(f"""
         SELECT SUM(cost), SUM(revenue)
         FROM traffic_stats
-        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {source_filter}
+        WHERE campaign_id = :cid AND date >= :d AND date <= :d_to {last14_source_filter}
     """), last14_params).fetchone()
+
     last14_add = db.execute(text("""
         SELECT COALESCE(SUM(revenue), 0)
         FROM additional_monetization

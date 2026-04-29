@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Affiliate Brain v2.0</title>
     <link rel="icon"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238b5cf6'/%3E%3Cpath fill='%23fff' d='M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z'/%3E%3C/svg%3E"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Cpath fill='%23fff' d='M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z'/%3E%3C/svg%3E"
         type="image/svg+xml">
     <!-- Tailwind CDN: для production лучше собрать CSS через PostCSS/CLI -->
     <script>
@@ -171,6 +171,7 @@
             color: #a1a1aa;
             white-space: nowrap;
         }
+
         /* Custom Multiselect */
         .multiselect-container {
             position: relative;
@@ -281,7 +282,58 @@
         .source-name-cell:hover {
             color: #8b5cf6;
         }
+
+        /* Directive indicator dot */
+        .dir-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #f59e0b;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+            animation: dir-pulse 2s ease-in-out infinite;
+        }
+
+
+        @keyframes dir-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .campaign-name-cell.has-directives {
+            cursor: help;
+        }
+
+        /* Native tooltip multiline support via white-space: pre-line in title */
+        /* Custom Tooltip overlay */
+        .directives-tooltip {
+            position: fixed;
+            background: #1a1a24;
+            border: 1px solid #3f3f46;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            pointer-events: none;
+            font-size: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .directives-tooltip.show {
+            display: flex;
+        }
     </style>
+    <link rel="stylesheet" href="/assets/theme.css">
 </head>
 
 <body class="min-h-screen">
@@ -349,8 +401,10 @@
                                 <!-- Options will be loaded here -->
                             </div>
                             <div class="multiselect-footer">
-                                <button class="text-xs text-purple-400 hover:text-purple-300" onclick="selectAllSources(true)">Select All</button>
-                                <button class="text-xs text-zinc-400 hover:text-zinc-300" onclick="selectAllSources(false)">Clear</button>
+                                <button class="text-xs text-purple-400 hover:text-purple-300"
+                                    onclick="selectAllSources(true)">Select All</button>
+                                <button class="text-xs text-zinc-400 hover:text-zinc-300"
+                                    onclick="selectAllSources(false)">Clear</button>
                             </div>
                         </div>
                     </div>
@@ -433,9 +487,20 @@
                     <table class="w-full text-xs campaigns-table">
                         <thead class="sticky top-0 bg-zinc-900 z-[1]">
                             <tr class="text-zinc-400 text-xs border-b border-zinc-700">
-                                <th class="text-left py-2 px-2 sticky left-0 bg-zinc-900 z-[2]">Token1</th>
-                                <th class="text-left py-2 px-2 sticky left-16 bg-zinc-900 z-[2]">Campaign</th>
-                                <th class="text-right py-2 px-2 bg-zinc-900">Spend</th>
+                                <th class="text-center py-2 px-1 sticky left-0 bg-zinc-900 z-[2]" style="width: 36px;">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <input type="checkbox" id="toggleAllOptimized"
+                                            onclick="toggleAllOptimized(this)"
+                                            class="w-4 h-4 rounded text-emerald-500 bg-zinc-900 border-zinc-700 focus:ring-emerald-500 focus:ring-offset-zinc-900 focus:ring-2"
+                                            title="Select/Deselect All">
+                                        <span
+                                            class="cursor-pointer text-xs text-zinc-500 hover:text-emerald-400 font-bold"
+                                            onclick="sortOptimized()" title="Sort by optimized">⇅</span>
+                                    </div>
+                                </th>
+                                <th class="text-left py-2 px-2 sticky left-[36px] bg-zinc-900 z-[2]">Token1</th>
+                                <th class="text-left py-2 px-2 bg-zinc-900">Campaign</th>
+                                <th class="text-right py-2 px-2 bg-zinc-900">Cost</th>
                                 <th class="text-center py-2 px-1 bg-zinc-900 date-col" id="dateHeaders"></th>
                             </tr>
                         </thead>
@@ -448,6 +513,9 @@
 
     <!-- Toast -->
     <div id="copyToast" class="copy-toast">Copied to clipboard!</div>
+
+    <!-- Directives Tooltip -->
+    <div id="directivesTooltip" class="directives-tooltip"></div>
 
     <!-- Upload Modal -->
     <div id="uploadModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
@@ -487,15 +555,17 @@
         const colors = ['#8b5cf6', '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#ec4899'];
         let selectedSources = [];
         let allSourcesList = [];
+        let directivesMap = {};  // token1 -> [{network, action}, ...]
 
-        document.addEventListener('DOMContentLoaded', () => { 
-            lucide.createIcons(); 
-            setDefaultCustomDates(); 
-            toggleCustomDate(); 
-            loadSources(); 
-            loadAll(); 
-            loadOrphansCount(); 
-            
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            setDefaultCustomDates();
+            toggleCustomDate();
+            await loadDirectivesMap();
+            loadSources();
+            loadAll();
+            loadOrphansCount();
+
             // Close dropdown when clicking outside
             document.addEventListener('click', (e) => {
                 const container = document.getElementById('sourceMultiselect');
@@ -504,6 +574,48 @@
                 }
             });
         });
+
+        function showDirTooltip(e, token1) {
+            const tooltip = document.getElementById('directivesTooltip');
+            if (!tooltip || !directivesMap) return;
+
+            // Чистим токен от суффиксов для поиска в мапе
+            let cleaned = String(token1).trim();
+            if (cleaned.includes('_')) {
+                cleaned = cleaned.split('_')[0];
+            }
+            const rules = directivesMap[cleaned] || [];
+            if (rules.length === 0) return;
+
+            const ACTION_LABELS = {
+                'STOP': '🔴 STOP',
+                'SCALE': '🟢 SCALE',
+                'BUMP': '⬆️ BUMP',
+                'TEST': '🔵 TEST'
+            };
+
+            let html = '';
+            rules.forEach(r => {
+                const label = ACTION_LABELS[r.action] || r.action;
+                html += `<div class="font-bold">${r.network}: <span class="px-1.5 py-0.5 rounded text-xs bg-zinc-800">${label}</span></div>`;
+            });
+
+            tooltip.innerHTML = html;
+            tooltip.classList.add('show');
+
+            // Позиционирование tooltip
+            const x = e.clientX + 15;
+            const y = e.clientY + 15;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+        }
+
+        function hideDirTooltip() {
+            const tooltip = document.getElementById('directivesTooltip');
+            if (tooltip) {
+                tooltip.classList.remove('show');
+            }
+        }
 
         function setDefaultCustomDates() {
             const to = new Date();
@@ -595,6 +707,49 @@
             else label.textContent = `${selectedSources.length} selected`;
         }
 
+        function isOptimized(cid) {
+            return localStorage.getItem('optimized_' + cid) === 'true';
+        }
+
+        function toggleCampaignOptimized(cid, checked) {
+            if (checked) {
+                localStorage.setItem('optimized_' + cid, 'true');
+            } else {
+                localStorage.removeItem('optimized_' + cid);
+            }
+        }
+
+        function toggleAllOptimized(headerCheckbox) {
+            const state = headerCheckbox.checked;
+            const checks = document.querySelectorAll('.campaign-optimized-check');
+            checks.forEach(c => {
+                c.checked = state;
+                const cid = c.getAttribute('data-cid');
+                if (state) localStorage.setItem('optimized_' + cid, 'true');
+                else localStorage.removeItem('optimized_' + cid);
+            });
+        }
+
+        let sortOptimizedAsc = true;
+        function sortOptimized() {
+            const table = document.getElementById('campaignsTable');
+            const rows = Array.from(table.querySelectorAll('tr'));
+
+            rows.sort((a, b) => {
+                const checkA = a.querySelector('.campaign-optimized-check').checked;
+                const checkB = b.querySelector('.campaign-optimized-check').checked;
+                if (checkA === checkB) return 0;
+                if (sortOptimizedAsc) {
+                    return checkA ? -1 : 1;
+                } else {
+                    return checkA ? 1 : -1;
+                }
+            });
+
+            sortOptimizedAsc = !sortOptimizedAsc;
+            rows.forEach(r => table.appendChild(r));
+        }
+
         function cleanToken1(t) {
             if (!t) return '';
             // Если токен имеет вид "2306_y", возвращаем только цифры "2306"
@@ -608,6 +763,28 @@
                 toast.classList.add('show');
                 setTimeout(() => toast.classList.remove('show'), 2000);
             });
+        }
+
+        // ─── Advertiser Directives (tooltip) ───
+        const DIR_ICONS = { 'STOP': '🔴', 'SCALE': '🟢', 'BUMP': '⬆️', 'TEST': '🔵' };
+
+        async function loadDirectivesMap() {
+            try {
+                const res = await fetch('/api/directives/by-campaigns');
+                const data = await res.json();
+                directivesMap = data.directives || {};
+            } catch (e) {
+                console.error('Failed to load directives', e);
+                directivesMap = {};
+            }
+        }
+
+        function getDirectivesTooltip(token1) {
+            // Extract numeric prefix from token1 (e.g. "2090_x" -> "2090")
+            const numPrefix = cleanToken1(token1);
+            const dirs = directivesMap[numPrefix];
+            if (!dirs || !dirs.length) return '';
+            return dirs.map(d => `${DIR_ICONS[d.action] || ''} ${d.action} ${d.network}`).join('\n');
         }
 
         async function loadSources() {
@@ -681,8 +858,10 @@
                     datasets: [
                         { label: 'Revenue', data: data.daily.map(d => d.revenue), borderColor: '#22c55e', tension: 0.4 },
                         { label: 'Spend', data: data.daily.map(d => d.cost), borderColor: '#ef4444', tension: 0.4 },
+                        { label: 'Profit', data: data.daily.map(d => d.profit), borderColor: '#f59e0b', tension: 0.4 },
                         { label: 'Traffic ÷10', data: data.daily.map(d => (d.clicks || 0) / 10), borderColor: '#3b82f6', tension: 0.4 }
                     ]
+
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { ticks: { color: '#9ca3af' } }, y: { ticks: { color: '#9ca3af' } } } }
             });
@@ -738,9 +917,29 @@
                 }).join('');
 
                 const cleanedToken = cleanToken1(c.token1);
+                const safeCid = (c.campaign_id || '').replace(/'/g, "\\'");
+                const dirTooltip = getDirectivesTooltip(c.token1);
+
+                // Чистим название от служебных префиксов
+                let campaignName = String(c.campaign || '').trim();
+                let changed = true;
+                while (changed) {
+                    changed = false;
+                    const before = campaignName;
+                    campaignName = campaignName.replace(/^Mediabuys\s*-\s*/i, '');
+                    campaignName = campaignName.trim();
+                    if (campaignName !== before) changed = true;
+                }
+
+                const hasDirs = dirTooltip ? 'has-directives' : '';
+                const campaignCellTitle = dirTooltip ? dirTooltip : campaignName;
                 return `<tr class="border-b border-zinc-800">
-                    <td class="py-2 px-2 sticky left-0 bg-zinc-900 text-xs source-name-cell" onclick="copyToClipboard('${cleanedToken}')" title="Click to copy cleaned Token1">${cleanedToken}</td>
-                    <td class="py-2 px-2 sticky left-16 bg-zinc-900 text-xs truncate" style="max-width: 200px;">${(c.campaign || '').replace(/^Mediabuys\s*-\s*/i, '')}</td>
+                    <td class="py-2 px-1 sticky left-0 bg-zinc-900 text-center" style="width: 36px;">
+                        <input type="checkbox" class="campaign-optimized-check w-4 h-4 rounded text-emerald-500 bg-zinc-900 border-zinc-700 focus:ring-emerald-500 focus:ring-offset-zinc-900 focus:ring-2" data-cid="${c.campaign_id}" ${isOptimized(c.campaign_id) ? 'checked' : ''} onchange="toggleCampaignOptimized('${safeCid}', this.checked)">
+                    </td>
+                    <td class="py-2 px-2 sticky left-[36px] bg-zinc-900 text-xs source-name-cell" onclick="copyToClipboard('${cleanedToken}')" title="Click to copy cleaned Token1">${cleanedToken}</td>
+                    <td class="py-2 px-2 bg-zinc-900 text-xs truncate campaign-name-cell ${hasDirs}" style="max-width: 200px; position: relative;" onmousemove="showDirTooltip(event, '${c.token1}')" onmouseleave="hideDirTooltip()">${dirTooltip ? '<span class="dir-dot"></span>' : ''}${campaignName}</td>
+
                     <td class="py-2 px-2 text-right text-xs">${c.spend.toLocaleString()}</td>
                     ${dateCells}
                 </tr>`;

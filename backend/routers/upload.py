@@ -474,6 +474,7 @@ def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
             token9=str(row.get('token9', '')) if pd.notna(row.get('token9')) else None,
             token10=str(row.get('token10', '')) if pd.notna(row.get('token10')) else None,
             traffic_source=str(row.get('traffic_source', 'Unknown'))[:255],
+            affiliate_network=str(row.get('affiliate_network', ''))[:255] if pd.notna(row.get('affiliate_network')) else None,
             path=str(row.get('path', ''))[:255] if pd.notna(row.get('path')) else None,
             rule=str(row.get('rule', ''))[:255] if pd.notna(row.get('rule')) else None,
             offer=str(row.get('offer', ''))[:255] if pd.notna(row.get('offer')) else None,
@@ -545,6 +546,7 @@ def _save_traffic_batch(db, batch):
         token9 = escape(getattr(obj, 'token9', None))
         token10 = escape(getattr(obj, 'token10', None))
         traffic_source = escape(getattr(obj, 'traffic_source', None))
+        affiliate_network = escape(getattr(obj, 'affiliate_network', None))
         os_val = escape(getattr(obj, 'os', None))
         device_type_val = escape(getattr(obj, 'device_type', None))
         cost = getattr(obj, 'cost', 0) or 0
@@ -554,14 +556,14 @@ def _save_traffic_batch(db, batch):
         values_parts.append(
             f"({click_id}, {campaign_id}, {campaign}, {date_val}, {token1}, {token2}, "
             f"{token3}, {token4}, {token5}, {token6}, {token7}, {token8}, {token9}, {token10}, "
-            f"{traffic_source}, {os_val}, {device_type_val}, {cost}, {revenue}, {conversions})"
+            f"{traffic_source}, {affiliate_network}, {os_val}, {device_type_val}, {cost}, {revenue}, {conversions})"
         )
     
     # Bulk INSERT с ON CONFLICT REPLACE
     sql = f"""
         INSERT OR REPLACE INTO traffic_stats 
         (click_id, campaign_id, campaign, date, token1, token2, token3, token4, token5, 
-         token6, token7, token8, token9, token10, traffic_source, os, device_type, cost, revenue, conversions)
+         token6, token7, token8, token9, token10, traffic_source, affiliate_network, os, device_type, cost, revenue, conversions)
         VALUES {', '.join(values_parts)}
     """
     

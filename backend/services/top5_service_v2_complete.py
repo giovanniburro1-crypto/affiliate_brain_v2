@@ -101,9 +101,10 @@ def _calc_instability_index(daily_data: List[Dict[str, float]]) -> float:
         spend = day.get('cost', 0)
         roi = day.get('roi', 0)
         
-        # Считаем день нестабильным только если потратили больше $15 и ROI меньше 10%
-        if spend > 15 and roi < 10:
+        # Считаем день нестабильным только если потратили больше $10 и ROI меньше 20%
+        if spend > 10 and roi < 20:
             volatile_days += 1
+
             
     return (volatile_days / total_days) * 100
 
@@ -594,7 +595,7 @@ class Top5ServiceV2:
         
         # Базовый SQL запрос
         sql = """
-            SELECT campaign_id, campaign, traffic_source,
+            SELECT campaign_id, MAX(campaign), MAX(traffic_source),
                    SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
             FROM traffic_stats
             WHERE date >= :d AND date <= :d_to
@@ -603,13 +604,15 @@ class Top5ServiceV2:
         # Добавляем условие исключения, если есть исключаемые кампании
         params = {"d": date_from, "d_to": date_to, "min_spend": MIN_SPEND, "min_clicks": MIN_CLICKS}
         if excluded_campaigns:
-            sql += " AND campaign_id NOT IN :excluded"
-            params["excluded"] = tuple(excluded_campaigns)
+            sql += f" AND campaign_id NOT IN ({','.join([':ex' + str(i) for i in range(len(excluded_campaigns))])})"
+            for i, ec in enumerate(excluded_campaigns):
+                params[f"ex{i}"] = ec
         
         sql += """
-            GROUP BY campaign_id, campaign, traffic_source
+            GROUP BY campaign_id
             HAVING SUM(cost) >= :min_spend AND COUNT(*) >= :min_clicks
         """
+
         
         rows = self.db.execute(text(sql), params).fetchall()
         campaigns = []
@@ -763,11 +766,12 @@ class Top5ServiceV2:
         total_days = (date_to - date_from).days + 1
         row = self.db.execute(
             text("""
-                SELECT campaign_id, campaign, traffic_source,
+                SELECT campaign_id, MAX(campaign), MAX(traffic_source),
                        SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
                 FROM traffic_stats
                 WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
-                GROUP BY campaign_id, campaign, traffic_source
+                GROUP BY campaign_id
+
             """),
             {"cid": campaign_id, "d": date_from, "d_to": date_to},
         ).fetchone()
