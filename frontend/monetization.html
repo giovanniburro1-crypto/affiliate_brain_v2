@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliate Brain v2.0</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Cpath fill='%23fff' d='M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 10c3 0 6 1.5 6 3v2H10v-2c0-1.5 3-3 6-3z'/%3E%3C/svg%3E"
+        type="image/svg+xml">
+    <!-- Tailwind CDN: для production лучше собрать CSS через PostCSS/CLI -->
+    <script>
+        (function () {
+            var w = console.warn;
+            console.warn = function (m) { if (typeof m === 'string' && m.indexOf('cdn.tailwindcss.com') !== -1) return; w.apply(console, arguments); };
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background: #0a0a0f;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+        }
+
+        .sidebar {
+            background: #12121a;
+            border-right: 1px solid #2a2a3a;
+        }
+
+        .card {
+            background: #1a1a24;
+            border: 1px solid #2a2a3a;
+            border-radius: 12px;
+        }
+
+        .btn-primary {
+            background: #8b5cf6;
+        }
+
+        .btn-primary:hover {
+            background: #7c3aed;
+        }
+
+        .btn-secondary {
+            background: #3f3f46;
+        }
+
+        .nav-item {
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .nav-item.active {
+            background: #8b5cf6;
+        }
+
+        select {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            color: #fff;
+        }
+
+        .profit-green {
+            color: #22c55e;
+        }
+
+        .profit-red {
+            color: #ef4444;
+        }
+
+        .cell-green {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .cell-red {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .cell-yellow {
+            background: rgba(234, 179, 8, 0.15);
+            color: #eab308;
+        }
+
+        th {
+            background: #12121a;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .modal {
+            backdrop-filter: blur(4px);
+        }
+
+        .progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: #2a2a3a;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #2a2a3a;
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .dashboard-loading {
+            transition: opacity 0.2s;
+        }
+
+        .campaigns-table-wrap {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+            border: 1px solid #2a2a3a;
+            border-radius: 10px;
+            background: #12121a;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar {
+            height: 10px;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar-track {
+            background: #1a1a24;
+            border-radius: 5px;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 5px;
+        }
+
+        .campaigns-table-wrap::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+
+        .campaigns-table {
+            min-width: max-content;
+        }
+
+        .campaigns-table th:nth-child(n+4),
+        .campaigns-table td:nth-child(n+4) {
+            min-width: 2.75rem;
+        }
+
+        .campaigns-table .date-col {
+            font-size: 10px;
+            color: #a1a1aa;
+            white-space: nowrap;
+        }
+
+        /* Custom Multiselect */
+        .multiselect-container {
+            position: relative;
+            width: 200px;
+        }
+
+        .multiselect-trigger {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            min-height: 38px;
+        }
+
+        .multiselect-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a1a24;
+            border: 1px solid #2a2a3a;
+            border-radius: 8px;
+            margin-top: 4px;
+            z-index: 100;
+            max-height: 300px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        .multiselect-dropdown.show {
+            display: flex;
+        }
+
+        .multiselect-search {
+            padding: 8px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .multiselect-search input {
+            width: 100%;
+            background: #0a0a0f;
+            border: 1px solid #3f3f46;
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: #fff;
+            font-size: 12px;
+        }
+
+        .multiselect-options {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .multiselect-option {
+            padding: 6px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .multiselect-option:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .multiselect-option input {
+            cursor: pointer;
+        }
+
+        .multiselect-footer {
+            padding: 8px;
+            border-top: 1px solid #2a2a3a;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            transform: translateY(100px);
+            transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            z-index: 1000;
+        }
+
+        .copy-toast.show {
+            transform: translateY(0);
+        }
+
+        .source-name-cell {
+            cursor: copy;
+            transition: color 0.2s;
+        }
+
+        .source-name-cell:hover {
+            color: #8b5cf6;
+        }
+
+        /* Directive indicator dot */
+        .dir-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #f59e0b;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+            animation: dir-pulse 2s ease-in-out infinite;
+        }
+
+
+        @keyframes dir-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .campaign-name-cell.has-directives {
+            cursor: help;
+        }
+
+        /* Native tooltip multiline support via white-space: pre-line in title */
+        /* Custom Tooltip overlay */
+        .directives-tooltip {
+            position: fixed;
+            background: #1a1a24;
+            border: 1px solid #3f3f46;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            pointer-events: none;
+            font-size: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .directives-tooltip.show {
+            display: flex;
+        }
+
+        /* Orange Checkbox/Radio hybrid Styling */
+        .orange-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border: 1px solid #4b5563;
+            border-radius: 50%; /* Circle shape as requested 'radio button' */
+            background: #18181b;
+            cursor: pointer;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .orange-checkbox:checked {
+            background: #f59e0b !important; /* Amber-500, pleasant orange */
+            border-color: #f59e0b !important;
+        }
+
+        .orange-checkbox:checked::after {
+            content: '✓';
+            color: #fff;
+            font-size: 9px;
+            font-weight: bold;
+            display: block;
+        }
+
+        .orange-checkbox:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
+    <link rel="stylesheet" href="/assets/theme.css">
+</head>
+
+<body class="min-h-screen">
+    <div class="flex">
+        <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
+            <div class="flex items-center gap-2 mb-8">
+                <div
+                    class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <i data-lucide="brain" class="w-5 h-5"></i>
+                </div>
+                <span class="font-bold">AFFILIATE BRAIN</span>
+            </div>
+            <nav class="flex-1 space-y-1">
+                <div class="text-xs text-zinc-500 mb-2 px-3">ANALYSIS</div>
+                <a href="/" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="layout-dashboard"
+                        class="w-4 h-4"></i>Dashboard</a>
+                <a href="/monetization" class="nav-item active flex items-center gap-3 px-3 py-2"><i data-lucide="zap"
+                        class="w-4 h-4"></i>Monetization</a>
+                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">INTELLIGENCE</div>
+                <a href="/bot-top5" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="trophy"
+                        class="w-4 h-4"></i>TOP-5</a>
+                <a href="/bot-stop-optimize" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-red-400"></i>Stop &amp; Optimize</a>
+                <a href="/ai-company-analysis" class="nav-item flex items-center gap-3 px-3 py-2"><i
+                        data-lucide="building-2" class="w-4 h-4"></i>Campaign Analysis</a>
+                <a href="/ai-search-gold" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="search"
+                        class="w-4 h-4"></i>Search for Gold</a>
+                <a href="/re-checking" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="refresh-cw"
+                        class="w-4 h-4"></i>Re-checking</a>
+                <div class="text-xs text-zinc-500 mb-2 mt-4 px-3">SYSTEM</div>
+                <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2"><i data-lucide="settings"
+                        class="w-4 h-4"></i>Settings</a>
+            </nav>
+
+            <div class="space-y-2">
+                <button onclick="openUpload()"
+                    class="btn-primary w-full py-2 rounded-lg flex items-center justify-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i>Upload
+                </button>
+                <button onclick="openOrphans()"
+                    class="btn-secondary w-full py-2 rounded-lg flex items-center justify-center gap-2">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>Orphans <span id="orphanCount"
+                        class="text-xs bg-red-500 px-1.5 rounded">0</span>
+                </button>
+            </div>
+        </aside>
+        <main class="ml-56 flex-1 p-6 relative">
+            <!-- Индикатор загрузки -->
+            <div id="dashboardLoading"
+                class="dashboard-loading hidden absolute inset-0 z-10 bg-black/40 flex items-center justify-center rounded-xl"
+                style="margin: -1.5rem;">
+                <div class="card p-6 flex flex-col items-center gap-4">
+                    <div class="spinner"></div>
+                    <span class="text-zinc-300">Loading data...</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold flex items-center gap-2">
+                        <i data-lucide="zap" class="text-amber-500 w-6 h-6"></i>
+                        Monetization Analytics
+                    </h1>
+                    <p class="text-sm text-zinc-500 mt-1">Detailed correlation between Bought Traffic and Additional Revenue</p>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <div class="multiselect-container" id="sourceMultiselect">
+                        <div class="multiselect-trigger" onclick="toggleSourceDropdown()">
+                            <span id="multiselectLabel">All Sources</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </div>
+                        <div class="multiselect-dropdown" id="sourceDropdown">
+                            <div class="multiselect-search">
+                                <input type="text" placeholder="Search source..." oninput="filterSources(this.value)">
+                            </div>
+                            <div class="multiselect-options" id="sourceOptions">
+                                <!-- Options will be loaded here -->
+                            </div>
+                            <div class="multiselect-footer">
+                                <button class="text-xs text-purple-400 hover:text-purple-300"
+                                    onclick="selectAllSources(true)">Select All</button>
+                                <button class="text-xs text-zinc-400 hover:text-zinc-300"
+                                    onclick="selectAllSources(false)">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate(); loadAll()">
+                        <option value="7">7 days</option>
+                        <option value="14" selected>14 days</option>
+                        <option value="30">30 days</option>
+                        <option value="custom">Custom date</option>
+                    </select>
+                    <div id="customDateRange" class="hidden flex items-center gap-2">
+                        <input type="date" id="customDateFrom"
+                            class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600" onchange="loadAll()">
+                        <span class="text-zinc-500">—</span>
+                        <input type="date" id="customDateTo"
+                            class="px-2 py-1.5 rounded text-sm bg-zinc-800 border border-zinc-600" onchange="loadAll()">
+                    </div>
+                    <button id="applyBtn" onclick="loadAll()"
+                        class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 min-w-[100px] justify-center">Apply</button>
+                </div>
+            </div>
+            
+            <!-- Summary Section -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="card p-4 bg-zinc-800/30 border border-zinc-800 relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-zinc-500"></div>
+                    <span class="text-[10px] uppercase font-bold text-zinc-500 block mb-1">Total Extra Rev</span>
+                    <span class="text-2xl font-bold text-white" id="pageMonRev">$0</span>
+                    <div class="text-[10px] text-zinc-500 mt-1"><span id="pageMonJumps">0</span> jumps</div>
+                </div>
+                <div class="card p-4 bg-emerald-900/20 border border-emerald-800/50 relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                    <div class="flex justify-between items-start">
+                        <span class="text-[10px] uppercase font-bold text-emerald-500/80 block mb-1">Push Revenue</span>
+                        <span class="text-[10px] font-bold text-emerald-500" id="erpmPush">$0.00 eRPM</span>
+                    </div>
+                    <span class="text-2xl font-bold text-white" id="revPush">$0</span>
+                </div>
+                <div class="card p-4 bg-blue-900/20 border border-blue-800/50 relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                    <div class="flex justify-between items-start">
+                        <span class="text-[10px] uppercase font-bold text-blue-500/80 block mb-1">BB (Back Button)</span>
+                        <span class="text-[10px] font-bold text-blue-500" id="erpmBB">$0.00 eRPM</span>
+                    </div>
+                    <span class="text-2xl font-bold text-white" id="revBB">$0</span>
+                </div>
+                <div class="card p-4 bg-purple-900/20 border border-purple-800/50 relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
+                    <div class="flex justify-between items-start">
+                        <span class="text-[10px] uppercase font-bold text-purple-500/80 block mb-1">Double (AddMon)</span>
+                        <span class="text-[10px] font-bold text-purple-500" id="erpmDouble">$0.00 eRPM</span>
+                    </div>
+                    <span class="text-2xl font-bold text-white" id="revDouble">$0</span>
+                </div>
+            </div>
+
+            <!-- Graph Section -->
+            <div class="card p-4 mb-6">
+                <h3 class="font-semibold mb-4 text-zinc-300 uppercase text-sm tracking-wider">Revenue & eRPM Trends</h3>
+                <div style="height:300px"><canvas id="chart"></canvas></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-6">
+                <!-- By Source -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4"></i>
+                        By Traffic Source
+                    </h3>
+                    <div class="overflow-hidden rounded-xl border border-zinc-800 card">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-zinc-800/50 text-zinc-500 border-b border-zinc-800">
+                                <tr>
+                                    <th class="p-3 cursor-pointer hover:text-zinc-300" id="thSource" onclick="sortDashboardTable('source', 'source')">Source</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thSourceJumps" onclick="sortDashboardTable('source', 'jumps')">Jumps</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thSourceCost" onclick="sortDashboardTable('source', 'cost')">Cost</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thSourceErpm" onclick="sortDashboardTable('source', 'erpm')">eRPM</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thSourceRev" onclick="sortDashboardTable('source', 'revenue')">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pageSourceTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- By Campaign -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                        <i data-lucide="target" class="w-4 h-4"></i>
+                        Top Campaigns
+                    </h3>
+                    <div class="overflow-hidden rounded-xl border border-zinc-800 card">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-zinc-800/50 text-zinc-500 border-b border-zinc-800">
+                                <tr>
+                                    <th class="p-3 cursor-pointer hover:text-zinc-300" id="thCamp" onclick="sortDashboardTable('campaign', 'campaign')">Campaign</th>
+                                    <th class="p-3 cursor-pointer hover:text-zinc-300" id="thCampT1" onclick="sortDashboardTable('campaign', 'token1')">T1</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thCampCost" onclick="sortDashboardTable('campaign', 'cost')">Cost</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thCampErpm" onclick="sortDashboardTable('campaign', 'erpm')">eRPM</th>
+                                    <th class="p-3 text-right cursor-pointer hover:text-zinc-300" id="thCampRev" onclick="sortDashboardTable('campaign', 'revenue')">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pageCampaignTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="card p-6 w-96">
+            <h3 class="font-semibold mb-4">Upload File</h3>
+            <input type="file" id="fileInput" accept=".xlsx,.csv" class="mb-4" multiple onchange="uploadFile(this)">
+            <div id="uploadStatus" class="text-sm"></div>
+            <button onclick="closeUpload()" class="mt-4 text-zinc-400">Close</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-4 right-4 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 text-xs z-[9999] shadow-2xl animate-fade-in';
+                toast.textContent = 'Copied: ' + text;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            });
+        }
+        let chart;
+        let selectedSources = [];
+        let allSourcesList = [];
+        let selectedCampaignId = null;
+        let selectedSourceSingle = null;
+        let currentDashboardData = { by_source: [], by_campaign: [] };
+        let sortState = { 
+            source: { col: 'revenue', dir: 'desc' }, 
+            campaign: { col: 'revenue', dir: 'desc' } 
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            setDefaultCustomDates();
+            toggleCustomDate();
+            loadSources();
+            loadAll();
+
+            document.addEventListener('click', (e) => {
+                const container = document.getElementById('sourceMultiselect');
+                if (container && !container.contains(e.target)) {
+                    document.getElementById('sourceDropdown').classList.remove('show');
+                }
+            });
+        });
+
+        function setDefaultCustomDates() {
+            const to = new Date();
+            const from = new Date(to);
+            from.setDate(from.getDate() - 13);
+            document.getElementById('customDateFrom').value = from.toISOString().slice(0, 10);
+            document.getElementById('customDateTo').value = to.toISOString().slice(0, 10);
+        }
+
+        function toggleCustomDate() {
+            const el = document.getElementById('customDateRange');
+            if (document.getElementById('periodSelect').value === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); }
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+
+        function getPeriodParams() {
+            const sel = document.getElementById('periodSelect');
+            if (sel.value === 'custom') {
+                const from = document.getElementById('customDateFrom').value;
+                const to = document.getElementById('customDateTo').value;
+                if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
+            }
+            return 'period=' + sel.value;
+        }
+
+        function toggleSourceDropdown() {
+            document.getElementById('sourceDropdown').classList.toggle('show');
+        }
+
+        function filterSources(val) {
+            const options = document.querySelectorAll('.multiselect-option');
+            val = val.toLowerCase();
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                opt.style.display = text.includes(val) ? 'flex' : 'none';
+            });
+        }
+
+        function selectAllSources(state) {
+            const checks = document.querySelectorAll('.source-check');
+            checks.forEach(c => c.checked = state);
+            updateSelectedSources();
+        }
+
+        function updateSelectedSources() {
+            const checks = document.querySelectorAll('.source-check');
+            selectedSources = Array.from(checks).filter(c => c.checked).map(c => c.value);
+            const label = document.getElementById('multiselectLabel');
+            if (selectedSources.length === 0) label.textContent = 'All Sources';
+            else if (selectedSources.length === 1) label.textContent = selectedSources[0];
+            else label.textContent = `${selectedSources.length} selected`;
+        }
+
+        async function loadSources() {
+            try {
+                const res = await fetch('/api/metrics/sources');
+                const data = await res.json();
+                allSourcesList = data.sources || [];
+                const container = document.getElementById('sourceOptions');
+                container.innerHTML = allSourcesList.map(s => `
+                    <label class="multiselect-option">
+                        <input type="checkbox" class="source-check orange-checkbox" value="${s}" onchange="updateSelectedSources()">
+                        ${s}
+                    </label>
+                `).join('');
+            } catch (e) {
+                console.error("Failed to load sources", e);
+            }
+        }
+
+        async function loadAll() {
+            const applyBtn = document.getElementById('applyBtn');
+            const loadingEl = document.getElementById('dashboardLoading');
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = 'Loading...';
+            loadingEl.classList.remove('hidden');
+            loadingEl.classList.add('flex');
+            
+            try {
+                const periodParam = getPeriodParams();
+                // If we have a single source selected via click, use it. Otherwise use multiselect.
+                const source = selectedSourceSingle || selectedSources.join(',');
+                const campId = selectedCampaignId || '';
+                
+                await Promise.all([
+                    loadMonetizationDashboard(periodParam, source, campId),
+                    loadChart(periodParam, source, campId)
+                ]);
+            } finally {
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = 'Apply';
+                loadingEl.classList.add('hidden');
+                loadingEl.classList.remove('flex');
+            }
+        }
+        
+        function setSourceFilter(s) {
+            selectedSourceSingle = (selectedSourceSingle === s) ? null : s;
+            selectedCampaignId = null; // Clear campaign when source changes
+            loadAll();
+        }
+        
+        function setCampaignFilter(cid) {
+            selectedCampaignId = (selectedCampaignId === cid) ? null : cid;
+            loadAll();
+        }
+
+        async function loadChart(periodParam, source, campId) {
+            const url = `/api/metrics/monetization-daily?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '') + (campId ? `&campaign_id=${encodeURIComponent(campId)}` : '');
+            try {
+                const res = await fetch(url, { cache: 'no-store' });
+                const data = await res.json();
+                
+                if (chart) chart.destroy();
+                
+                const chartInstance = new Chart(document.getElementById('chart'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.daily.map(d => d.date.slice(5)),
+                        datasets: [
+                            { 
+                                label: 'Traffic (Jumps / 10)', 
+                                data: data.daily.map(d => Math.round(d.jumps / 10)), 
+                                type: 'line',
+                                borderColor: '#ef4444',
+                                borderWidth: 4,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                yAxisID: 'y',
+                                order: 0
+                            },
+                            { 
+                                label: 'Push ($)', 
+                                data: data.daily.map(d => d.push_rev), 
+                                type: 'line',
+                                borderColor: '#10b981',
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 0
+                            },
+                            { 
+                                label: 'BB ($)', 
+                                data: data.daily.map(d => d.bb_rev), 
+                                type: 'line',
+                                borderColor: '#3b82f6',
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 0
+                            },
+                            { 
+                                label: 'Double ($)', 
+                                data: data.daily.map(d => d.double_rev), 
+                                type: 'line',
+                                borderColor: '#a855f7',
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 0
+                            },
+                            { 
+                                label: 'Total Revenue ($)', 
+                                data: data.daily.map(d => d.revenue), 
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                borderRadius: 4,
+                                order: 10
+                            },
+                            { 
+                                label: 'eRPM ($)', 
+                                data: data.daily.map(d => d.erpm), 
+                                type: 'line',
+                                borderColor: '#f59e0b', 
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 3,
+                                yAxisID: 'y1',
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { 
+                                labels: { color: '#9ca3af' },
+                                onClick: (e, legendItem, legend) => {
+                                    const index = legendItem.datasetIndex;
+                                    const ci = legend.chart;
+                                    if (ci.isDatasetVisible(index)) {
+                                        ci.hide(index);
+                                        legendItem.hidden = true;
+                                    } else {
+                                        ci.show(index);
+                                        legendItem.hidden = false;
+                                    }
+                                    // Save state
+                                    const hiddenStates = JSON.parse(localStorage.getItem('monChartHidden') || '{}');
+                                    hiddenStates[legendItem.text] = legendItem.hidden;
+                                    localStorage.setItem('monChartHidden', JSON.stringify(hiddenStates));
+                                }
+                            },
+                            tooltip: { mode: 'index', intersect: false }
+                        }, 
+                        scales: { 
+                            x: { ticks: { color: '#9ca3af' }, grid: { color: '#2a2a3a' } }, 
+                            y: { 
+                                type: 'linear', display: true, position: 'left', 
+                                title: { display: true, text: 'Revenue ($)', color: '#9ca3af' },
+                                ticks: { color: '#9ca3af' }, grid: { color: '#2a2a3a' } 
+                            },
+                            y1: {
+                                type: 'linear', display: true, position: 'right', 
+                                title: { display: true, text: 'eRPM / Traffic', color: '#f59e0b' },
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: '#f59e0b' }
+                            }
+                        } 
+                    }
+                });
+                
+                chart = chartInstance;
+                
+                // Persistence logic
+                const hiddenStates = JSON.parse(localStorage.getItem('monChartHidden') || '{}');
+                chartInstance.data.datasets.forEach((ds, idx) => {
+                    if (hiddenStates[ds.label] === true) {
+                        chartInstance.hide(idx);
+                    }
+                });
+                chartInstance.update();
+                
+            } catch (e) {
+                console.error("Chart load failed", e);
+            }
+        }
+
+        function sortDashboardTable(type, col) {
+            const state = sortState[type];
+            if (state.col === col) {
+                state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.col = col;
+                state.dir = 'desc';
+            }
+            renderMonetizationTables();
+        }
+
+        function renderMonetizationTables() {
+            const data = currentDashboardData;
+            if (!data.by_source || !data.by_campaign) return;
+            
+            // Sort sources
+            const sortedSources = [...data.by_source].sort((a, b) => {
+                let v1 = a[sortState.source.col];
+                let v2 = b[sortState.source.col];
+                if (typeof v1 === 'string') {
+                    return sortState.source.dir === 'asc' ? v1.localeCompare(v2) : v2.localeCompare(v1);
+                }
+                return sortState.source.dir === 'asc' ? v1 - v2 : v2 - v1;
+            });
+
+            // Sort campaigns
+            const sortedCampaigns = [...data.by_campaign].sort((a, b) => {
+                let v1 = a[sortState.campaign.col];
+                let v2 = b[sortState.campaign.col];
+                if (typeof v1 === 'string') {
+                    return sortState.campaign.dir === 'asc' ? v1.localeCompare(v2) : v2.localeCompare(v1);
+                }
+                return sortState.campaign.dir === 'asc' ? v1 - v2 : v2 - v1;
+            });
+
+            const getSortIcon = (type, col) => {
+                if (sortState[type].col !== col) return '<span class="text-zinc-700 ml-1">⇅</span>';
+                return sortState[type].dir === 'asc' ? '<span class="text-amber-500 ml-1">↑</span>' : '<span class="text-amber-500 ml-1">↓</span>';
+            };
+
+            document.getElementById('pageSourceTable').innerHTML = sortedSources.map(s => `
+                <tr class="border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors cursor-pointer ${selectedSourceSingle === s.source ? 'bg-amber-900/40' : ''}" onclick="setSourceFilter('${s.source}')">
+                    <td class="p-3 text-zinc-300 font-medium">${s.source}</td>
+                    <td class="p-3 text-right text-zinc-400">${s.jumps.toLocaleString()}</td>
+                    <td class="p-3 text-right text-zinc-400">$${Math.round(s.cost || 0).toLocaleString()}</td>
+                    <td class="p-3 text-right text-amber-500 font-bold">$${Math.round(s.erpm || 0).toLocaleString()}</td>
+                    <td class="p-3 text-right text-white font-semibold">$${Math.round(s.revenue || 0).toLocaleString()}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="p-8 text-center text-zinc-500">No jump traffic data found for this period</td></tr>';
+
+            document.getElementById('pageCampaignTable').innerHTML = sortedCampaigns.map(c => `
+                <tr class="border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors cursor-pointer ${selectedCampaignId === c.campaign_id ? 'bg-amber-900/40' : ''}" onclick="setCampaignFilter('${c.campaign_id}')">
+                    <td class="p-3">
+                        <div class="text-zinc-300 font-medium truncate max-w-[200px]" title="${c.campaign}">${c.campaign}</div>
+                        <div class="text-[10px] text-zinc-600 font-mono">${c.campaign_id}</div>
+                    </td>
+                    <td class="p-3 font-mono text-[10px] text-zinc-500 hover:text-amber-500 transition-colors" onclick="event.stopPropagation(); copyToClipboard('${c.token1}')" title="Click to copy Token1">
+                        ${c.token1 || '-'}
+                    </td>
+                    <td class="p-3 text-right text-zinc-400">$${Math.round(c.cost || 0).toLocaleString()}</td>
+                    <td class="p-3 text-right text-amber-500 font-bold">$${Math.round(c.erpm || 0).toLocaleString()}</td>
+                    <td class="p-3 text-right text-white font-semibold">$${Math.round(c.revenue || 0).toLocaleString()}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="p-8 text-center text-zinc-500">No campaign data found</td></tr>';
+            
+            const updateHeader = (id, type, col, label) => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = label + getSortIcon(type, col);
+            };
+            
+            updateHeader('thSource', 'source', 'source', 'Source');
+            updateHeader('thSourceJumps', 'source', 'jumps', 'Jumps');
+            updateHeader('thSourceCost', 'source', 'cost', 'Cost');
+            updateHeader('thSourceErpm', 'source', 'erpm', 'eRPM');
+            updateHeader('thSourceRev', 'source', 'revenue', 'Revenue');
+            
+            updateHeader('thCamp', 'campaign', 'campaign', 'Campaign');
+            updateHeader('thCampT1', 'campaign', 'token1', 'T1');
+            updateHeader('thCampCost', 'campaign', 'cost', 'Cost');
+            updateHeader('thCampErpm', 'campaign', 'erpm', 'eRPM');
+            updateHeader('thCampRev', 'campaign', 'revenue', 'Revenue');
+        }
+
+        async function loadMonetizationDashboard(periodParam, source, campId) {
+            const url = `/api/metrics/monetization-dashboard?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '') + (campId ? `&campaign_id=${encodeURIComponent(campId)}` : '');
+            try {
+                const res = await fetch(url, { cache: 'no-store' });
+                const d = await res.json();
+                
+                const s = d.summary;
+                document.getElementById('pageMonRev').textContent = '$' + Math.round(s.revenue).toLocaleString();
+                document.getElementById('pageMonJumps').textContent = s.jumps.toLocaleString();
+                
+                document.getElementById('revPush').textContent = '$' + Math.round(s.categories.push).toLocaleString();
+                document.getElementById('revBB').textContent = '$' + Math.round(s.categories.bb).toLocaleString();
+                document.getElementById('revDouble').textContent = '$' + Math.round(s.categories.double).toLocaleString();
+                
+                const jumpsK = s.jumps / 1000;
+                document.getElementById('erpmPush').textContent = '$' + (jumpsK > 0 ? Math.round(s.categories.push / jumpsK).toLocaleString() : '0') + ' eRPM';
+                document.getElementById('erpmBB').textContent = '$' + (jumpsK > 0 ? Math.round(s.categories.bb / jumpsK).toLocaleString() : '0') + ' eRPM';
+                document.getElementById('erpmDouble').textContent = '$' + (jumpsK > 0 ? Math.round(s.categories.double / jumpsK).toLocaleString() : '0') + ' eRPM';
+                
+                currentDashboardData = d;
+                renderMonetizationTables();
+                
+            } catch (e) {
+                console.error("Failed to load monetization dashboard", e);
+            }
+        }
+        
+        function openUpload() { document.getElementById('uploadModal').classList.remove('hidden'); document.getElementById('uploadModal').classList.add('flex'); }
+        function closeUpload() { document.getElementById('uploadModal').classList.add('hidden'); document.getElementById('uploadModal').classList.remove('flex'); }
+        async function uploadFile(input) {
+            const files = input.files; if (!files.length) return;
+            document.getElementById('uploadStatus').textContent = `Uploading ${files.length} file(s)...`;
+            const form = new FormData();
+            for (let i = 0; i < files.length; i++) { form.append('files', files[i]); }
+            const res = await fetch('/api/upload', { method: 'POST', body: form });
+            const data = await res.json();
+            document.getElementById('uploadStatus').innerHTML = data.success ? `<span class="text-green-400">Done!</span>` : `<span class="text-red-400">Error: ${data.detail}</span>`;
+            input.value = '';
+            if (data.success) setTimeout(() => { closeUpload(); loadAll(); }, 1500);
+        }
+    </script>
+</body>

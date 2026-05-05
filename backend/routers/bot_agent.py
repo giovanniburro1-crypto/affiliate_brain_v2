@@ -149,6 +149,31 @@ async def get_top5(
     return result
 
 
+@router.get("/stop-optimize")
+async def get_stop_optimize(
+    period: int = Query(30),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    max_roi: Optional[float] = Query(None, alias="max_roi"),
+    min_cost: Optional[float] = Query(None, alias="min_cost"),
+    min_neg_streak: Optional[int] = Query(None, alias="min_neg_streak"),
+    limit: int = Query(50),
+    db: Session = Depends(get_db),
+):
+    """TOP-N самых убыточных кампаний для страницы STOP & OPTIMIZATION."""
+    service = Top5ServiceV2(db)
+    result = service.get_stop_optimize(
+        period=period,
+        date_from_str=date_from_param,
+        date_to_str=date_to_param,
+        max_roi=max_roi,
+        min_cost=min_cost,
+        min_neg_streak=min_neg_streak,
+        limit=limit,
+    )
+    return result
+
+
 @router.post("/analyze")
 async def analyze(
     campaign_id: str = Query(...),

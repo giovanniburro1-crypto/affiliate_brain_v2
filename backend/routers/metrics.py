@@ -99,6 +99,221 @@ async def get_summary(
     roi = round((profit / total_spend * 100) if total_spend > 0 else 0)
     return {"spend": total_spend, "revenue": total_revenue, "profit": profit, "roi": roi, "conversions": conversions, "clicks": clicks}
 
+@router.get("/metrics/monetization-dashboard")
+async def get_monetization_dashboard(
+    period: int = Query(7),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    params = {'date_from': date_from, 'date_to': date_to}
+    source_filter = _apply_source_filter(params, source, FILTER_OUT_MONETISATION)
+    
+    camp_filter = ""
+    if campaign_id:
+        params['cid_filter'] = campaign_id
+        camp_filter = " AND am.campaign_id = :cid_filter"
+        ts_camp_filter = " AND campaign_id = :cid_filter"
+    else:
+        ts_camp_filter = ""
+
+    # Logic for categorization
+    cat_sql = """
+        CASE 
+            WHEN LOWER(am.source) LIKE '%push%' 
+                 OR LOWER(am.token1) LIKE '%!_ip%' ESCAPE '!'
+                 OR am.campaign_id IN (SELECT campaign_id FROM traffic_stats WHERE (LOWER(campaign) LIKE '%push%' OR LOWER(campaign) LIKE '%!_ip%' ESCAPE '!') AND date >= :date_from AND date <= :date_to) THEN 'push'
+            WHEN LOWER(am.source) LIKE '%bb%' OR LOWER(am.source) LIKE '%back%' OR am.campaign_id IN (SELECT campaign_id FROM traffic_stats WHERE (LOWER(campaign) LIKE '%bb%' OR LOWER(campaign) LIKE '%back%') AND date >= :date_from AND date <= :date_to) THEN 'bb'
+            ELSE 'double'
+        END
+    """
+
+    # 1. Categorized Monetization Revenue
+    rev_rows = db.execute(text(f"""
+        SELECT 
+            {cat_sql} as category,
+            COALESCE(SUM(am.revenue), 0) as revenue
+        FROM additional_monetization am
+        WHERE am.date >= :date_from AND am.date <= :date_to {camp_filter}
+          AND am.campaign_id IN (
+              SELECT DISTINCT campaign_id 
+              FROM traffic_stats 
+              WHERE date >= :date_from AND date <= :date_to {source_filter} {ts_camp_filter}
+          )
+        GROUP BY category
+    """), params).fetchall()
+    
+    rev_by_cat = {r[0]: round(r[1], 2) for r in rev_rows}
+    total_rev = sum(rev_by_cat.values())
+    
+    # 2. Bought Jump Clicks (First Base)
+    jump_clicks = db.execute(text(f"""
+        SELECT COUNT(*) 
+        FROM traffic_stats 
+        WHERE date >= :date_from AND date <= :date_to 
+          AND cost > 0 
+          AND lander_id IS NOT NULL AND lander_id != '0' AND lander_id != ''
+          {source_filter} {ts_camp_filter}
+    """), params).scalar() or 0
+    
+    # 3. Breakdowns
+    by_source = db.execute(text(f"""
+        WITH SourceJumps AS (
+            SELECT traffic_source, COUNT(*) as jumps, SUM(cost) as cost
+            FROM traffic_stats
+            WHERE date >= :date_from AND date <= :date_to
+              AND cost > 0 AND lander_id IS NOT NULL AND lander_id != '0' AND lander_id != ''
+              {source_filter} {ts_camp_filter}
+            GROUP BY traffic_source
+        ),
+        SourceRevenue AS (
+            SELECT ts.traffic_source, SUM(am.revenue) as revenue
+            FROM additional_monetization am
+            JOIN (SELECT DISTINCT campaign_id, traffic_source FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {ts_camp_filter}) ts 
+              ON am.campaign_id = ts.campaign_id
+            WHERE am.date >= :date_from AND am.date <= :date_to {camp_filter}
+            GROUP BY ts.traffic_source
+        )
+        SELECT sj.traffic_source, sj.jumps, COALESCE(sr.revenue, 0), sj.cost
+        FROM SourceJumps sj
+        LEFT JOIN SourceRevenue sr ON sj.traffic_source = sr.traffic_source
+        ORDER BY COALESCE(sr.revenue, 0) DESC
+    """), params).fetchall()
+    
+    sources_data = [{
+        "source": r[0], "jumps": r[1], "revenue": round(r[2], 2),
+        "erpm": round((r[2] / (r[1] / 1000)) if r[1] > 0 else 0, 2),
+        "cost": round(r[3], 2)
+    } for r in by_source]
+
+    by_campaign = db.execute(text(f"""
+        WITH CampaignJumps AS (
+            SELECT campaign_id, MAX(campaign) as campaign, MAX(token1) as t1, COUNT(*) as jumps, SUM(cost) as cost
+            FROM traffic_stats
+            WHERE date >= :date_from AND date <= :date_to
+              AND cost > 0 AND lander_id IS NOT NULL AND lander_id != '0' AND lander_id != ''
+              {source_filter} {ts_camp_filter}
+            GROUP BY campaign_id
+        ),
+        CampaignRevenue AS (
+            SELECT campaign_id, SUM(revenue) as revenue
+            FROM additional_monetization am
+            WHERE am.date >= :date_from AND am.date <= :date_to {camp_filter}
+            GROUP BY campaign_id
+        )
+        SELECT cj.campaign_id, cj.campaign, cj.jumps, COALESCE(cr.revenue, 0), cj.cost, cj.t1
+        FROM CampaignJumps cj
+        LEFT JOIN CampaignRevenue cr ON cj.campaign_id = cr.campaign_id
+        ORDER BY COALESCE(cr.revenue, 0) DESC
+        LIMIT 50
+    """), params).fetchall()
+    
+    campaigns_data = [{
+        "campaign_id": r[0], 
+        "campaign": r[1].replace('Mediabuys - ', '') if r[1] else r[0], 
+        "jumps": r[2], 
+        "revenue": round(r[3], 2),
+        "erpm": round((r[3] / (r[2] / 1000)) if r[2] > 0 else 0, 2),
+        "cost": round(r[4], 2),
+        "token1": r[5] or ''
+    } for r in by_campaign]
+    
+    return {
+        "summary": {
+            "revenue": round(total_rev, 2),
+            "jumps": jump_clicks,
+            "erpm": round((total_rev / (jump_clicks / 1000)) if jump_clicks > 0 else 0, 2),
+            "categories": {
+                "push": rev_by_cat.get('push', 0),
+                "bb": rev_by_cat.get('bb', 0),
+                "double": rev_by_cat.get('double', 0)
+            }
+        },
+        "by_source": sources_data,
+        "by_campaign": campaigns_data
+    }
+
+@router.get("/metrics/monetization-daily")
+async def get_monetization_daily(
+    period: int = Query(7),
+    date_from_param: Optional[str] = Query(None, alias="date_from"),
+    date_to_param: Optional[str] = Query(None, alias="date_to"),
+    source: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    date_from, date_to = _period_or_range(period, date_from_param, date_to_param)
+    params = {'date_from': date_from, 'date_to': date_to}
+    source_filter = _apply_source_filter(params, source, FILTER_OUT_MONETISATION)
+    
+    camp_filter = ""
+    if campaign_id:
+        params['cid_filter'] = campaign_id
+        camp_filter = " AND am.campaign_id = :cid_filter"
+        ts_camp_filter = " AND campaign_id = :cid_filter"
+    else:
+        ts_camp_filter = ""
+
+    cat_sql = """
+        CASE 
+            WHEN LOWER(am.source) LIKE '%push%' 
+                 OR LOWER(am.token1) LIKE '%!_ip%' ESCAPE '!'
+                 OR am.campaign_id IN (SELECT campaign_id FROM traffic_stats WHERE (LOWER(campaign) LIKE '%push%' OR LOWER(campaign) LIKE '%!_ip%' ESCAPE '!') AND date >= :date_from AND date <= :date_to) THEN 'push'
+            WHEN LOWER(am.source) LIKE '%bb%' OR LOWER(am.source) LIKE '%back%' OR am.campaign_id IN (SELECT campaign_id FROM traffic_stats WHERE (LOWER(campaign) LIKE '%bb%' OR LOWER(campaign) LIKE '%back%') AND date >= :date_from AND date <= :date_to) THEN 'bb'
+            ELSE 'double'
+        END
+    """
+
+    daily_jumps = db.execute(text(f"""
+        SELECT date, COUNT(*) as jumps FROM traffic_stats
+        WHERE date >= :date_from AND date <= :date_to
+          AND cost > 0 AND lander_id IS NOT NULL AND lander_id != '0' AND lander_id != ''
+          {source_filter} {ts_camp_filter}
+        GROUP BY date
+    """), params).fetchall()
+    
+    daily_rev = db.execute(text(f"""
+        WITH ActiveCampaigns AS (
+            SELECT DISTINCT campaign_id FROM traffic_stats 
+            WHERE date >= :date_from AND date <= :date_to {source_filter} {ts_camp_filter}
+        )
+        SELECT am.date, {cat_sql} as cat, SUM(am.revenue) as revenue
+        FROM additional_monetization am
+        JOIN ActiveCampaigns ac ON am.campaign_id = ac.campaign_id
+        WHERE am.date >= :date_from AND am.date <= :date_to {camp_filter}
+        GROUP BY am.date, cat
+    """), params).fetchall()
+    
+    jumps_dict = {row[0]: row[1] for row in daily_jumps}
+    rev_map = {} # date -> {cat -> rev}
+    for row in daily_rev:
+        d, c, r = row[0], row[1], row[2]
+        if d not in rev_map: rev_map[d] = {}
+        rev_map[d][c] = r
+    
+    daily_data = []
+    current_date = date_from
+    while current_date <= date_to:
+        d_str = current_date.strftime('%Y-%m-%d')
+        j = jumps_dict.get(d_str, 0)
+        rd = rev_map.get(d_str, {})
+        
+        daily_data.append({
+            "date": d_str,
+            "jumps": j,
+            "revenue": round(sum(rd.values()), 2),
+            "push_rev": round(rd.get('push', 0), 2),
+            "bb_rev": round(rd.get('bb', 0), 2),
+            "double_rev": round(rd.get('double', 0), 2),
+            "erpm": round((sum(rd.values()) / (j / 1000)) if j > 0 else 0, 2)
+        })
+        current_date += timedelta(days=1)
+        
+    return {"daily": daily_data}
+
 @router.get("/metrics/campaigns")
 async def get_campaigns(
     period: int = Query(7),
@@ -118,9 +333,9 @@ async def get_campaigns(
 
     limit_val = 500 if min_cost > 0 else 50
     query = text(
-        f"SELECT campaign_id, campaign, traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
+        f"SELECT campaign_id, MAX(campaign), traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
         f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} "
-        f"GROUP BY campaign_id, campaign, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT {limit_val}"
+        f"GROUP BY campaign_id, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT {limit_val}"
     )
     rows = db.execute(query, params).fetchall()
     campaigns = []
@@ -128,7 +343,8 @@ async def get_campaigns(
         spend, revenue = int(row[3] or 0), int(row[4] or 0)
         profit = revenue - spend
         roi = round((profit / spend * 100) if spend > 0 else 0)
-        campaigns.append({"campaign_id": row[0], "campaign": row[1], "source": row[2], "spend": spend, "revenue": revenue, "profit": profit, "roi": roi, "conversions": int(row[5] or 0), "clicks": int(row[6] or 0)})
+        campaign_name = row[1].replace('Mediabuys - ', '') if row[1] else row[0]
+        campaigns.append({"campaign_id": row[0], "campaign": campaign_name, "source": row[2], "spend": spend, "revenue": revenue, "profit": profit, "roi": roi, "conversions": int(row[5] or 0), "clicks": int(row[6] or 0)})
     return {"campaigns": campaigns}
 
 

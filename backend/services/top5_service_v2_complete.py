@@ -910,3 +910,236 @@ class Top5ServiceV2:
             "all_campaigns": campaigns,
             "summary": summary,
         }
+
+    def get_stop_optimize(
+        self,
+        period: int = 30,
+        date_from_str: Optional[str] = None,
+        date_to_str: Optional[str] = None,
+        max_roi: Optional[float] = None,
+        min_cost: Optional[float] = None,
+        min_neg_streak: Optional[int] = None,
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Топ-N самых убыточных кампаний для страницы STOP & OPTIMIZATION.
+        Сортировка: рецидивисты (STOP + живой трафик) → убыток по убыванию.
+        Фильтры применяются только если не None.
+        """
+        date_from, date_to = self._period_or_range(period, date_from_str, date_to_str)
+        total_days = (date_to - date_from).days + 1
+
+        # --- Исключаем кампании в recheck_queue (OPTIMIZE/HOLD со сроком) ---
+        excluded_campaigns: List[str] = []
+        try:
+            excluded_rows = self.db.execute(
+                text("""
+                    SELECT campaign_id
+                    FROM recheck_queue
+                    WHERE recheck_after_days = 0
+                       OR (datetime(applied_at, '+' || recheck_after_days || ' days') > date('now'))
+                """)
+            ).fetchall()
+            excluded_campaigns = [row[0] for row in excluded_rows]
+        except Exception:
+            pass
+
+        # --- Запоминаем кампании, которые были STOP'd ранее (рецидивисты) ---
+        stopped_campaign_ids: set = set()
+        try:
+            stopped_rows = self.db.execute(
+                text("""
+                    SELECT DISTINCT campaign_id FROM ai_memory
+                    WHERE user_choice = 'STOP' OR bot_verdict = 'STOP'
+                """)
+            ).fetchall()
+            stopped_campaign_ids = {row[0] for row in stopped_rows}
+        except Exception:
+            pass
+
+        # --- Базовый SQL: все кампании за период ---
+        sql = """
+            SELECT campaign_id, MAX(campaign), MAX(traffic_source),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            FROM traffic_stats
+            WHERE date >= :d AND date <= :d_to
+        """
+        params: Dict[str, Any] = {
+            "d": date_from, "d_to": date_to,
+            "min_spend": min_cost if min_cost is not None else MIN_SPEND,
+            "min_clicks": MIN_CLICKS,
+        }
+
+        # Исключаем кампании из recheck_queue (OPTIMIZE/HOLD)
+        if excluded_campaigns:
+            sql += f" AND campaign_id NOT IN ({','.join([':ex' + str(i) for i in range(len(excluded_campaigns))])})"
+            for i, ec in enumerate(excluded_campaigns):
+                params[f"ex{i}"] = ec
+
+        sql += """
+            GROUP BY campaign_id
+            HAVING SUM(cost) >= :min_spend AND COUNT(*) >= :min_clicks
+        """
+
+        rows = self.db.execute(text(sql), params).fetchall()
+
+        campaigns: List[Dict] = []
+        for row in rows:
+            cid = row[0]
+            spend = int(round(float(row[3] or 0)))
+            base_revenue = int(round(float(row[4] or 0)))
+            conversions = int(row[5] or 0)
+            clicks = int(row[6] or 0)
+
+            # Доп. монетизация
+            add_mon = self.db.execute(
+                text("""
+                    SELECT COALESCE(SUM(revenue),0) FROM additional_monetization
+                    WHERE campaign_id = :c AND date >= :d AND date <= :d_to
+                """),
+                {"c": cid, "d": date_from, "d_to": date_to},
+            ).scalar() or 0
+            add_mon = int(round(float(add_mon)))
+            revenue = base_revenue + add_mon
+            profit = revenue - spend
+            roi = round((profit / spend * 100) if spend > 0 else 0)
+            add_mon_pct = round((add_mon / revenue * 100), 1) if revenue > 0 else 0.0
+
+            # Дневные метрики
+            daily = self._get_daily_metrics(cid, date_from, date_to)
+            days_with_data = max(len(daily), 1)
+            daily_roi = [d["roi"] for d in daily]
+            daily_cr = [d["cr"] for d in daily]
+            daily_impact = [d["impact"] for d in daily]
+            volatility = _calc_instability_index(daily)
+            trend = _calc_trend(daily_impact)
+            opp_score = _opportunity_score(roi, clicks, volatility)
+            stability_factor = _stability_factor(volatility)
+
+            # Считаем negative streak
+            neg_streak = 0
+            for d in reversed(daily):
+                if d["impact"] < 0:
+                    neg_streak += 1
+                else:
+                    break
+
+            # --- Пользовательские фильтры (только если не None) ---
+            if max_roi is not None and roi > max_roi:
+                continue
+            if min_cost is not None and spend < min_cost:
+                continue
+            if min_neg_streak is not None and neg_streak < min_neg_streak:
+                continue
+
+            # Вердикт
+            killer_rules = self.brain.get_killer_rules()
+            verdict = "HOLD"
+            if roi < killer_rules.get("roi_threshold", -20):
+                verdict = "STOP"
+            elif profit < 0 and conversions == 0 and spend > 100:
+                verdict = "STOP"
+            elif roi >= 30 and volatility < 15 and conversions >= 3:
+                verdict = "SCALE"
+            elif roi >= 15 and volatility < 10 and conversions >= 3:
+                verdict = "SCALE"
+            elif 0 < roi < 15:
+                verdict = "OPTIMIZE"
+            if neg_streak >= 3:
+                verdict = "STOP"
+
+            confidence = min(100, max(10, (days_with_data / 14) * 50 + (clicks / 1000) * 30 - (volatility / 100) * 20 + stability_factor * 15))
+            confidence = round(confidence, 1)
+
+            # Голоса блоков (обучение бота)
+            block_votes: List[Dict] = []
+            payout = (revenue / conversions) if conversions > 0 else 0.0
+            epc = (revenue / clicks) if clicks > 0 else 0.0
+            cpc = (spend / clicks) if clicks > 0 else 0.0
+            try:
+                analysis_result = self.brain.analyze_campaign(
+                    campaign_id=cid, roi=roi, profit=profit, spend=spend,
+                    clicks=clicks, conversions=conversions, volatility=volatility,
+                    daily_impact=daily_impact, payout=payout, epc=epc, cpc=cpc,
+                )
+                if analysis_result and "block_votes" in analysis_result:
+                    block_votes = analysis_result["block_votes"]
+            except Exception:
+                pass
+
+            # Сегменты
+            segments = self._get_campaign_segments(cid, row[2], date_from, date_to)
+            power_segments = self._find_power_segments(segments, profit, clicks, limit=3)
+            weakness_segments = self._find_weakness_segments(segments, spend, profit, clicks, limit=5)
+            power_keys = {(s["type"], str(s["value"])) for s in power_segments}
+            weakness_segments = [w for w in weakness_segments if (w["type"], str(w["value"])) not in power_keys]
+            has_zacepy = self._check_zacepy(segments)
+            killers = self._find_profit_killers(segments, revenue, conversions, spend)
+            if killers and not has_zacepy and conversions > 0:
+                killers = []
+            trend_str = _calc_trend_last_n_days(daily_impact)
+
+            summary_lines = self._build_summary_lines(
+                {"roi": roi, "profit": profit, "spend": spend, "clicks": clicks, "conversions": conversions, "verdict": verdict},
+                power_segments, weakness_segments, add_mon, add_mon_pct, days_with_data, total_days, volatility, trend_str, block_votes,
+            )
+            explanation = self._generate_selection_reason(
+                roi=roi, profit=profit, spend=spend, clicks=clicks,
+                conversions=conversions, volatility=volatility, verdict=verdict,
+                opportunity_score=round(opp_score, 2),
+                power_segments=power_segments, weakness_segments=weakness_segments,
+                days_with_data=days_with_data,
+            )
+
+            # Флаг рецидивиста: был STOP, но трафик продолжается
+            is_repeat_offender = cid in stopped_campaign_ids and spend > 0
+
+            campaigns.append({
+                "campaign_id": cid,
+                "campaign": row[1],
+                "source": row[2],
+                "spend": spend,
+                "revenue": revenue,
+                "profit": profit,
+                "roi": roi,
+                "conversions": conversions,
+                "clicks": clicks,
+                "add_mon": add_mon,
+                "add_mon_pct": add_mon_pct,
+                "volatility": volatility,
+                "neg_streak": neg_streak,
+                "days_with_data": days_with_data,
+                "total_days": total_days,
+                "opportunity_score": round(opp_score, 2),
+                "verdict": verdict,
+                "confidence": confidence,
+                "bot_score": round(opp_score / 5, 1),
+                "summary_lines": summary_lines,
+                "reasoning": "; ".join(summary_lines),
+                "explanation": explanation,
+                "strengths": power_segments,
+                "weaknesses": weakness_segments,
+                "profit_killers": killers,
+                "trend": trend,
+                "block_votes": block_votes,
+                "is_repeat_offender": is_repeat_offender,
+            })
+
+        # Сортировка: рецидивисты → потом по убытку (profit ASC)
+        campaigns.sort(key=lambda x: (0 if x["is_repeat_offender"] else 1, x["profit"]))
+
+        top = campaigns[:limit]
+        total_loss = sum(c["profit"] for c in campaigns if c["profit"] < 0)
+        stop_count = len([c for c in campaigns if c["verdict"] == "STOP"])
+        optimize_count = len([c for c in campaigns if c["verdict"] == "OPTIMIZE"])
+
+        return {
+            "campaigns": top,
+            "all_campaigns": campaigns,
+            "total_count": len(campaigns),
+            "summary": {
+                "total_loss": total_loss,
+                "stop_count": stop_count,
+                "optimize_count": optimize_count,
+            },
+        }

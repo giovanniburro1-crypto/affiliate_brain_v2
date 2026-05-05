@@ -41,6 +41,10 @@ async def top5():
 async def bot_top5():
     with open("frontend/bot-top5.html") as f: return f.read()
 
+@app.get("/bot-stop-optimize", response_class=HTMLResponse)
+async def bot_stop_optimize():
+    with open("frontend/bot-stop-optimize.html") as f: return f.read()
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page():
     with open("frontend/settings.html") as f: return f.read()
@@ -56,6 +60,10 @@ async def ai_top5():
 @app.get("/ai-search-gold", response_class=HTMLResponse)
 async def ai_search_gold():
     with open("frontend/ai-search-gold.html") as f: return f.read()
+
+@app.get("/monetization", response_class=HTMLResponse)
+async def monetization_page():
+    with open("frontend/monetization.html") as f: return f.read()
 
 @app.get("/ai-company-analysis", response_class=HTMLResponse)
 async def ai_company_analysis():

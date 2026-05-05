@@ -114,12 +114,13 @@ _monet_log_sampled = 0
 
 def _is_monetisation_by_column(traffic_source_val, campaign_val):
     """
-    Доп. монетизация: в колонке Traffic Source (или campaign) есть 'monetisation'.
+    Доп. монетизация: в колонке Traffic Source (или campaign) есть 'monetisation' или 'monetization'.
     Уверенность 0.96 — только при явном маркере. Иначе не применяем маршрут.
     """
     ts = (str(traffic_source_val or '')).lower()
     camp = (str(campaign_val or '')).lower()
-    if MONETISATION_MARKER in ts or MONETISATION_MARKER in camp:
+    markers = ['monetisation', 'monetization']
+    if any(m in ts for m in markers) or any(m in camp for m in markers):
         return True, 0.96
     return False, 0.0
 
@@ -549,6 +550,14 @@ def _save_traffic_batch(db, batch):
         affiliate_network = escape(getattr(obj, 'affiliate_network', None))
         os_val = escape(getattr(obj, 'os', None))
         device_type_val = escape(getattr(obj, 'device_type', None))
+        path = escape(getattr(obj, 'path', None))
+        rule = escape(getattr(obj, 'rule', None))
+        offer = escape(getattr(obj, 'offer', None))
+        lander_id = escape(getattr(obj, 'lander_id', None))
+        os_version = escape(getattr(obj, 'os_version', None))
+        browser_name = escape(getattr(obj, 'browser_name', None))
+        country = escape(getattr(obj, 'country', None))
+        language = escape(getattr(obj, 'language', None))
         cost = getattr(obj, 'cost', 0) or 0
         revenue = getattr(obj, 'revenue', 0) or 0
         conversions = getattr(obj, 'conversions', 0) or 0
@@ -556,14 +565,17 @@ def _save_traffic_batch(db, batch):
         values_parts.append(
             f"({click_id}, {campaign_id}, {campaign}, {date_val}, {token1}, {token2}, "
             f"{token3}, {token4}, {token5}, {token6}, {token7}, {token8}, {token9}, {token10}, "
-            f"{traffic_source}, {affiliate_network}, {os_val}, {device_type_val}, {cost}, {revenue}, {conversions})"
+            f"{traffic_source}, {affiliate_network}, {os_val}, {device_type_val}, "
+            f"{path}, {rule}, {offer}, {lander_id}, {os_version}, {browser_name}, {country}, {language}, "
+            f"{cost}, {revenue}, {conversions})"
         )
     
     # Bulk INSERT с ON CONFLICT REPLACE
     sql = f"""
         INSERT OR REPLACE INTO traffic_stats 
         (click_id, campaign_id, campaign, date, token1, token2, token3, token4, token5, 
-         token6, token7, token8, token9, token10, traffic_source, affiliate_network, os, device_type, cost, revenue, conversions)
+         token6, token7, token8, token9, token10, traffic_source, affiliate_network, os, device_type, 
+         path, rule, offer, lander_id, os_version, browser_name, country, language, cost, revenue, conversions)
         VALUES {', '.join(values_parts)}
     """
     
