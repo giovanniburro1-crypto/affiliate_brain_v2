@@ -50,9 +50,20 @@ import subprocess
 async def git_commit(data: dict):
     try:
         message = data.get('message', 'Auto backup')
-        subprocess.run(['git', 'add', '.'], cwd='/Users/andreylp/affiliate_brain/app', check=True)
-        subprocess.run(['git', 'commit', '-m', message], cwd='/Users/andreylp/affiliate_brain/app', check=True)
-        result = subprocess.run(['git', 'push'], cwd='/Users/andreylp/affiliate_brain/app', capture_output=True, text=True)
+        cwd = '/Users/andreylp/affiliate_brain/app'
+        
+        # Stage all changes in app/
+        subprocess.run(['git', 'add', '-A'], cwd=cwd, check=True)
+        
+        # Commit (returns non-zero if no changes, so we capture output instead of check=True)
+        commit_res = subprocess.run(['git', 'commit', '-m', message], cwd=cwd, capture_output=True, text=True)
+        
+        # Push to origin main
+        push_res = subprocess.run(['git', 'push', 'origin', 'main'], cwd=cwd, capture_output=True, text=True)
+        
+        if push_res.returncode != 0:
+            return {"success": False, "error": push_res.stderr or push_res.stdout}
+            
         return {"success": True, "message": "Pushed to GitHub!"}
     except Exception as e:
         return {"success": False, "error": str(e)}
