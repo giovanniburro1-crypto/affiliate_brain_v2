@@ -209,22 +209,24 @@
             </h3>
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div class="flex-1">
-                    <p class="text-zinc-300 text-sm mb-2">Clear uploaded traffic data and metrics. <b>Action cannot be undone</b>.</p>
+                    <p class="text-zinc-300 text-sm mb-2">Clear uploaded traffic data and metrics. <b>Action cannot be
+                            undone</b>.</p>
                     <div id="dbWeightInfo" class="text-xs text-zinc-400 flex items-center gap-1 mb-4">
                         <i data-lucide="database" class="w-3 h-3"></i> Calculating DB size...
                     </div>
-                    
+
                     <div class="flex flex-wrap items-end gap-4 bg-black/30 p-4 rounded-lg border border-red-500/20">
                         <div class="w-full md:w-48">
                             <label class="block text-[10px] uppercase text-zinc-500 mb-1">Select Period</label>
-                            <select id="clearPeriodSelect" class="text-xs py-1 px-2 w-full" onchange="toggleClearDates()">
+                            <select id="clearPeriodSelect" class="text-xs py-1 px-2 w-full"
+                                onchange="toggleClearDates()">
                                 <option value="all">All Data (Reset)</option>
                                 <option value="this_month">This Month</option>
                                 <option value="last_month">Last Month</option>
                                 <option value="custom">Custom Range...</option>
                             </select>
                         </div>
-                        
+
                         <div id="clearCustomDates" class="hidden items-center gap-3">
                             <div>
                                 <label class="block text-[10px] uppercase text-zinc-500 mb-1">From</label>
@@ -712,7 +714,7 @@
                     `;
                     lucide.createIcons();
                 }
-            } catch (err) {}
+            } catch (err) { }
         }
 
         function toggleClearDates() {
@@ -731,7 +733,7 @@
             const period = document.getElementById('clearPeriodSelect').value;
             let dateFrom = '';
             let dateTo = '';
-            
+
             const now = new Date();
             if (period === 'this_month') {
                 dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -747,12 +749,12 @@
                     return;
                 }
             }
-            
+
             let msg = '⚠️ DANGER: This will delete ALL traffic metrics, stats, and uploaded reports. Proceed?';
             if (dateFrom && dateTo) {
                 msg = `⚠️ This will delete traffic data ONLY for the period from ${dateFrom} to ${dateTo}. Proceed?`;
             }
-            
+
             if (!confirm(msg)) return;
             if (!confirm('Really? This action is permanent!')) return;
 
@@ -762,7 +764,7 @@
             btn.disabled = true;
 
             try {
-                const res = await fetch('/api/ai-settings/database/clear', { 
+                const res = await fetch('/api/ai-settings/database/clear', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ date_from: dateFrom, date_to: dateTo })

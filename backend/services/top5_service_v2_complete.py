@@ -592,11 +592,25 @@ class Top5ServiceV2:
         except Exception:
             # Таблицы может не существовать, игнорируем
             pass
+
+        # Также исключаем кампании, у которых в имени есть "STOP - "
+        try:
+            stopped_rows = self.db.execute(
+                text("""SELECT DISTINCT campaign_id
+                    FROM traffic_stats t1
+                    WHERE date = (SELECT MAX(date) FROM traffic_stats t2 WHERE t2.campaign_id = t1.campaign_id)
+                      AND (campaign LIKE '%STOP -%' OR campaign LIKE '%stop -%')""")
+            ).fetchall()
+            excluded_campaigns.extend([row[0] for row in stopped_rows])
+            excluded_campaigns = list(set(excluded_campaigns))
+        except Exception:
+            pass
+
         
         # Базовый SQL запрос
         sql = """
-            SELECT campaign_id, MAX(campaign), MAX(traffic_source),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            SELECT campaign_id, MAX(COALESCE(date, '') || '|||' || campaign), MAX(traffic_source),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*), MAX(token1)
             FROM traffic_stats
             WHERE date >= :d AND date <= :d_to
         """
@@ -723,8 +737,9 @@ class Top5ServiceV2:
             campaigns.append(
                 {
                     "campaign_id": cid,
-                    "campaign": row[1],
+                    "campaign": row[1].split('|||', 1)[1] if row[1] and '|||' in row[1] else row[1],
                     "source": row[2],
+                    "token1": row[7],
                     "spend": spend,
                     "revenue": revenue,
                     "profit": profit,
@@ -766,7 +781,7 @@ class Top5ServiceV2:
         total_days = (date_to - date_from).days + 1
         row = self.db.execute(
             text("""
-                SELECT campaign_id, MAX(campaign), MAX(traffic_source),
+                SELECT campaign_id, MAX(COALESCE(date, '') || '|||' || campaign), MAX(traffic_source),
                        SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
                 FROM traffic_stats
                 WHERE campaign_id = :cid AND date >= :d AND date <= :d_to
@@ -944,6 +959,19 @@ class Top5ServiceV2:
         except Exception:
             pass
 
+        # Также исключаем кампании, у которых в имени есть "STOP - "
+        try:
+            stopped_rows = self.db.execute(
+                text("""SELECT DISTINCT campaign_id
+                    FROM traffic_stats t1
+                    WHERE date = (SELECT MAX(date) FROM traffic_stats t2 WHERE t2.campaign_id = t1.campaign_id)
+                      AND (campaign LIKE '%STOP -%' OR campaign LIKE '%stop -%')""")
+            ).fetchall()
+            excluded_campaigns.extend([row[0] for row in stopped_rows])
+            excluded_campaigns = list(set(excluded_campaigns))
+        except Exception:
+            pass
+
         # --- Запоминаем кампании, которые были STOP'd ранее (рецидивисты) ---
         stopped_campaign_ids: set = set()
         try:
@@ -959,8 +987,8 @@ class Top5ServiceV2:
 
         # --- Базовый SQL: все кампании за период ---
         sql = """
-            SELECT campaign_id, MAX(campaign), MAX(traffic_source),
-                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*)
+            SELECT campaign_id, MAX(COALESCE(date, '') || '|||' || campaign), MAX(traffic_source),
+                   SUM(cost), SUM(revenue), SUM(conversions), COUNT(*), MAX(token1)
             FROM traffic_stats
             WHERE date >= :d AND date <= :d_to
         """
@@ -1096,8 +1124,9 @@ class Top5ServiceV2:
 
             campaigns.append({
                 "campaign_id": cid,
-                "campaign": row[1],
+                "campaign": row[1].split('|||', 1)[1] if row[1] and '|||' in row[1] else row[1],
                 "source": row[2],
+                "token1": row[7],
                 "spend": spend,
                 "revenue": revenue,
                 "profit": profit,

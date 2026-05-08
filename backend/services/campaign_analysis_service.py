@@ -63,6 +63,11 @@ def get_parameter_conclusions(
     conclusions["conversion"] = {"metrics": {"conversions": conversions, "cr_pct": cr_pct}, "conclusion": f"{conversions} конверсий, CR {cr_pct}%. {'Мало конверсий для выводов.' if conversions < 3 else 'Достаточно данных.'}"}
     conclusions["cost"] = {"metrics": {"spend": spend}, "conclusion": f"Spend ${spend}. {'Достаточно для анализа.' if spend >= 20 else 'Мало данных (min $20).'}"}
 
+    # Получаем активные колонки из шаблона
+    source = summary.get("traffic_source") or campaign_summary.get("traffic_source", "default")
+    segment_columns = brain.get_segment_columns(source)
+    active_columns = set(segment_columns)
+
     # Все остальные параметры
     params = [
         ("path", "by_path", "path"),
@@ -81,7 +86,14 @@ def get_parameter_conclusions(
     for i in range(3, 11):
         params.append((f"token{i}", f"by_token{i}", f"token{i}"))
 
-    for key, source_key, name_key in params:
+    active_params = []
+    for p in params:
+        param_name = p[0]
+        col_name = "offer" if param_name == "offer_id" else param_name
+        if col_name in active_columns:
+            active_params.append(p)
+
+    for key, source_key, name_key in active_params:
         if key == "lander_id":
             items = breakdown.get("by_lander_id_jump") or breakdown.get("by_lander_id") or []
         else:
@@ -127,6 +139,7 @@ def get_bot_actions(
     
     # Получаем segment_config для этого источника
     segment_columns = brain.get_segment_columns(analysis.get("source", "default"))
+    active_columns = set(segment_columns)
     
     # Проходим по всем токенам и параметрам
     token_params = [f"by_token{i}" for i in range(2, 11)]
@@ -137,6 +150,14 @@ def get_bot_actions(
     all_params = token_params + other_params
     
     for param_key in all_params:
+        # Определяем имя параметра для проверки в шаблоне
+        param_name = param_key.replace("by_", "").replace("_jump", "")
+        col_name = "offer" if param_name == "offer_id" else param_name
+        
+        # Пропускаем параметры, которые отключены (weight = 0) в шаблоне
+        if col_name not in active_columns:
+            continue
+
         items = breakdown.get(param_key, [])
         if not items or len(items) <= 1:
             continue

@@ -371,6 +371,7 @@
         }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
+    <script src="/assets/date-utils.js"></script>
 </head>
 
 <body class="min-h-screen">
@@ -451,9 +452,20 @@
                         </div>
                     </div>
                     <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate()">
-                        <option value="7">7 days</option>
-                        <option value="14" selected>14 days</option>
-                        <option value="30">30 days</option>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="this_week">This week</option>
+                        <option value="last_week">Last week</option>
+                        <option value="2">Last 2 days</option>
+                        <option value="3">Last 3 days</option>
+                        <option value="5">Last 5 days</option>
+                        <option value="7">Last 7 days</option>
+                        <option value="14" selected>Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="this_month">This month</option>
+                        <option value="last_month">Last month</option>
+                        <option value="this_year">This year</option>
+                        <option value="last_year">Last year</option>
+                        <option value="all_time">All time</option>
                         <option value="custom">Custom date</option>
                     </select>
                     <div id="customDateRange" class="hidden flex items-center gap-2">
@@ -761,46 +773,12 @@
             else { el.classList.add('hidden'); el.classList.remove('flex'); }
         }
         function getPeriodParams() {
-            const sel = document.getElementById('periodSelect');
-            if (sel.value === 'custom') {
-                const from = document.getElementById('customDateFrom').value;
-                const to = document.getElementById('customDateTo').value;
-                if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
-            }
-            return 'period=' + sel.value;
+            return buildPeriodQueryString('periodSelect', 'customDateFrom', 'customDateTo');
         }
 
         /** Возвращает массив дат выбранного периода в формате MM-DD (как в API campaigns-table). */
         function getPeriodDateList() {
-            const sel = document.getElementById('periodSelect');
-            let dateFrom, dateTo;
-            if (sel.value === 'custom') {
-                const fromStr = document.getElementById('customDateFrom').value;
-                const toStr = document.getElementById('customDateTo').value;
-                if (!fromStr || !toStr) {
-                    const today = new Date();
-                    dateTo = today;
-                    dateFrom = new Date(today);
-                    dateFrom.setDate(dateFrom.getDate() - 13);
-                } else {
-                    dateFrom = new Date(fromStr);
-                    dateTo = new Date(toStr);
-                }
-            } else {
-                const days = parseInt(sel.value, 10) || 14;
-                dateTo = new Date();
-                dateFrom = new Date(dateTo);
-                dateFrom.setDate(dateFrom.getDate() - (days - 1));
-            }
-            const list = [];
-            const cur = new Date(dateFrom);
-            while (cur <= dateTo) {
-                const m = String(cur.getMonth() + 1).padStart(2, '0');
-                const d = String(cur.getDate()).padStart(2, '0');
-                list.push(m + '-' + d);
-                cur.setDate(cur.getDate() + 1);
-            }
-            return list;
+            return getPeriodDateListArray('periodSelect');
         }
 
         /** Для блока GENERAL ANALYSIS BY CAMPAIGNS: макс. 30 дней, обратный порядок (слева — старые, вправо — сегодня). */

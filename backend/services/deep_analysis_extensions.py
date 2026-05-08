@@ -29,6 +29,11 @@ def analyze_parameter_interconnections(
     }
     
     # Собираем все параметры для анализа
+    from backend.brain import KnowledgeBase
+    brain = KnowledgeBase()
+    source = campaign_summary.get("traffic_source", "default")
+    active_columns = set(brain.get_segment_columns(source))
+
     all_params = {}
     param_sources = [
         ("by_path", "path"),
@@ -47,7 +52,15 @@ def analyze_parameter_interconnections(
     for i in range(3, 11):
         param_sources.append((f"by_token{i}", f"token{i}"))
     
-    for source_key, name_key in param_sources:
+    # Оставляем только активные параметры
+    active_param_sources = []
+    for p in param_sources:
+        param_name = p[0].replace("by_", "").replace("_jump", "")
+        col_name = "offer" if param_name == "offer_id" else param_name
+        if col_name in active_columns:
+            active_param_sources.append(p)
+            
+    for source_key, name_key in active_param_sources:
         items = breakdown.get(source_key, [])
         if not items:
             continue
@@ -177,9 +190,16 @@ def get_parameter_category_summary(
         'lander_id': 'content'
     }
     
+    # Получаем активные колонки
+    from backend.brain import KnowledgeBase
+    brain = KnowledgeBase()
+    source = campaign_summary.get("traffic_source", "default")
+    active_columns = set(brain.get_segment_columns(source))
+    
     # Собираем данные из breakdown для дополнения strengths/weaknesses
     breakdown_data = {}
-    for source_key, name_key in [
+    
+    all_param_sources = [
         ("by_path", "path"),
         ("by_rule", "rule"),
         ("by_offer_id", "offer_id"),
@@ -191,7 +211,16 @@ def get_parameter_category_summary(
         ("by_browser_name", "browser_name"),
         ("by_language", "language"),
         ("by_token2", "name"),
-    ] + [(f"by_token{i}", f"token{i}") for i in range(3, 11)]:
+    ] + [(f"by_token{i}", f"token{i}") for i in range(3, 11)]
+    
+    active_param_sources = []
+    for p in all_param_sources:
+        param_name = p[0].replace("by_", "").replace("_jump", "")
+        col_name = "offer" if param_name == "offer_id" else param_name
+        if col_name in active_columns:
+            active_param_sources.append(p)
+
+    for source_key, name_key in active_param_sources:
         items = breakdown.get(source_key, [])
         param_name = source_key.replace("by_", "").replace("_jump", "")
         

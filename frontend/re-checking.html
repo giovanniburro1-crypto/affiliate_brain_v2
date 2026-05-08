@@ -26,6 +26,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
+    <script src="/assets/date-utils.js"></script>
 </head>
 <body class="min-h-screen">
     <div class="flex">
@@ -108,8 +109,11 @@
                 const to = document.getElementById('customDateTo-' + cardId)?.value;
                 if (from && to) return { periodParam: 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to), period: null, date_from: from, date_to: to };
             }
-            const period = parseInt(sel.value, 10) || 7;
-            return { periodParam: 'period=' + period, period: period };
+            if (sel.value === 'all_time') return { periodParam: 'period=0', period: 0 };
+            const range = getPeriodDateRange(sel.value);
+            const fromStr = range.from.toISOString().slice(0, 10);
+            const toStr = range.to.toISOString().slice(0, 10);
+            return { periodParam: 'date_from=' + encodeURIComponent(fromStr) + '&date_to=' + encodeURIComponent(toStr), period: null, date_from: fromStr, date_to: toStr };
         }
 
         async function loadQueue() {
@@ -152,11 +156,22 @@
                             <div class="mt-4 flex flex-wrap items-center gap-3">
                                 <span class="text-zinc-500 text-sm">Период:</span>
                                 <select id="periodSelect-${safeId}" class="px-2 py-1.5 rounded text-sm bg-zinc-800" onchange="toggleCustomDateForCard('${safeId}')">
-                                    <option value="7">Last 7 days</option>
-                                    <option value="14">Last 14 days</option>
-                                    <option value="30">Last 30 days</option>
-                                    <option value="custom">Custom date</option>
-                                </select>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="this_week">This week</option>
+                        <option value="last_week">Last week</option>
+                        <option value="2">Last 2 days</option>
+                        <option value="3">Last 3 days</option>
+                        <option value="5">Last 5 days</option>
+                        <option value="7">Last 7 days</option>
+                        <option value="14" selected>Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="this_month">This month</option>
+                        <option value="last_month">Last month</option>
+                        <option value="this_year">This year</option>
+                        <option value="last_year">Last year</option>
+                        <option value="all_time">All time</option>
+                        <option value="custom">Custom date</option>
+                    </select>
                                 <div id="customDateRange-${safeId}" class="hidden items-center gap-2">
                                     <input type="date" id="customDateFrom-${safeId}" class="px-2 py-1 rounded text-sm bg-zinc-800 border border-zinc-600">
                                     <span class="text-zinc-500">—</span>

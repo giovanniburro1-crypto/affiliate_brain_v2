@@ -191,7 +191,7 @@ async def get_monetization_dashboard(
 
     by_campaign = db.execute(text(f"""
         WITH CampaignJumps AS (
-            SELECT campaign_id, MAX(campaign) as campaign, MAX(token1) as t1, COUNT(*) as jumps, SUM(cost) as cost
+            SELECT campaign_id, MAX(COALESCE(date, '') || '|||' || campaign) as campaign, MAX(token1) as t1, COUNT(*) as jumps, SUM(cost) as cost
             FROM traffic_stats
             WHERE date >= :date_from AND date <= :date_to
               AND cost > 0 AND lander_id IS NOT NULL AND lander_id != '0' AND lander_id != ''
@@ -213,7 +213,7 @@ async def get_monetization_dashboard(
     
     campaigns_data = [{
         "campaign_id": r[0], 
-        "campaign": r[1].replace('Mediabuys - ', '') if r[1] else r[0], 
+        "campaign": (r[1].split('|||', 1)[1] if r[1] and '|||' in r[1] else r[1]).replace('Mediabuys - ', '') if r[1] else r[0], 
         "jumps": r[2], 
         "revenue": round(r[3], 2),
         "erpm": round((r[3] / (r[2] / 1000)) if r[2] > 0 else 0, 2),
@@ -333,7 +333,7 @@ async def get_campaigns(
 
     limit_val = 500 if min_cost > 0 else 50
     query = text(
-        f"SELECT campaign_id, MAX(campaign), traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
+        f"SELECT campaign_id, MAX(COALESCE(date, '') || '|||' || campaign), traffic_source, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) "
         f"FROM traffic_stats WHERE date >= :date_from AND date <= :date_to {source_filter} "
         f"GROUP BY campaign_id, traffic_source{having} ORDER BY SUM(revenue)-SUM(cost) DESC LIMIT {limit_val}"
     )
@@ -343,7 +343,9 @@ async def get_campaigns(
         spend, revenue = int(row[3] or 0), int(row[4] or 0)
         profit = revenue - spend
         roi = round((profit / spend * 100) if spend > 0 else 0)
-        campaign_name = row[1].replace('Mediabuys - ', '') if row[1] else row[0]
+        name_raw = row[1]
+        c_name = name_raw.split('|||', 1)[1] if name_raw and '|||' in name_raw else name_raw
+        campaign_name = c_name.replace('Mediabuys - ', '') if c_name else row[0]
         campaigns.append({"campaign_id": row[0], "campaign": campaign_name, "source": row[2], "spend": spend, "revenue": revenue, "profit": profit, "roi": roi, "conversions": int(row[5] or 0), "clicks": int(row[6] or 0)})
     return {"campaigns": campaigns}
 
@@ -1041,7 +1043,7 @@ async def get_campaigns_table(
             SELECT 
                 ts.campaign_id, 
                 MAX(CASE WHEN INSTR(ts.token1, '_') > 0 THEN ts.token1 ELSE NULL END) as token1, 
-                MAX(ts.campaign) as name,
+                MAX(COALESCE(ts.date, '') || '|||' || ts.campaign) as name,
                 SUM(ts.cost) as total_spend,
                 SUM(ts.revenue) as base_revenue
             FROM traffic_stats ts
@@ -1067,6 +1069,7 @@ async def get_campaigns_table(
         FROM all_cids ac
         LEFT JOIN campaign_base cb ON ac.campaign_id = cb.campaign_id
         LEFT JOIN campaign_add ca ON ac.campaign_id = ca.campaign_id
+        WHERE COALESCE(cb.total_spend, 0) > 0 OR (COALESCE(cb.base_revenue, 0) + COALESCE(ca.add_revenue, 0)) > 0
         ORDER BY total_spend DESC, total_rev DESC
         LIMIT 25
     """
@@ -1078,7 +1081,9 @@ async def get_campaigns_table(
         # row: (campaign_id, token1, name, total_spend, total_rev)
         cid = row[0]
         token1_val = row[1]
-        c_name = row[2]
+        name_raw = row[2]
+        c_name = name_raw.split('|||', 1)[1] if name_raw and '|||' in name_raw else name_raw
+        c_name = c_name.replace('Mediabuys - ', '') if c_name else cid
         total_spend_val = int(row[3] or 0)
         
         day_params = {**params, 'cid': cid}

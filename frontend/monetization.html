@@ -373,6 +373,7 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
+    <script src="/assets/date-utils.js"></script>
 </head>
 
 <body class="min-h-screen">
@@ -460,9 +461,20 @@
                         </div>
                     </div>
                     <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="toggleCustomDate(); loadAll()">
-                        <option value="7">7 days</option>
-                        <option value="14" selected>14 days</option>
-                        <option value="30">30 days</option>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="this_week">This week</option>
+                        <option value="last_week">Last week</option>
+                        <option value="2">Last 2 days</option>
+                        <option value="3">Last 3 days</option>
+                        <option value="5">Last 5 days</option>
+                        <option value="7">Last 7 days</option>
+                        <option value="14" selected>Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="this_month">This month</option>
+                        <option value="last_month">Last month</option>
+                        <option value="this_year">This year</option>
+                        <option value="last_year">Last year</option>
+                        <option value="all_time">All time</option>
                         <option value="custom">Custom date</option>
                     </select>
                     <div id="customDateRange" class="hidden flex items-center gap-2">
@@ -627,13 +639,7 @@
         }
 
         function getPeriodParams() {
-            const sel = document.getElementById('periodSelect');
-            if (sel.value === 'custom') {
-                const from = document.getElementById('customDateFrom').value;
-                const to = document.getElementById('customDateTo').value;
-                if (from && to) return 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to);
-            }
-            return 'period=' + sel.value;
+            return buildPeriodQueryString('periodSelect', 'customDateFrom', 'customDateTo');
         }
 
         function toggleSourceDropdown() {

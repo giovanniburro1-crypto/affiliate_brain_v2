@@ -902,27 +902,7 @@ class KnowledgeBaseV2:
             
     def get_decision_history(self, limit: int = 100) -> List[Dict]:
         """Получить историю решений."""
-        return self._decision_history[-limit:] if self._decision_history else []
-        
-    def clear_decision_history(self) -> None:
-        """Очистить историю решений."""
-        self._decision_history.clear()
-        
-    def get_available_blocks(self) -> List[Dict]:
-        """Получить список всех доступных блоков."""
-        blocks = []
-        for block_id, metadata in self._blocks_metadata.items():
-            blocks.append({
-                "id": block_id,
-                "class_name": metadata.class_name,
-                "enabled": metadata.enabled,
-                "weight": metadata.weight,
-                "priority": metadata.priority,
-                "description": metadata.description,
-                "last_used": metadata.last_used.isoformat() if metadata.last_used else None,
-                "loaded": block_id in self._loaded_classes
-            })
-        return blocks
+        return []
         
     def analyze_campaign_simple(self, campaign_data: Dict[str, Any]) -> Dict[str, Any]:
         """Упрощенный анализ кампании для обратной совместимости."""
@@ -977,8 +957,36 @@ class KnowledgeBaseV2:
     def get_segment_columns(self, traffic_source: Optional[str] = None) -> List[str]:
         """
         Список колонок для сегментного анализа.
-        Для traffic_source ищет конфиг, иначе default.
+        Приоритет: insight_config.json (weight > 0) -> segment_config.json
         """
+        import os
+        from pathlib import Path
+        
+        insight_path = Path(__file__).parent.parent / "data" / "insight_config.json"
+        insight_data = None
+        if insight_path.exists():
+            try:
+                with open(insight_path, "r", encoding="utf-8") as f:
+                    insight_data = json.load(f)
+            except Exception:
+                pass
+                
+        src = (traffic_source or "").strip().lower()
+        
+        if insight_data:
+            source_key = "default"
+            for k in insight_data.keys():
+                if k.lower() == src:
+                    source_key = k
+                    break
+            
+            if source_key in insight_data and "parameter_weights" in insight_data[source_key]:
+                weights = insight_data[source_key]["parameter_weights"]
+                cols = [k for k, v in weights.items() if v > 0]
+                cols.sort(key=lambda k: weights[k], reverse=True)
+                if cols:
+                    return cols
+
         path = self._base / "segment_config.json"
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -987,10 +995,10 @@ class KnowledgeBaseV2:
             data = None
         if not data or not isinstance(data, dict):
             return ["os", "device_type", "token2", "offer", "lander_id", "country"]
-        # Ищем по точному имени или по части (Approach X, Affmy, etc.)
-        src = (traffic_source or "").strip()
-        if src and src in data:
-            cols = data[src]
+            
+        src_orig = (traffic_source or "").strip()
+        if src_orig and src_orig in data:
+            cols = data[src_orig]
         else:
             cols = data.get("default", ["os", "device_type", "token2", "offer", "lander_id", "country"])
         return cols if isinstance(cols, list) else list(cols)

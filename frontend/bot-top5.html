@@ -105,6 +105,7 @@
         }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
+    <script src="/assets/date-utils.js"></script>
 </head>
 <body class="min-h-screen">
     <div class="flex">
@@ -144,9 +145,20 @@
                 <div class="flex items-center gap-3">
                     <span class="text-zinc-400 text-sm">Period:</span>
                     <select id="periodSelect" class="px-3 py-2 rounded-lg text-sm" onchange="onPeriodChange(); toggleCustomDate();">
+                        <option value="yesterday">Yesterday</option>
+                        <option value="this_week">This week</option>
+                        <option value="last_week">Last week</option>
+                        <option value="2">Last 2 days</option>
+                        <option value="3">Last 3 days</option>
+                        <option value="5">Last 5 days</option>
                         <option value="7">Last 7 days</option>
-                        <option value="14">Last 14 days</option>
-                        <option value="30" selected>Last 30 days</option>
+                        <option value="14" selected>Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="this_month">This month</option>
+                        <option value="last_month">Last month</option>
+                        <option value="this_year">This year</option>
+                        <option value="last_year">Last year</option>
+                        <option value="all_time">All time</option>
                         <option value="custom">Custom date</option>
                     </select>
                     <div id="customDateRange" class="hidden items-center gap-2">
@@ -200,12 +212,22 @@
         let breakdownCache = {};
         let cachedPeriod = null; // кеш действителен только для этого периода
 
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            setDefaultCustomDates();
-            toggleCustomDate();
-            document.getElementById('top5Cards').innerHTML = '<p class="text-zinc-500 py-8 text-center">Нажмите <strong>Play</strong> для загрузки TOP-5.</p>';
-        });
+        let directivesMap = {};
+async function loadDirectives() {
+    try {
+        const res = await fetch('/api/directives/by-campaigns');
+        const data = await res.json();
+        directivesMap = data.directives || {};
+    } catch(e) { console.error('Failed to load directives', e); }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    lucide.createIcons();
+    setDefaultCustomDates();
+    toggleCustomDate();
+    await loadDirectives();
+    loadTop5();
+});
         function setDefaultCustomDates() {
             const to = new Date();
             const from = new Date(to);
@@ -226,7 +248,9 @@
                 const to = document.getElementById('customDateTo').value;
                 if (from && to) return { periodParam: 'date_from=' + encodeURIComponent(from) + '&date_to=' + encodeURIComponent(to), periodNum: Math.ceil((new Date(to) - new Date(from)) / 86400000) };
             }
-            return { periodParam: 'period=' + sel.value, periodNum: parseInt(sel.value, 10) };
+            const periodParamStr = buildPeriodQueryString('periodSelect', 'customDateFrom', 'customDateTo');
+            const num = parseInt(sel.value, 10) || 14; // fallback for non-ints if used
+            return { periodParam: periodParamStr, periodNum: num };
         }
 
         function onPeriodChange() {
@@ -329,7 +353,7 @@
                                 return `
                                 <div class="relative group">
                                     <div class="px-2 py-1 rounded text-xs ${title === 'POWER' ? 'bg-green-900/30 border border-green-700/50' : 'bg-red-900/30 border border-red-700/50'}">
-                                        <span class="font-medium">${escapeHtml(s.type)}=${escapeHtml(String(s.value))}</span>
+                                        <span class="font-medium">${escapeHtml(s.type)}=<span class="cursor-pointer hover:underline" data-copy="${escapeHtml(String(s.value))}" onclick="copyId(this)" title="Копировать">${escapeHtml(String(s.value))}</span></span>
                                         <div class="flex items-center gap-1 text-[10px] mt-0.5">
                                             <span class="text-zinc-400">${s.traffic_pct}% traffic</span>
                                             <span class="text-zinc-500">•</span>
@@ -479,6 +503,19 @@
                     `;
                 };
 
+                const token1 = c.token1 || '';
+                const cid = c.campaign_id || '';
+                const rules = directivesMap[cid] || directivesMap[token1] || [];
+                const networkRules = rules.filter(r => (r.network || '').toLowerCase() === (c.source || '').toLowerCase());
+                const rulesToShow = networkRules.length > 0 ? networkRules : rules;
+                let directiveHtml = '';
+                if (rulesToShow.length > 0) {
+                    const rule = rulesToShow[0];
+                    const bgMap = {'STOP': 'bg-red-500/20 text-red-400 border border-red-500/30', 'SCALE': 'bg-green-500/20 text-green-400 border border-green-500/30', 'BUMP': 'bg-blue-500/20 text-blue-400 border border-blue-500/30', 'TEST': 'bg-purple-500/20 text-purple-400 border border-purple-500/30'};
+                    const cls = bgMap[rule.action] || 'bg-zinc-800 text-zinc-300';
+                    directiveHtml = `<span class="px-2 py-0.5 rounded text-xs ml-2 ${cls}" title="Matched by token1=${escapeHtml(token1)}">ADV: ${rule.action} (${escapeHtml(rule.network || '')})</span>`;
+                }
+
                 return `
                 <div class="card p-4" data-campaign-id="${escapeHtml(c.campaign_id)}">
                     <div class="flex justify-between items-start gap-4">
@@ -487,6 +524,7 @@
                             <div class="flex items-center gap-2 mt-1">
                                 <span class="px-2 py-0.5 rounded text-xs bg-zinc-800">${escapeHtml(c.source || 'unknown')}</span>
                                 <span class="px-2 py-0.5 rounded text-xs ${c.verdict === 'SCALE' ? 'bg-green-900/30 text-green-400' : c.verdict === 'STOP' ? 'bg-red-900/30 text-red-400' : c.verdict === 'OPTIMIZE' ? 'bg-blue-900/30 text-blue-400' : 'bg-yellow-900/30 text-yellow-400'}">${c.verdict}</span>
+                                ${directiveHtml}
                             </div>
                         </div>
                         <div class="text-right">
