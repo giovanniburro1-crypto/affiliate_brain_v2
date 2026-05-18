@@ -1069,7 +1069,7 @@ async def get_campaigns_table(
         FROM all_cids ac
         LEFT JOIN campaign_base cb ON ac.campaign_id = cb.campaign_id
         LEFT JOIN campaign_add ca ON ac.campaign_id = ca.campaign_id
-        WHERE COALESCE(cb.total_spend, 0) > 0 OR (COALESCE(cb.base_revenue, 0) + COALESCE(ca.add_revenue, 0)) > 0
+        WHERE ROUND(COALESCE(cb.total_spend, 0)) >= 1 OR ROUND(COALESCE(cb.base_revenue, 0) + COALESCE(ca.add_revenue, 0)) >= 1
         ORDER BY total_spend DESC, total_rev DESC
         LIMIT 25
     """

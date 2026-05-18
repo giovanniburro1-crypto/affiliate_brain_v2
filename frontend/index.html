@@ -1105,16 +1105,37 @@
             chart = new Chart(document.getElementById('chart'), {
                 type: 'line',
                 data: {
-                    labels: data.daily.map(d => d.date.slice(5)),
+                    labels: data.daily.map(d => {
+                        const p = Math.round(d.profit);
+                        const profitStr = p >= 0 ? `$${p}` : `-$${Math.abs(p)}`;
+                        return [profitStr, d.date.slice(5)];
+                    }),
                     datasets: [
                         { label: 'Revenue', data: data.daily.map(d => d.revenue), borderColor: '#22c55e', tension: 0.4 },
                         { label: 'Spend', data: data.daily.map(d => d.cost), borderColor: '#ef4444', tension: 0.4 },
-                        { label: 'Profit', data: data.daily.map(d => d.profit), borderColor: '#f59e0b', tension: 0.4 },
                         { label: 'Traffic ÷10', data: data.daily.map(d => (d.clicks || 0) / 10), borderColor: '#3b82f6', tension: 0.4 }
                     ]
-
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { ticks: { color: '#9ca3af' } }, y: { ticks: { color: '#9ca3af' } } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { labels: { color: '#9ca3af' } } 
+                    }, 
+                    scales: { 
+                        x: { 
+                            ticks: { 
+                                color: '#e4e4e7',
+                                font: {
+                                    size: 13,
+                                    weight: 'bold'
+                                },
+                                padding: 6
+                            } 
+                        }, 
+                        y: { ticks: { color: '#9ca3af' } } 
+                    } 
+                }
             });
         }
 

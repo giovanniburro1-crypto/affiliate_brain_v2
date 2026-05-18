@@ -368,7 +368,7 @@ const panel = document.getElementById('aiPanelContent');
 panel.innerHTML = '<p class="text-yellow-400">Загрузка AI Council...</p>';
 try {
 const { periodParam, periodNum } = getPeriodParams();
-const body = { campaign_id: campaignId };
+const body = { campaign_id: campaignId, category: 'stop_optimize' };
 if (periodParam.startsWith('date_from')) {
 body.date_from = document.getElementById('customDateFrom').value;
 body.date_to = document.getElementById('customDateTo').value;

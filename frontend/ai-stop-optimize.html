@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Settings Top 5 - Affiliate Brain</title>
+    <title>Settings Stop & Optimize - Affiliate Brain</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -11,7 +11,7 @@
         .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; }
         .nav-item { border-radius: 8px; }
         .nav-item:hover { background: rgba(139,92,246,0.1); }
-        .nav-item.active { background: #8b5cf6; }
+        .nav-item.active { background: #ef4444; }
         select, textarea, input { background: #12121a; border: 1px solid #2a2a3a; color: #fff; padding: 8px; border-radius: 6px; }
         .btn-primary { background: #8b5cf6; }
         .btn-success { background: #22c55e; }
@@ -29,8 +29,8 @@
     <div class="flex">
         <aside class="sidebar w-56 h-screen fixed flex flex-col p-4">
             <div class="flex items-center gap-2 mb-8">
-                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                    <i data-lucide="brain" class="w-5 h-5"></i>
+                <div class="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
+                    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
                 </div>
                 <span class="font-bold">AFFILIATE BRAIN</span>
             </div>
@@ -53,7 +53,7 @@
             <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center gap-3">
                     <a href="/settings" class="text-zinc-400 hover:text-white"><i data-lucide="arrow-left" class="w-5 h-5"></i></a>
-                    <h1 class="text-2xl font-bold">Settings Top 5</h1>
+                    <h1 class="text-2xl font-bold">Settings Stop & Optimize</h1>
                 </div>
                 <button onclick="addNewAgent()" class="btn-primary px-4 py-2 rounded-lg flex items-center gap-2">
                     <i data-lucide="plus" class="w-4 h-4"></i> Add Agent
@@ -95,14 +95,14 @@
                 </div>
             </div>
             
-            <!-- 8 AI Agents -->
+            <!-- AI Agents Container -->
             <div id="agentsContainer" class="space-y-6">
                 <!-- Will be populated by JS -->
             </div>
-
+            
             <div id="noAgentsMessage" class="hidden text-center py-12 text-zinc-500">
                 <i data-lucide="info" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-                <p>No AI agents for Top 5 yet.</p>
+                <p>No AI agents for Stop & Optimize yet.</p>
                 <button onclick="addNewAgent()" class="mt-4 text-purple-400 hover:underline">Add your first agent</button>
             </div>
         </main>
@@ -111,7 +111,7 @@
     <script>
         let agents = [];
         let providersConfig = {};
-        const CATEGORY = 'top5';
+        const CATEGORY = 'stop_optimize';
         
         async function init() {
             setDefaultCustomDates();
@@ -121,6 +121,7 @@
             await loadAgents();
             lucide.createIcons();
         }
+        
         function setDefaultCustomDates() {
             const to = new Date();
             const from = new Date(to);
@@ -130,12 +131,14 @@
             if (elFrom) elFrom.value = from.toISOString().slice(0, 10);
             if (elTo) elTo.value = to.toISOString().slice(0, 10);
         }
+        
         function toggleCustomDate() {
             const el = document.getElementById('customDateRange');
             if (!el) return;
             if (document.getElementById('periodSelect').value === 'custom') { el.classList.remove('hidden'); el.classList.add('flex'); }
             else { el.classList.add('hidden'); el.classList.remove('flex'); }
         }
+        
         function getPeriodParams() {
             return buildPeriodQueryString('periodSelect', 'customDateFrom', 'customDateTo');
         }
@@ -235,14 +238,14 @@
         }
         
         function addNewAgent() {
-            const name = prompt('Enter agent name (e.g. Scaling Master):');
+            const name = prompt('Enter agent name (e.g. Risk Manager):');
             if (!name) return;
             agents.push({
                 agent_name: name,
                 enabled: true,
                 provider: 'groq',
                 model: 'llama-3.1-70b-versatile',
-                system_prompt: 'Analyze this campaign and find growth opportunities.',
+                system_prompt: 'You are a Risk Manager for affiliate marketing campaigns. Analyze the data and recommend if we should STOP or OPTIMIZE the campaign.',
                 category: CATEGORY
             });
             renderAgents();
@@ -258,7 +261,8 @@
         
         async function deleteAgent(idx) {
             if (!confirm('Delete this agent?')) return;
-            // API call would go here
+            // Here we should ideally have a DELETE endpoint, but for now we can just not save it.
+            // Or we can add a delete endpoint to ai_agents.py
             agents.splice(idx, 1);
             renderAgents();
         }

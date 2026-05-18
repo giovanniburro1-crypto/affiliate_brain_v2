@@ -7,6 +7,7 @@ from typing import Optional
 from pathlib import Path
 import httpx
 import json
+from datetime import datetime
 
 router = APIRouter()
 PROVIDERS_CONFIG_PATH = Path("providers_config.json")
@@ -29,6 +30,7 @@ class AgentConfig(BaseModel):
     provider: str
     model: str
     system_prompt: str
+    category: str = "top5"
 
 class TestRequest(BaseModel):
     provider: str
@@ -42,15 +44,17 @@ class CouncilRequest(BaseModel):
     period: int = 14
     date_from: Optional[str] = None
     date_to: Optional[str] = None
+    category: str = "top5"
 
 @router.get("/agents")
-async def get_agents(db: Session = Depends(get_db)):
-    """Получить все агенты"""
+async def get_agents(category: str = "top5", db: Session = Depends(get_db)):
+    """Получить агенты по категории"""
     agents = db.execute(text("""
-        SELECT id, agent_name, enabled, provider, model, system_prompt
+        SELECT id, agent_name, enabled, provider, model, system_prompt, category
         FROM ai_agents
+        WHERE category = :category
         ORDER BY id
-    """)).fetchall()
+    """), {"category": category}).fetchall()
     
     return {"agents": [
         {
@@ -59,28 +63,49 @@ async def get_agents(db: Session = Depends(get_db)):
             "enabled": a[2],
             "provider": a[3],
             "model": a[4],
-            "system_prompt": a[5]
+            "system_prompt": a[5],
+            "category": a[6]
         } for a in agents
     ]}
 
 @router.put("/agents/{agent_name}")
 async def update_agent(agent_name: str, config: AgentConfig, db: Session = Depends(get_db)):
-    """Обновить конфиг агента"""
-    db.execute(text("""
-        UPDATE ai_agents
-        SET enabled = :enabled,
-            provider = :provider,
-            model = :model,
-            system_prompt = :prompt,
-            updated_at = NOW()
-        WHERE agent_name = :name
-    """), {
-        'enabled': config.enabled,
-        'provider': config.provider,
-        'model': config.model,
-        'prompt': config.system_prompt,
-        'name': agent_name
-    })
+    """Обновить или создать конфиг агента"""
+    # Сначала проверим существование
+    existing = db.execute(text("SELECT id FROM ai_agents WHERE agent_name = :name"), {"name": agent_name}).fetchone()
+    
+    if existing:
+        db.execute(text("""
+            UPDATE ai_agents
+            SET enabled = :enabled,
+                provider = :provider,
+                model = :model,
+                system_prompt = :prompt,
+                category = :category,
+                updated_at = :now
+            WHERE agent_name = :name
+        """), {
+            'enabled': config.enabled,
+            'provider': config.provider,
+            'model': config.model,
+            'prompt': config.system_prompt,
+            'category': config.category,
+            'name': agent_name,
+            'now': datetime.now()
+        })
+    else:
+        db.execute(text("""
+            INSERT INTO ai_agents (agent_name, enabled, provider, model, system_prompt, category, updated_at)
+            VALUES (:name, :enabled, :provider, :model, :prompt, :category, :now)
+        """), {
+            'name': agent_name,
+            'enabled': config.enabled,
+            'provider': config.provider,
+            'model': config.model,
+            'prompt': config.system_prompt,
+            'category': config.category,
+            'now': datetime.now()
+        })
     db.commit()
     return {"success": True}
 
@@ -185,8 +210,10 @@ async def council(req: CouncilRequest, request: Request, db: Session = Depends(g
     try:
         agents_rows = db.execute(text("""
             SELECT agent_name, enabled, provider, model, system_prompt
-            FROM ai_agents WHERE enabled = true ORDER BY id
-        """)).fetchall()
+            FROM ai_agents 
+            WHERE enabled = true AND category = :category
+            ORDER BY id
+        """), {"category": req.category}).fetchall()
         agents = [
             {"agent_name": r[0], "enabled": True, "provider": r[2], "model": r[3], "system_prompt": r[4]}
             for r in agents_rows

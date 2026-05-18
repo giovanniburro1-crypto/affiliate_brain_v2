@@ -61,6 +61,10 @@ async def ai_top5():
 async def ai_search_gold():
     with open("frontend/ai-search-gold.html") as f: return f.read()
 
+@app.get("/ai-stop-optimize", response_class=HTMLResponse)
+async def ai_stop_optimize():
+    with open("frontend/ai-stop-optimize.html") as f: return f.read()
+
 @app.get("/monetization", response_class=HTMLResponse)
 async def monetization_page():
     with open("frontend/monetization.html") as f: return f.read()
@@ -99,4 +103,21 @@ async def chrome_devtools():
     return Response(content=b"{}", media_type="application/json")
 
 if __name__ == "__main__":
+    import os
+    import threading
+    import time
+    import webbrowser
+
+    # Prevent opening multiple browser tabs during development reload
+    if not os.environ.get("BROWSER_OPENED"):
+        os.environ["BROWSER_OPENED"] = "true"
+        
+        def open_browser():
+            time.sleep(1.5)  # Wait for uvicorn to bind and start listening
+            url = f"http://127.0.0.1:{settings.port}"
+            print(f"🌐 Automatically opening dashboard at {url}...")
+            webbrowser.open(url)
+            
+        threading.Thread(target=open_browser, daemon=True).start()
+
     uvicorn.run("backend.main:app", host=settings.host, port=settings.port, reload=True)

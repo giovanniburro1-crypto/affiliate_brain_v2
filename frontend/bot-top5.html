@@ -642,7 +642,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             panel.innerHTML = '<p class="text-yellow-400">Загрузка анализа AI Council...</p>';
 
             try {
-                const body = { campaign_id: campaignId };
+                const body = { campaign_id: campaignId, category: 'top5' };
                 if (periodParams.periodParam.startsWith('date_from')) {
                     const from = document.getElementById('customDateFrom').value;
                     const to = document.getElementById('customDateTo').value;
