@@ -301,53 +301,34 @@ class Top5ServiceV2:
         limit: int = 5,
     ) -> List[Dict]:
         """
-        WEAKNESS: segment_cost / total_cost ≥ 10%,
-        AND |segment_impact| / total_profit ≥ 10% (если total_profit > 0).
-        При total_profit ≤ 0 — только условие по cost.
-        Исключить очевидные: traffic_share >= 90%.
-        Для сливающих кампаний (profit < 0): если нет сегментов по 10%, берём топ по spend (порог 5%).
+        WEAKNESS: показывает ТОЛЬКО сегменты с отрицательным profit (то, что тянет кампанию вниз).
+        Цель: пользователь видит, что конкретно сливает, и решает — оптимизировать или стопать.
+        Без ограничения по traffic_share (если 88% трафика сливает — это и есть главная проблема).
         """
         if total_cost <= 0 or total_clicks <= 0:
             return []
-        cost_share_min = 10
-        if total_profit < 0 and total_cost >= 20:
-            # При сливе и значительном spend — снижаем порог, чтобы показать сегменты
-            cost_share_min = 5
-        bad = []
+
+        # Берём только сегменты, которые РЕАЛЬНО теряют деньги
+        losing = []
         for s in segments:
-            cost_share = (s["spend"] / total_cost) * 100
-            if cost_share < cost_share_min:
-                continue
+            if s["profit"] >= 0:
+                continue  # не показываем прибыльные — это не weakness
             traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
-            if traffic_share >= 90:
-                continue
-            if total_profit > 0:
-                impact = s["revenue"] - s["spend"]
-                impact_share = (abs(impact) / abs(total_profit)) * 100
-                if impact_share < 10:
-                    continue
-            profit_pct = round((s["profit"] / total_profit) * 100, 0) if total_profit != 0 else 0
-            bad.append({
+            loss_dollars = abs(s["profit"])
+            # Доля убытка: сколько % от общего убытка приходится на этот сегмент
+            # Если кампания в целом в минусе: loss_share = segment_loss / total_loss * 100
+            total_loss = abs(total_profit) if total_profit < 0 else 1
+            loss_share = round((loss_dollars / total_loss) * 100, 0) if total_loss > 0 else 0
+            losing.append({
                 **s,
                 "traffic_pct": round(traffic_share, 0),
-                "profit_pct": int(profit_pct),
+                "profit_pct": -int(loss_share),  # всегда отрицательный для WEAKNESS
+                "loss_dollars": round(loss_dollars, 2),
             })
-        # Если всё ещё пусто при сливе — берём топ по |profit| среди минусовых
-        if not bad and total_profit < 0 and total_cost >= 20:
-            losing = [s for s in segments if s["profit"] < 0]
-            losing.sort(key=lambda x: (-x["spend"], x["profit"]))
-            for s in losing[:limit]:
-                traffic_share = (s["clicks"] / total_clicks) * 100 if total_clicks else 0
-                if traffic_share >= 90:
-                    continue
-                profit_pct = round((s["profit"] / total_profit) * 100, 0) if total_profit != 0 else 0
-                bad.append({
-                    **s,
-                    "traffic_pct": round(traffic_share, 0),
-                    "profit_pct": int(profit_pct),
-                })
-        bad.sort(key=lambda x: (x["profit"], -x["spend"]))
-        return bad[:limit]
+
+        # Сортируем: самые большие убытки первыми
+        losing.sort(key=lambda x: x["profit"])
+        return losing[:limit]
 
     def _check_zacepy(self, segments: List[Dict]) -> bool:
         """Есть ли зацепы: сегмент с min_conversions и profit > 0."""
@@ -458,7 +439,8 @@ class Top5ServiceV2:
                 segments_line += " • "
             weakness_parts = []
             for s in top_weakness:
-                weakness_parts.append(f"{s['type']}={s['value']} ({s['profit_pct']}% profit)")
+                loss = s.get('loss_dollars', abs(s.get('profit', 0)))
+                weakness_parts.append(f"{s['type']}={s['value']} (-${loss} loss)")
             segments_line += "WEAKNESS: " + " • ".join(weakness_parts)
             
         if segments_line:
@@ -544,7 +526,8 @@ class Top5ServiceV2:
             
         if weakness_segments:
             top_weakness = weakness_segments[0]
-            reasons.append(f"слабые сегменты ({top_weakness['type']}={top_weakness['value']} теряет {abs(top_weakness['profit_pct'])}% прибыли)")
+            loss = top_weakness.get('loss_dollars', abs(top_weakness.get('profit', 0)))
+            reasons.append(f"слабые сегменты ({top_weakness['type']}={top_weakness['value']} теряет ${loss})")
             
         # 5. Opportunity Score
         if opportunity_score > 100:

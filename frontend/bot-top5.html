@@ -348,8 +348,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                         <div class="flex flex-wrap gap-2">
                             ${segments.map(s => {
-                                const profitSign = s.profit_pct >= 0 ? '+' : '';
-                                const profitColor = s.profit_pct >= 0 ? 'text-green-400' : 'text-red-400';
+                                const isWeakness = title === 'WEAKNESS';
+                                const profitDisplay = isWeakness && s.loss_dollars != null
+                                  ? `<span class="text-red-400">-$${s.loss_dollars} loss</span>`
+                                  : `<span class="${s.profit_pct >= 0 ? 'text-green-400' : 'text-red-400'}">${s.profit_pct >= 0 ? '+' : ''}${s.profit_pct}% profit</span>`;
                                 return `
                                 <div class="relative group">
                                     <div class="px-2 py-1 rounded text-xs ${title === 'POWER' ? 'bg-green-900/30 border border-green-700/50' : 'bg-red-900/30 border border-red-700/50'}">
@@ -357,7 +359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         <div class="flex items-center gap-1 text-[10px] mt-0.5">
                                             <span class="text-zinc-400">${s.traffic_pct}% traffic</span>
                                             <span class="text-zinc-500">•</span>
-                                            <span class="${profitColor}">${profitSign}${s.profit_pct}% profit</span>
+                                            ${profitDisplay}
                                         </div>
                                     </div>
                                     <div class="absolute hidden group-hover:block z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-3 py-2 rounded-lg ${title === 'POWER' ? 'bg-green-900/90 border border-green-600' : 'bg-red-900/90 border border-red-600'} text-xs min-w-[180px]">

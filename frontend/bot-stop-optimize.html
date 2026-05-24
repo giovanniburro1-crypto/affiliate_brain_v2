@@ -261,7 +261,13 @@ const renderSegments = (segs, title) => {
 if (!segs || !segs.length) return '';
 const icon = title === 'POWER' ? 'trending-up' : 'trending-down';
 const clr = title === 'POWER' ? 'bg-green-900/30 border-green-700/50' : 'bg-red-900/30 border-red-700/50';
-return `<div class="mb-2"><div class="text-xs text-zinc-400 mb-1 flex items-center gap-1"><i data-lucide="${icon}" class="w-3 h-3 ${title==='POWER'?'text-green-400':'text-red-400'}"></i>${title}</div><div class="flex flex-wrap gap-2">${segs.map(s=>`<div class="px-2 py-1 rounded text-xs ${clr} border"><span class="font-medium">${escapeHtml(s.type)}=<span class="cursor-pointer hover:underline" data-copy="${escapeHtml(String(s.value))}" onclick="copyId(this)" title="Копировать">${escapeHtml(String(s.value))}</span></span><div class="text-[10px] mt-0.5 text-zinc-400">${s.traffic_pct}% traffic • <span class="${s.profit_pct>=0?'text-green-400':'text-red-400'}">${s.profit_pct>=0?'+':''}${s.profit_pct}% profit</span></div></div>`).join('')}</div></div>`;
+return `<div class="mb-2"><div class="text-xs text-zinc-400 mb-1 flex items-center gap-1"><i data-lucide="${icon}" class="w-3 h-3 ${title==='POWER'?'text-green-400':'text-red-400'}"></i>${title}</div><div class="flex flex-wrap gap-2">${segs.map(s=>{
+const isWeakness = title === 'WEAKNESS';
+const profitDisplay = isWeakness && s.loss_dollars != null
+  ? `<span class="text-red-400">-$${s.loss_dollars} loss</span>`
+  : `<span class="${s.profit_pct>=0?'text-green-400':'text-red-400'}">${s.profit_pct>=0?'+':''}${s.profit_pct}% profit</span>`;
+return `<div class="px-2 py-1 rounded text-xs ${clr} border"><span class="font-medium">${escapeHtml(s.type)}=<span class="cursor-pointer hover:underline" data-copy="${escapeHtml(String(s.value))}" onclick="copyId(this)" title="Копировать">${escapeHtml(String(s.value))}</span></span><div class="text-[10px] mt-0.5 text-zinc-400">${s.traffic_pct}% traffic • ${profitDisplay}</div></div>`;
+}).join('')}</div></div>`;
 };
 
 const renderBlocks = (votes) => {

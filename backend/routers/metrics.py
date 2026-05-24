@@ -379,6 +379,31 @@ def get_campaign_breakdown_data(
     roi = round((profit / spend * 100) if spend > 0 else 0)
     epc = round(revenue / clicks, 4) if clicks else 0
     cr = round(conversions / clicks * 100, 2) if clicks else 0
+    
+    # Получаем директивы рекламодателя по разным вариантам token1
+    token1_val = db.execute(
+        text("SELECT MAX(token1) FROM traffic_stats WHERE campaign_id = :cid"),
+        {"cid": campaign_id}
+    ).scalar()
+    extracted_token = campaign_id.split('_')[0] if campaign_id else ""
+    directives_rows = []
+    try:
+        directives_rows = db.execute(
+            text("""
+                SELECT affiliate_network, action 
+                FROM advertiser_directives 
+                WHERE token1 = :cid OR token1 = :t1 OR token1 = :ext
+            """),
+            {"cid": campaign_id, "t1": token1_val or "", "ext": extracted_token}
+        ).fetchall()
+    except Exception:
+        pass
+        
+    advertiser_directives = [
+        {"network": r[0], "action": r[1]}
+        for r in directives_rows
+    ]
+
     summary = {
         "campaign_id": campaign_id,
         "spend": spend,
@@ -389,6 +414,7 @@ def get_campaign_breakdown_data(
         "clicks": clicks,
         "epc": epc,
         "cr_pct": cr,
+        "advertiser_directives": advertiser_directives,
     }
 
     def _rows(rows, first_key="name"):
@@ -609,7 +635,7 @@ async def get_sources(
             f"SELECT traffic_source FROM traffic_stats "
             f"WHERE traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
             f"GROUP BY traffic_source "
-            f"HAVING SUM(cost) >= 10 "
+            f"HAVING SUM(cost) >= 50 OR ABS(SUM(revenue) - SUM(cost)) >= 50 "
             f"ORDER BY traffic_source"
         )).fetchall()
     else:
@@ -618,7 +644,7 @@ async def get_sources(
             f"SELECT traffic_source FROM traffic_stats "
             f"WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
             f"GROUP BY traffic_source "
-            f"HAVING SUM(cost) >= 10 "
+            f"HAVING SUM(cost) >= 50 OR ABS(SUM(revenue) - SUM(cost)) >= 50 "
             f"ORDER BY traffic_source"
         ), {'d': date_from, 'd_to': date_to}).fetchall()
 
@@ -1005,13 +1031,14 @@ async def get_traffic_sources_summary(
         profit = total_revenue - spend
         roi = round((profit / spend * 100) if spend > 0 else 0)
         
-        result.append({
-            "source": source_name,
-            "spend": spend,
-            "revenue": total_revenue,
-            "profit": profit,
-            "roi": roi
-        })
+        if spend >= 50 or abs(profit) >= 50:
+            result.append({
+                "source": source_name,
+                "spend": spend,
+                "revenue": total_revenue,
+                "profit": profit,
+                "roi": roi
+            })
     
     result.sort(key=lambda x: x['profit'], reverse=True)
     return {"sources": result}
