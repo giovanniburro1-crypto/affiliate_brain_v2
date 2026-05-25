@@ -668,7 +668,8 @@ async def get_daily(
     
     rows = db.execute(
         text(f"""
-        SELECT date, SUM(cost), SUM(revenue), SUM(conversions), COUNT(*) as clicks
+        SELECT date, SUM(cost), SUM(revenue), SUM(conversions), 
+               SUM(CASE WHEN cost > 0 AND lander_id IS NOT NULL AND lander_id != '0' AND lander_id != '' THEN 1 ELSE 0 END) as clicks
         FROM traffic_stats
         WHERE date >= :d AND date <= :d_to AND traffic_source IS NOT NULL {source_filter}
         GROUP BY date
@@ -1157,8 +1158,13 @@ async def get_campaigns_table(
             d_rev = int(round(vals["rev"]))
             d_profit = d_rev - d_spend
             
-            d_profit_pct = (d_profit / d_spend * 100) if d_spend > 0 else (100 if d_profit > 0 else 0)
-            color = 'green' if d_profit_pct > 10 else 'red' if d_profit_pct < -10 else 'none'
+            # Если spend=0 — трафик-файл за этот день не загружен;
+            # показываем нейтральный цвет, не зелёный (был бы ложный плюс)
+            if d_spend > 0:
+                d_profit_pct = d_profit / d_spend * 100
+                color = 'green' if d_profit_pct > 10 else 'red' if d_profit_pct < -10 else 'none'
+            else:
+                color = 'none'  # нет данных о спенде — нельзя судить о прибыльности
             days_dict[day_key] = {"profit": d_profit, "color": color}
 
         result.append({
@@ -1211,8 +1217,12 @@ def get_campaign_daily_days(
         """), {'cid': campaign_id, 'dt': day_row[0]}).scalar() or 0
         day_total_revenue = day_base_revenue + int(day_add_revenue)
         day_profit = day_total_revenue - day_spend
-        day_profit_pct = (day_profit / day_spend * 100) if day_spend > 0 else 0
-        color = 'red' if day_profit_pct < -10 else ('green' if day_profit_pct > 10 else 'none')
+        # Если spend=0 — нет данных о трафике, нейтральный цвет
+        if day_spend > 0:
+            day_profit_pct = day_profit / day_spend * 100
+            color = 'red' if day_profit_pct < -10 else ('green' if day_profit_pct > 10 else 'none')
+        else:
+            color = 'none'
         days[day_date] = {'profit': day_profit, 'color': color}
     return days
 

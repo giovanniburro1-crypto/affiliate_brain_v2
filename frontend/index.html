@@ -1027,10 +1027,13 @@
                 const res = await fetch(url, { cache: 'no-store' });
                 const d = await res.json();
                 
-                // Update Sidebar Widget
-                document.getElementById('monRev').textContent = '+$' + Math.round(d.summary.revenue).toLocaleString();
-                document.getElementById('monERPM').textContent = '$' + d.summary.erpm.toFixed(2);
-                document.getElementById('monJumps').textContent = (d.summary.jumps / 1000).toFixed(1) + 'k jumps';
+                // Update Sidebar Widget (elements may not exist if widget was removed)
+                const monRevEl = document.getElementById('monRev');
+                const monERPMEl = document.getElementById('monERPM');
+                const monJumpsEl = document.getElementById('monJumps');
+                if (monRevEl) monRevEl.textContent = '+$' + Math.round(d.summary.revenue).toLocaleString();
+                if (monERPMEl) monERPMEl.textContent = '$' + d.summary.erpm.toFixed(2);
+                if (monJumpsEl) monJumpsEl.textContent = (d.summary.jumps / 1000).toFixed(1) + 'k jumps';
                 
                 // Update Modal Summary
                 document.getElementById('modalMonRev').textContent = '$' + Math.round(d.summary.revenue).toLocaleString();
