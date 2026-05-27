@@ -169,11 +169,12 @@ async def upload_files(files: List[UploadFile] = File(...), db: Session = Depend
             content = await file.read()
             filename = file.filename.lower()
             if 'sale' in filename:
-                df = _read_sales_file(content)
+                df = _read_sales_file(content, filename)
                 _process_sales(df, db, stats)
             else:
                 try:
-                    df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+                    engine = 'xlrd' if filename.endswith('.xls') else 'openpyxl'
+                    df = pd.read_excel(io.BytesIO(content), engine=engine)
                 except Exception:
                     # Fallback to CSV: try semicolon first (tracker exports), then comma
                     try:
@@ -377,14 +378,15 @@ def _insert_monetisation_with_upsert(db, rows):
         """
         db.execute(text(sql))
 
-def _read_sales_file(content):
+def _read_sales_file(content, filename=''):
     try:
         # Читаем файл без заголовков, чтобы поддерживать формат: дата;токен;доп;клики;доход
         df = pd.read_csv(io.BytesIO(content), sep=';', encoding='utf-8', header=None)
         if len(df.columns) > 1: return df
     except: pass
     try:
-        df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+        engine = 'xlrd' if filename.endswith('.xls') else 'openpyxl'
+        df = pd.read_excel(io.BytesIO(content), engine=engine)
         if len(df.columns) == 1 and ';' in str(df.columns[0]):
             headers = df.columns[0].split(';')
             data = [str(row.iloc[0]).split(';') for _, row in df.iterrows()]

@@ -90,6 +90,27 @@
             color: #eab308;
         }
 
+        .dynamics-card {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .dynamics-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            opacity: 0.8;
+        }
+        
+        .dynamics-gainer::before {
+            background: linear-gradient(90deg, transparent, #22c55e, transparent);
+        }
+        
+        .dynamics-loser::before {
+            background: linear-gradient(90deg, transparent, #ef4444, transparent);
+        }
+
         th {
             background: #12121a;
             font-size: 11px;
@@ -479,7 +500,7 @@
                         class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 min-w-[100px] justify-center">Apply</button>
                 </div>
             </div>
-            <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="grid grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                 <div class="card p-4">
                     <div class="text-zinc-400 text-sm mb-1">Spend</div>
                     <div id="statSpend" class="text-2xl font-bold">$0</div>
@@ -495,6 +516,28 @@
                 <div class="card p-4">
                     <div class="text-zinc-400 text-sm mb-1">ROI</div>
                     <div id="statRoi" class="text-2xl font-bold">0%</div>
+                </div>
+                <!-- Top Gainer -->
+                <div class="card p-4 dynamics-card dynamics-gainer" id="cardGainer">
+                    <div class="text-zinc-500 text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <span style="color:#22c55e">▲</span> Top Gainer
+                    </div>
+                    <div id="gainerName" class="text-sm font-semibold text-zinc-200 truncate mb-1" title="">—</div>
+                    <div class="flex items-baseline gap-2">
+                        <span id="gainerProfit" class="text-lg font-bold profit-green">—</span>
+                        <span id="gainerDelta" class="text-xs text-zinc-500">—</span>
+                    </div>
+                </div>
+                <!-- Top Loser -->
+                <div class="card p-4 dynamics-card dynamics-loser" id="cardLoser">
+                    <div class="text-zinc-500 text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <span style="color:#ef4444">▼</span> Top Loser
+                    </div>
+                    <div id="loserName" class="text-sm font-semibold text-zinc-200 truncate mb-1" title="">—</div>
+                    <div class="flex items-baseline gap-2">
+                        <span id="loserProfit" class="text-lg font-bold profit-red">—</span>
+                        <span id="loserDelta" class="text-xs text-zinc-500">—</span>
+                    </div>
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-6">
@@ -557,7 +600,9 @@
                                 </th>
                                 <th class="text-left py-2 px-2 sticky left-[36px] bg-zinc-900 z-[2]">Token1</th>
                                 <th class="text-left py-2 px-2 bg-zinc-900">Campaign</th>
-                                <th class="text-right py-2 px-2 bg-zinc-900">Cost</th>
+                                <th class="text-right py-2 px-2 bg-zinc-900 cursor-pointer hover:text-zinc-300" onclick="setCampaignSort('spend')">Cost <span class="text-[10px] opacity-50">⇅</span></th>
+                                <th class="text-right py-2 px-2 bg-zinc-900 cursor-pointer hover:text-zinc-300" id="campaignProfitHeader" onclick="setCampaignSort('profit')">Profit <span class="text-[10px] opacity-50">⇅</span></th>
+                                <th class="text-right py-2 px-2 bg-zinc-900 cursor-pointer hover:text-zinc-300" id="campaignAddMonHeader" onclick="setCampaignSort('add_mon_pct')">Доп. % <span class="text-[10px] opacity-50">⇅</span></th>
                                 <th class="text-center py-2 px-1 bg-zinc-900 date-col" id="dateHeaders"></th>
                             </tr>
                         </thead>
@@ -578,7 +623,7 @@
     <div id="uploadModal" class="modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="card p-6 w-96">
             <h3 class="font-semibold mb-4">Upload File</h3>
-            <input type="file" id="fileInput" accept=".xlsx,.csv" class="mb-4" multiple onchange="uploadFile(this)">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="mb-4" multiple onchange="uploadFile(this)">
             <div id="uploadStatus" class="text-sm"></div>
             <button onclick="closeUpload()" class="mt-4 text-zinc-400">Close</button>
         </div>
@@ -1007,6 +1052,7 @@
                 const source = selectedSources.join(',');
                 await Promise.all([
                     loadSummary(periodParam, source), 
+                    loadSourceDynamics(source),
                     loadSplits(periodParam, source), 
                     loadChart(periodParam, source), 
                     loadTrafficSourcesSummary(periodParam, source), 
@@ -1081,6 +1127,62 @@
             }
         }
 
+        async function loadSourceDynamics(source) {
+            const url = `/api/metrics/source-dynamics` + (source ? `?source=${encodeURIComponent(source)}` : '');
+            try {
+                const res = await fetch(url, { cache: 'no-store' });
+                const d = await res.json();
+                
+                const updateCard = (type, data) => {
+                    const card = document.getElementById(`card${type}`);
+                    const nameEl = document.getElementById(`${type.toLowerCase()}Name`);
+                    const profitEl = document.getElementById(`${type.toLowerCase()}Profit`);
+                    const deltaEl = document.getElementById(`${type.toLowerCase()}Delta`);
+                    
+                    if (!data) {
+                        nameEl.innerHTML = "—";
+                        nameEl.title = "";
+                        profitEl.textContent = "—";
+                        profitEl.className = `text-lg font-bold text-zinc-500`;
+                        deltaEl.textContent = "—";
+                        return;
+                    }
+                    
+                    let displayName = String(data.name || "Unknown").trim();
+                    let changed = true;
+                    while (changed) {
+                        changed = false;
+                        const before = displayName;
+                        displayName = displayName.replace(/^Mediabuys\s*-\s*/i, '');
+                        displayName = displayName.trim();
+                        if (displayName !== before) changed = true;
+                    }
+                    
+                    let keyHtml = '';
+                    if (data.key && d.level === 'campaign') {
+                        const cleanKey = cleanToken1(data.key);
+                        keyHtml = `<span class="cursor-pointer text-xs bg-zinc-800 px-1.5 py-0.5 rounded mr-2 hover:bg-zinc-700 transition-colors shrink-0" onclick="copyToClipboard('${cleanKey}')" title="Click to copy ID">${cleanKey}</span>`;
+                    }
+                    
+                    nameEl.className = "text-sm font-semibold text-zinc-200 mb-1 flex items-center";
+                    nameEl.innerHTML = `${keyHtml}<span class="truncate" title="${data.name}">${displayName}</span>`;
+                    
+                    const sign = data.profit_today > 0 ? '+' : '';
+                    profitEl.textContent = `${sign}$${data.profit_today.toLocaleString()}`;
+                    profitEl.className = `text-lg font-bold ${data.profit_today >= 0 ? 'profit-green' : 'profit-red'}`;
+                    
+                    const deltaSign = data.delta > 0 ? '+' : '';
+                    deltaEl.textContent = `${deltaSign}$${data.delta.toLocaleString()} vs ${d.t_prev.slice(-5)}`;
+                };
+                
+                updateCard('Gainer', d.gainer);
+                updateCard('Loser', d.loser);
+                
+            } catch (e) {
+                console.error("Failed to load source dynamics", e);
+            }
+        }
+
         async function loadSummary(periodParam, source) {
             const url = `/api/metrics/summary?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
@@ -1150,10 +1252,43 @@
             renderTrafficSourcesTable();
         }
 
+        let campaignSortCol = 'spend';
+        let campaignSortDir = 'desc';
+        let lastCampaignsData = [];
+
+        function setCampaignSort(col) {
+            if (campaignSortCol === col) {
+                campaignSortDir = campaignSortDir === 'desc' ? 'asc' : 'desc';
+            } else {
+                campaignSortCol = col;
+                campaignSortDir = 'desc';
+            }
+            renderCampaignsTable();
+        }
+
         async function loadSourcesTable(periodParam, source) {
             const url = `/api/metrics/campaigns-table?${periodParam}` + (source ? `&source=${encodeURIComponent(source)}` : '');
             const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
+            lastCampaignsData = data.campaigns || [];
+            renderCampaignsTable();
+        }
+
+        function renderCampaignsTable() {
+            if (!lastCampaignsData) return;
+
+            const sorted = [...lastCampaignsData].sort((a, b) => {
+                let vA = a[campaignSortCol];
+                let vB = b[campaignSortCol];
+                if (campaignSortCol === 'spend' || campaignSortCol === 'profit' || campaignSortCol === 'add_mon_pct') {
+                    vA = Number(vA) || 0;
+                    vB = Number(vB) || 0;
+                }
+                
+                if (vA < vB) return campaignSortDir === 'desc' ? 1 : -1;
+                if (vA > vB) return campaignSortDir === 'desc' ? -1 : 1;
+                return 0;
+            });
 
             // Даты: макс. 30 дней, обратный порядок (слева старые, вправо сегодня); нет данных — 0
             const dates = getCampaignTableDateList();
@@ -1163,16 +1298,26 @@
                 return dd + '.' + mm;
             });
 
-            // Вставляем заголовки дат (внутри блока с прокруткой)
+            // Удаляем старые колонки дат
+            document.querySelectorAll('.dynamic-date-col').forEach(el => el.remove());
+
+            // Вставляем заголовки дат
             const headerCell = document.getElementById('dateHeaders');
             if (headerCell) {
                 headerCell.outerHTML = dateLabels.map((label, i) =>
-                    `<th class="text-center py-2 px-1 date-col" title="${dates[i]}">${label}</th>`
+                    `<th class="text-center py-2 px-1 date-col dynamic-date-col" title="${dates[i]}">${label}</th>`
                 ).join('');
+            } else {
+                const profitHeader = document.getElementById('campaignAddMonHeader');
+                if (profitHeader) {
+                    profitHeader.insertAdjacentHTML('afterend', dateLabels.map((label, i) =>
+                        `<th class="text-center py-2 px-1 date-col dynamic-date-col" title="${dates[i]}">${label}</th>`
+                    ).join(''));
+                }
             }
 
             // Заполняем таблицу
-            document.getElementById('campaignsTable').innerHTML = data.campaigns.map(c => {
+            document.getElementById('campaignsTable').innerHTML = sorted.map(c => {
                 const dateCells = dates.map(d => {
                     const dayData = c.days[d];
                     if (!dayData) return '<td class="px-1 py-1 text-center text-xs">0</td>';
@@ -1209,6 +1354,8 @@
                     <td class="py-2 px-2 bg-zinc-900 text-xs truncate campaign-name-cell ${hasDirs}" style="max-width: 200px; position: relative;" onmousemove="showDirTooltip(event, '${c.token1}')" onmouseleave="hideDirTooltip()">${dirTooltip ? '<span class="dir-dot"></span>' : ''}${campaignName}</td>
 
                     <td class="py-2 px-2 text-right text-xs">${c.spend.toLocaleString()}</td>
+                    <td class="py-2 px-2 text-right text-xs ${c.profit > 0 ? 'text-emerald-500' : (c.profit < 0 ? 'text-red-500' : 'text-zinc-500')} font-medium">${c.profit.toLocaleString()}</td>
+                    <td class="py-2 px-2 text-right text-xs ${c.add_mon_pct > 0 ? 'text-cyan-400 font-semibold' : 'text-zinc-500'}">${c.spend > 0 ? c.add_mon_pct + '%' : '-'}</td>
                     ${dateCells}
                 </tr>`;
             }).join('');

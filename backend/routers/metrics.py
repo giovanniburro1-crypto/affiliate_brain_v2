@@ -99,6 +99,167 @@ async def get_summary(
     roi = round((profit / total_spend * 100) if total_spend > 0 else 0)
     return {"spend": total_spend, "revenue": total_revenue, "profit": profit, "roi": roi, "conversions": conversions, "clicks": clicks}
 
+
+@router.get("/metrics/source-dynamics")
+async def get_source_dynamics(
+    source: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Top Gainer / Top Loser: сравниваем прибыль за последние 2 дня с данными.
+    Если source не задан или 'all' — группируем по traffic_source.
+    Если задан конкретный source — группируем по campaign внутри него.
+    """
+    # 1. Находим T_max и T_max-1 (последние 2 дня с трафиком)
+    last_dates = db.execute(text(
+        f"SELECT DISTINCT date FROM traffic_stats "
+        f"WHERE traffic_source IS NOT NULL {FILTER_OUT_MONETISATION} "
+        f"ORDER BY date DESC LIMIT 2"
+    )).fetchall()
+
+    if len(last_dates) < 2:
+        return {"gainer": None, "loser": None, "t_max": None, "t_prev": None}
+
+    t_max = last_dates[0][0]
+    t_prev = last_dates[1][0]
+
+    drill_by_campaign = source and source != "all"
+
+    if drill_by_campaign:
+        # Группируем по кампаниям внутри конкретного источника
+        sources_list = [s.strip() for s in source.split(',') if s.strip()]
+        params = {"t_max": t_max, "t_prev": t_prev}
+
+        if len(sources_list) == 1:
+            params["src"] = sources_list[0]
+            src_filter = "AND traffic_source = :src"
+        else:
+            placeholders = []
+            for i, s in enumerate(sources_list):
+                p = f"src_{i}"
+                params[p] = s
+                placeholders.append(f":{p}")
+            src_filter = f"AND traffic_source IN ({', '.join(placeholders)})"
+
+        group_col = "campaign_id"
+        name_expr = "MAX(campaign)"
+
+        # Base traffic profit per campaign per day
+        rows = db.execute(text(f"""
+            SELECT {group_col}, {name_expr} as name, date,
+                   SUM(revenue) - SUM(cost) as profit, SUM(cost) as spend
+            FROM traffic_stats
+            WHERE date IN (:t_max, :t_prev)
+              AND traffic_source IS NOT NULL {src_filter}
+            GROUP BY {group_col}, date
+        """), params).fetchall()
+
+        # Addmon per campaign per day
+        addmon_rows = db.execute(text(f"""
+            SELECT campaign_id, date, SUM(revenue) as addmon
+            FROM additional_monetization
+            WHERE date IN (:t_max, :t_prev)
+              AND campaign_id IN (
+                  SELECT DISTINCT campaign_id FROM traffic_stats
+                  WHERE date IN (:t_max, :t_prev) {src_filter}
+              )
+            GROUP BY campaign_id, date
+        """), params).fetchall()
+
+    else:
+        # Группируем по traffic_source
+        params = {"t_max": t_max, "t_prev": t_prev}
+        group_col = "traffic_source"
+        name_expr = "traffic_source"
+
+        rows = db.execute(text(f"""
+            SELECT {group_col}, {name_expr} as name, date,
+                   SUM(revenue) - SUM(cost) as profit, SUM(cost) as spend
+            FROM traffic_stats
+            WHERE date IN (:t_max, :t_prev)
+              AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION}
+            GROUP BY {group_col}, date
+        """), params).fetchall()
+
+        # Addmon per source per day (через JOIN с campaign_id → traffic_source)
+        addmon_rows = db.execute(text(f"""
+            SELECT ts_map.traffic_source, am.date, SUM(am.revenue) as addmon
+            FROM additional_monetization am
+            JOIN (
+                SELECT DISTINCT campaign_id, traffic_source
+                FROM traffic_stats
+                WHERE date IN (:t_max, :t_prev)
+                  AND traffic_source IS NOT NULL {FILTER_OUT_MONETISATION}
+            ) ts_map ON am.campaign_id = ts_map.campaign_id
+            WHERE am.date IN (:t_max, :t_prev)
+            GROUP BY ts_map.traffic_source, am.date
+        """), params).fetchall()
+
+    # 2. Собираем данные в dict: key -> {t_max_profit, t_prev_profit, name, spend}
+    data = {}
+    for row in rows:
+        key = row[0]
+        name = row[1]
+        d = row[2]
+        profit = float(row[3] or 0)
+        spend = float(row[4] or 0)
+        if key not in data:
+            data[key] = {"name": name, "t_max": 0.0, "t_prev": 0.0, "spend_max": 0.0, "spend_prev": 0.0}
+        if str(d) == str(t_max):
+            data[key]["t_max"] = profit
+            data[key]["spend_max"] = spend
+        else:
+            data[key]["t_prev"] = profit
+            data[key]["spend_prev"] = spend
+
+    # Добавляем addmon
+    for row in addmon_rows:
+        key = row[0]
+        d = row[1]
+        addmon = float(row[2] or 0)
+        if key in data:
+            if str(d) == str(t_max):
+                data[key]["t_max"] += addmon
+            else:
+                data[key]["t_prev"] += addmon
+
+    # 3. Считаем дельту и выбираем top gainer / top loser
+    results = []
+    for key, d in data.items():
+        # Берём только те, у кого был расход хотя бы в одном из дней
+        if d["spend_max"] <= 0 and d["spend_prev"] <= 0:
+            continue
+        delta = d["t_max"] - d["t_prev"]
+        profit_today = int(round(d["t_max"]))
+        profit_yesterday = int(round(d["t_prev"]))
+        spend_today = int(round(d["spend_max"]))
+        roi_today = round((profit_today / spend_today * 100) if spend_today > 0 else 0)
+        results.append({
+            "key": key,
+            "name": d["name"],
+            "profit_today": profit_today,
+            "profit_yesterday": profit_yesterday,
+            "delta": int(round(delta)),
+            "spend_today": spend_today,
+            "roi_today": roi_today,
+        })
+
+    if not results:
+        return {"gainer": None, "loser": None, "t_max": str(t_max), "t_prev": str(t_prev)}
+
+    # Сортируем по profit_today (абсолютный профит за сегодня)
+    results_by_profit = sorted(results, key=lambda x: x["profit_today"], reverse=True)
+    gainer = results_by_profit[0] if results_by_profit and results_by_profit[0]["profit_today"] > 0 else None
+    loser = results_by_profit[-1] if results_by_profit and results_by_profit[-1]["profit_today"] < 0 else None
+
+    return {
+        "gainer": gainer,
+        "loser": loser,
+        "t_max": str(t_max),
+        "t_prev": str(t_prev),
+        "level": "campaign" if drill_by_campaign else "source",
+    }
+
 @router.get("/metrics/monetization-dashboard")
 async def get_monetization_dashboard(
     period: int = Query(7),
@@ -1093,7 +1254,8 @@ async def get_campaigns_table(
             COALESCE(cb.token1, ac.campaign_id) as token1, 
             COALESCE(cb.name, 'Campaign ' || ac.campaign_id) as name, 
             COALESCE(cb.total_spend, 0) as total_spend,
-            (COALESCE(cb.base_revenue, 0) + COALESCE(ca.add_revenue, 0)) as total_rev
+            (COALESCE(cb.base_revenue, 0) + COALESCE(ca.add_revenue, 0)) as total_rev,
+            COALESCE(ca.add_revenue, 0) as add_revenue
         FROM all_cids ac
         LEFT JOIN campaign_base cb ON ac.campaign_id = cb.campaign_id
         LEFT JOIN campaign_add ca ON ac.campaign_id = ca.campaign_id
@@ -1106,13 +1268,17 @@ async def get_campaigns_table(
 
     result = []
     for row in campaigns:
-        # row: (campaign_id, token1, name, total_spend, total_rev)
+        # row: (campaign_id, token1, name, total_spend, total_rev, add_revenue)
         cid = row[0]
         token1_val = row[1]
         name_raw = row[2]
         c_name = name_raw.split('|||', 1)[1] if name_raw and '|||' in name_raw else name_raw
         c_name = c_name.replace('Mediabuys - ', '') if c_name else cid
         total_spend_val = int(row[3] or 0)
+        total_rev_val = float(row[4] or 0)
+        total_profit_val = int(round(total_rev_val - total_spend_val))
+        add_rev_val = float(row[5] or 0)
+        add_mon_pct = int(round(add_rev_val / total_spend_val * 100)) if total_spend_val > 0 else 0
         
         day_params = {**params, 'cid': cid}
 
@@ -1172,6 +1338,8 @@ async def get_campaigns_table(
             "token1": token1_val,
             "campaign": c_name,
             "spend": total_spend_val,
+            "profit": total_profit_val,
+            "add_mon_pct": add_mon_pct,
             "days": days_dict
         })
 
