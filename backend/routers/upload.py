@@ -379,21 +379,32 @@ def _insert_monetisation_with_upsert(db, rows):
         db.execute(text(sql))
 
 def _read_sales_file(content, filename=''):
+    fname = (filename or '').lower()
+    if fname.endswith(('.xlsx', '.xls')):
+        engine = 'xlrd' if fname.endswith('.xls') else 'openpyxl'
+        try:
+            return pd.read_excel(io.BytesIO(content), engine=engine)
+        except Exception:
+            pass
     try:
-        # Читаем файл без заголовков, чтобы поддерживать формат: дата;токен;доп;клики;доход
-        df = pd.read_csv(io.BytesIO(content), sep=';', encoding='utf-8', header=None)
-        if len(df.columns) > 1: return df
-    except: pass
-    try:
-        engine = 'xlrd' if filename.endswith('.xls') else 'openpyxl'
-        df = pd.read_excel(io.BytesIO(content), engine=engine)
-        if len(df.columns) == 1 and ';' in str(df.columns[0]):
-            headers = df.columns[0].split(';')
-            data = [str(row.iloc[0]).split(';') for _, row in df.iterrows()]
-            return pd.DataFrame(data, columns=headers)
-        return df
-    except: pass
-    raise ValueError("Cannot read sales file")
+        return pd.read_excel(io.BytesIO(content), engine='openpyxl')
+    except Exception:
+        pass
+    for sep in [';', ',', '	']:
+        for enc in ['utf-8', 'cp1251', 'latin-1']:
+            try:
+                df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=enc)
+                if len(df.columns) > 1:
+                    return df
+            except Exception:
+                pass
+            try:
+                df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=enc, header=None)
+                if len(df.columns) > 1:
+                    return df
+            except Exception:
+                pass
+    raise ValueError("Cannot read sales file as Excel or CSV")
 
 def _process_traffic(df, db, stats, original_columns=None, rename_map=None):
     stats['total'] = len(df)
@@ -593,142 +604,191 @@ def _save_traffic_batch(db, batch):
 
 def _process_sales(df, db, stats):
     """
-    Обработка файлов продаж (sale).
-    Ожидаемый формат из 5 колонок: Date ; Token 1 ; Col 2 ; Clicks ; Revenue
-    Без заголовков (header=None).
+    Универсальная обработка файлов продаж (sale):
+    - Матричный формат (Sale+) с несколькими категориями монетизации (add, BB, bb2, nbb, i_p, etc.)
+    - Стандартный 5-колоночный (Date; Token1; Col2; Clicks; Revenue)
+    - T1/T5 формат (T1; T5; Clicks; CPC; Revenue)
+    - 4-колоночный (Token1; Clicks; Payout; Revenue)
+    - Fallback
     """
+    df = df.dropna(how='all').copy()
     stats['total'] = len(df)
     
-    if len(df.columns) >= 5:
-        # Переименовываем первые 5 колонок по индексу (позиции)
-        new_cols = list(df.columns)
-        new_cols[0] = 'date'
-        new_cols[1] = 'token1'
-        new_cols[2] = 'col2'
-        new_cols[3] = 'clicks'
-        new_cols[4] = 'revenue'
-        df.columns = new_cols
-    else:
-        raise ValueError("Sale file must have at least 5 columns: Date; Token1; Col2; Clicks; Revenue")
+    # 1. Загружаем все известные campaign_id
+    rows = db.execute(text("SELECT DISTINCT campaign_id FROM traffic_stats WHERE campaign_id IS NOT NULL AND campaign_id != ''")).fetchall()
+    known_campaigns = {str(r[0]) for r in rows if r[0]}
     
-    # ШАГ 1: Собираем все уникальные prefixes из файла
-    prefixes_set = set()
-    rows_data = []
+    # 2. Определяем формат и извлекаем нормализованные записи
+    cols_str = [str(c).strip() for c in df.columns]
+    cols_lower = [c.lower() for c in cols_str]
+    default_date = datetime.now().date()
+    
+    date_col = None
+    id_col = None
+    for i, cl in enumerate(cols_lower):
+        if cl in ('date', 'дата') and date_col is None:
+            date_col = df.columns[i]
+        elif cl in ('id', 'token', 'token1', 'subid', 'sub_id', 'sub id', 't1') and id_col is None:
+            id_col = df.columns[i]
+            
+    if id_col is None and date_col is not None and len(df.columns) > 1:
+        id_col = df.columns[1]
+        
+    records = []
+    
+    # Проверяем матричный формат (Sale+)
+    is_matrix = False
+    if id_col is not None:
+        exclude_cols = {date_col, id_col}
+        candidate_rev_cols = [c for c in df.columns if c not in exclude_cols and str(c).lower() not in (
+            'clicks', 'cpc', 'payout', 'conversions', 'cost', 'spend', 'cr', 'epc', 'date_str', 'camp'
+        )]
+        if len(candidate_rev_cols) >= 2 or (len(candidate_rev_cols) == 1 and any(cl in ('add', 'bb', 'nbb', 'i_p', 'rev') for cl in [str(c).lower() for c in candidate_rev_cols])):
+            is_matrix = True
+            for _, row in df.iterrows():
+                raw_d = row[date_col] if date_col else default_date
+                row_date = default_date
+                if hasattr(raw_d, 'date'):
+                    row_date = raw_d.date()
+                elif isinstance(raw_d, str):
+                    for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d-%m-%Y', '%Y/%m/%d', '%m/%d/%Y']:
+                        try:
+                            row_date = datetime.strptime(raw_d[:10], fmt).date()
+                            break
+                        except ValueError:
+                            pass
+                
+                raw_tok = str(row[id_col]).strip() if pd.notna(row[id_col]) else ''
+                raw_tok = raw_tok.replace('{', '').replace('}', '').replace('"', '').replace("'", '')
+                if not raw_tok or raw_tok.lower() in ('nan', 'none', '', 'итого', 'date', 'sub id'):
+                    continue
+                    
+                for r_col in candidate_rev_cols:
+                    val = row[r_col]
+                    if pd.isna(val):
+                        continue
+                    try:
+                        val_float = float(str(val).replace(',', '.'))
+                    except (ValueError, TypeError):
+                        continue
+                    if val_float == 0:
+                        continue
+                    records.append({
+                        'date': row_date,
+                        'raw_token': raw_tok,
+                        'stream': str(r_col).strip(),
+                        'col2': '',
+                        'revenue': round(val_float, 4)
+                    })
 
-    for _, row in df.iterrows():
-        token1 = str(row.get('token1', '')).replace('{', '').replace('}', '').replace('"', '').replace("'", '')
-        if not token1 or token1 in ['', 'nan', 'None']:
-            continue
-        if 'итого' in token1.lower():
-            continue
-        if 'sub id' in token1.lower() or (token1.lower() == 'date') or (len(token1) < 15 and 'date' in token1.lower()):
-            continue
-
-        col2_val = str(row.get('col2', '')).strip() if 'col2' in df.columns and pd.notna(row.get('col2')) else ''
-
-        revenue_raw = str(row.get('revenue', 0)).replace(',', '.')
-        try:
-            revenue = float(revenue_raw or 0)
-        except (ValueError, TypeError):
-            continue
-        date_val = row.get('date', datetime.now().date())
-        if isinstance(date_val, str):
-            if 'итого' in date_val.lower() or 'date' in date_val.lower():
-                continue
-            for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d-%m-%Y']:
-                try:
-                    date_val = datetime.strptime(date_val[:10], fmt).date()
-                    break
-                except: pass
-            else: date_val = datetime.now().date()
-        elif hasattr(date_val, 'date'):
-            date_val = date_val.date()
+    if not is_matrix:
+        # Проверяем классические форматы
+        if len(cols_lower) >= 5 and cols_lower[0] in ('t1', 'token1', 'token 1') and 'date' not in cols_lower[0]:
+            for _, row in df.iterrows():
+                raw_tok = str(row.iloc[0]).strip().replace('{', '').replace('}', '').replace('"', '').replace("'", '')
+                if not raw_tok or raw_tok.lower() in ('nan', 'none', '', 'итого', 'sub id', 't1'):
+                    continue
+                col2 = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ''
+                try: rev = float(str(row.iloc[-1]).replace(',', '.'))
+                except: continue
+                if rev == 0: continue
+                records.append({'date': default_date, 'raw_token': raw_tok, 'stream': '', 'col2': col2, 'revenue': rev})
+        elif len(df.columns) >= 5:
+            for _, row in df.iterrows():
+                raw_d = row.iloc[0]
+                row_date = default_date
+                if hasattr(raw_d, 'date'): row_date = raw_d.date()
+                elif isinstance(raw_d, str):
+                    for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d-%m-%Y']:
+                        try:
+                            row_date = datetime.strptime(raw_d[:10], fmt).date()
+                            break
+                        except: pass
+                raw_tok = str(row.iloc[1]).strip().replace('{', '').replace('}', '').replace('"', '').replace("'", '')
+                if not raw_tok or raw_tok.lower() in ('nan', 'none', '', 'итого', 'sub id', 'date'):
+                    continue
+                col2 = str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else ''
+                try: rev = float(str(row.iloc[4]).replace(',', '.'))
+                except: continue
+                if rev == 0: continue
+                records.append({'date': row_date, 'raw_token': raw_tok, 'stream': '', 'col2': col2, 'revenue': rev})
         else:
-            continue
+            for _, row in df.iterrows():
+                raw_tok = str(row.iloc[0]).strip().replace('{', '').replace('}', '').replace('"', '').replace("'", '')
+                if not raw_tok or raw_tok.lower() in ('nan', 'none', '', 'итого'): continue
+                col2 = str(row.iloc[1]).strip() if len(df.columns) > 2 and pd.notna(row.iloc[1]) else ''
+                try: rev = float(str(row.iloc[-1]).replace(',', '.'))
+                except: continue
+                if rev == 0: continue
+                records.append({'date': default_date, 'raw_token': raw_tok, 'stream': '', 'col2': col2, 'revenue': rev})
 
-        prefix = extract_prefix(token1)
-        if prefix:
-            prefixes_set.add(prefix)
-            rows_data.append({
-                'token1': token1,
-                'prefix': prefix,
-                'revenue': revenue,
-                'date': date_val,
-                'col2': col2_val,
-            })
-    
-    if not prefixes_set:
-        return
-    
-    # ШАГ 2: ОДИН batch запрос для матчинга всех prefixes сразу
-    prefixes_list = list(prefixes_set)
-    prefix_to_campaign = {}
-    
-    # Разбиваем на батчи по 100 prefixes (чтобы не превысить лимит параметров)
-    batch_size = 100
-    for i in range(0, len(prefixes_list), batch_size):
-        batch_prefixes = prefixes_list[i:i+batch_size]
-        placeholders = ','.join([f"'{p}'" for p in batch_prefixes])
-        
-        matches = db.execute(text(f"""
-            SELECT DISTINCT
-                CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END as prefix,
-                campaign_id
-            FROM traffic_stats
-            WHERE CASE WHEN instr(token1, '_') > 0 THEN substr(token1, 1, instr(token1, '_') - 1) ELSE token1 END IN ({placeholders})
-        """)).fetchall()
-        
-        for prefix, campaign_id in matches:
-            if campaign_id:
-                prefix_to_campaign[prefix] = campaign_id
-    
-    # ШАГ 3: Классифицируем все строки используя маппинг
-    matched_batch = []
+    # 3. Матчинг и группировка
     orphan_batch = []
-    for row_data in rows_data:
-        campaign_id = prefix_to_campaign.get(row_data['prefix'])
+    seen_cid = {}
+    
+    for idx, r in enumerate(records, start=1):
+        raw_tok = r['raw_token']
+        stream = r['stream']
+        parts = raw_tok.split('_')
+        camp_id = None
+        norm_token = raw_tok
+        partner = ''
+        geo = ''
         
-        if campaign_id:
-            click_id = _sale_click_id(
-                row_data['token1'], row_data['date'],
-                row_data.get('col2', ''), row_data['revenue']
-            )
-            matched_batch.append(AdditionalMonetization(
-                click_id=click_id,
-                campaign_id=campaign_id,
-                token1=row_data['token1'],
-                date=row_data['date'],
-                revenue=row_data['revenue'],
-                source='sales'
-            ))
+        if len(parts) >= 3 and parts[-1] in known_campaigns:
+            camp_id = parts[-1]
+            partner = parts[0]
+            geo = parts[1]
+            norm_token = f"{camp_id}_{geo}_{stream}" if stream else f"{camp_id}_{geo}"
+        elif parts[0] in known_campaigns:
+            camp_id = parts[0]
+            suffix = '_'.join(parts[1:])
+            norm_token = f"{camp_id}_{suffix}_{stream}" if stream else f"{camp_id}_{suffix}"
+        elif raw_tok in known_campaigns:
+            camp_id = raw_tok
+            norm_token = f"{camp_id}_{stream}" if stream else camp_id
+        else:
+            for p in parts:
+                if p in known_campaigns:
+                    camp_id = p
+                    norm_token = f"{camp_id}_{stream}" if stream else f"{raw_tok}_{stream}"
+                    break
+        
+        if not camp_id:
+            norm_token = f"{raw_tok}_{stream}" if stream else raw_tok
+
+        date_compact = r['date'].strftime('%Y%m%d') if hasattr(r['date'], 'strftime') else str(r['date']).replace('-', '')[:8]
+        rev_safe = str(r['revenue']).replace(',', '.')
+        
+        if camp_id:
+            meta_parts = [p for p in [partner, geo, stream, r['col2']] if p]
+            meta_tag = '_'.join(meta_parts) if meta_parts else str(idx)
+            cid = f"sale_{camp_id}_{date_compact}_{meta_tag}_{rev_safe}"[:255]
+            if cid in seen_cid:
+                cid = f"{cid}_{idx}"[:255]
+            
+            seen_cid[cid] = {
+                'click_id': cid,
+                'campaign_id': camp_id,
+                'token1': norm_token,
+                'date': r['date'],
+                'revenue': r['revenue'],
+                'source': 'sales'
+            }
             stats['matched'] += 1
         else:
             orphan_batch.append(Orphan(
-                token1=row_data['token1'],
-                date=row_data['date'],
-                revenue=row_data['revenue'],
+                token1=norm_token,
+                date=r['date'],
+                revenue=r['revenue'],
                 source='sales'
             ))
             stats['orphans'] += 1
-        
+            
         stats['inserted'] += 1
-    
-    # ШАГ 4: Bulk insert всех matched и orphans
-    if matched_batch:
-        # Преобразуем ORM объекты в словари и дедуплицируем по click_id (оставляем последнее)
-        seen_cid = {}
-        for obj in matched_batch:
-            seen_cid[obj.click_id] = {
-                'click_id': obj.click_id,
-                'campaign_id': obj.campaign_id,
-                'token1': obj.token1,
-                'date': obj.date,
-                'revenue': obj.revenue,
-                'source': obj.source
-            }
-        matched_dicts = list(seen_cid.values())
-        _insert_monetisation_with_upsert(db, matched_dicts)
+
+    if seen_cid:
+        _insert_monetisation_with_upsert(db, list(seen_cid.values()))
     if orphan_batch:
         db.bulk_save_objects(orphan_batch)
-    
     db.commit()
